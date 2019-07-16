@@ -1,5 +1,6 @@
-# -*- coding: utf-8 -*-
-"""NETTOOLS IMPORT/EXPORT WATER NETWORK FROM/TO GIS
+﻿# -*- coding: utf-8 -*-
+"""
+NETTOOLS IMPORT/EXPORT WATER NETWORK DATA FROM/TO GIS
 Andrés García Martínez (ppnoptimizer@gmail.com)
 Licensed under the Apache License 2.0. http://www.apache.org/licenses/
 """
@@ -40,12 +41,6 @@ class Node:
         assert type(point2[0]) == type(point2[1]) == float , msg 
         return ((self._x-point2[0])**2+((self._y-point2[1])**2))**0.5
     
-    def get_wkt(self):
-        '''Return the node geometry in WKT format, "POINT (x y)"'''
-        msg = 'Not defined/error in node coordinates'
-        assert type(self._x) == type(self._x) == float, msg
-        return 'POINT ({} {})'.format(self._x, self._y)
-    
     def set_wkt(self, wkt):
         '''Set the geometry from a point in WKT format, "POINT (x y)"'''
         point = wkt.upper()
@@ -56,8 +51,13 @@ class Node:
         point = float(point[0]),float(point[1])
         msg = 'Incorrect WKT point format'
         assert type(point[0]) == type(point[1]) == float, msg
-        self.set_geometry(point)
-                
+        self.set_geometry(point) 
+    
+    def get_wkt(self):
+        '''Return the node geometry in WKT format, "POINT (x y)"'''
+        msg = 'Not defined/error in node coordinates'
+        assert type(self._x) == type(self._x) == float, msg
+        return 'POINT ({} {})'.format(self._x, self._y)               
 
 class Link:
     '''Link class'''
@@ -67,11 +67,12 @@ class Link:
         self.end = end
         self._linktype = None
         self._polyline = None
+        self._length = None
         
     def set_geometry(self, polyline):
         msg = 'Incorrect geometry, it must be a tuple of tuples((x0,y0), ...'
-        for coor in polyline:
-            assert type(float(coor[0])) == type(float(coor[1])) == float, msg
+        for vertex in polyline:
+            assert type(float(vertex[0])) == type(float(vertex[1])) ==float,msg
         
         self._polyline = polyline
         
@@ -99,7 +100,7 @@ class Link:
         assert type(self._polyline) != type(None), 'Not defined geometry'
         return self._polyline[1:-1]
     
-    def get_length(self):
+    def get_length2d(self):
         '''Return the 2D length'''
         pol = self._polyline
         assert type(pol) != type(None), 'Not defined geometry'
@@ -110,23 +111,14 @@ class Link:
             length += (dx**2+dy**2)**0.5
             
         return length
-    
-    def get_wkt(self):
-        '''Return the node geometry in WKT format. "LineString (x0 y0, ...)"'''        
-        assert type(self._polyline) != type(None), 'Not defined geometry'
-        tmp = 'LINESTRING (' 
-        for point in self._polyline[0:-1]:
-            tmp += str(point[0]) + ' ' + str(point[1]) + ',' 
 
-        point = self._polyline[-1]
-        return tmp + str(point[0]) + ' ' + str(point[1]) + ')'
     
     def set_wkt(self, wkt):
         '''Set the geometry from a WKT format, "LineString (x0 y0, ...)"'''
         points = wkt.upper()
-        assert not ('MULTI' in wkt), 'Multi-geometry is not supported'
+        #assert not ('MULTI' in wkt), 'Multi-geometry is not supported'
         
-        for s in ['LINESTRING', '(', ')', '"', '\n']:
+        for s in ['MULTI', 'LINESTRING', '(', ')', '"', '\n']:
             points = points.replace(s, '')
             
         points = points.strip().split(',')
@@ -139,15 +131,24 @@ class Link:
             polyline.append((x,y))
         
         self.set_geometry(tuple(polyline))
-   
+    
+    def get_wkt(self):
+        '''Return the node geometry in WKT format. "LineString (x0 y0, ...)"'''        
+        assert type(self._polyline) != type(None), 'Not defined geometry'
+        tmp = 'LINESTRING (' 
+        for point in self._polyline[0:-1]:
+            tmp += str(point[0]) + ' ' + str(point[1]) + ',' 
+
+        point = self._polyline[-1]
+        return tmp + str(point[0]) + ' ' + str(point[1]) + ')'   
 
 class Network:
     '''Main class. A network is represented by two lists: nodes and lines.
     
-    It allows generating the topology and geometry of a network from a
-    file of lines in WKT format. It contains several functions for the 
-    conversion between geocsv and epanet formats.
-    It allows the update of epanet files from GIS data.'''
+    Make the topology and geometry of a network from a file of lines in WKT 
+    format.
+    It contains functions for the conversion between GIS and epanet formats.
+    '''
     
     def __init__(self):
         self.nodes = []
@@ -200,53 +201,45 @@ class Network:
                            'start': link.start,         \
                            'end': link.end,             \
                            'type': link.get_type(),     \
-                           'length': link.get_length()  \
+                           'length': link.get_length2d()  \
                            }
                 writer.writerow(nodeDic)
     
 
-    def network_from_lines(self, fn, t=0.1, prene='Node-', initne=0, \
-                           incrne=1, prelk='Link-', initlk=0, incrlk=1):
-        '''Make a network geometry and topology from lines
-        
-        Node data: id, x and y.
-        Link data: id, start, end and vertices.
+    def from_lines(self, lines, t=0.0, nodeprefix='Node-', nodeinit=0, \
+                   nodedelta=1, linkprefix='Link-', linkinit=0, linkdelta=1):
+        '''Make a network (geometry and topology) from txt lines in WKT format
         
         Parameters
         ----------
         
-        fn: geocsv file name, containing lines geometry as WKT (linestring)
+        lines: list, containing txt lines geometry as WKT (LineString)
         t: float, nodes separated lesser than t are merged
-        prelk: str, prefix of node id label
-        initlk: int, link initial numeration
-        incrlk: int, link increment numeration
-        prelk: str, prefix of link id label
-        initlk: int, link initial numeration
-        incrlk: int, link increment numeration
-        
-        Return
-        ------
-        A NetTools object
+        linkprefix: str, prefix of node id label
+        linkinit: int, link initial numeration
+        linkdelta: int, link increment numeration
+        linkprefix: str, prefix of link id label
+        linkinit: int, link initial numeration
+        linkdelta: int, link increment numeration
         '''    
         # LOAD LINKS
         links = []
         linkcnt = 0
-        with open(fn, 'r') as file:
-            lines = file.readlines()
-            for line in lines:
-                if 'LINESTRING' in line.upper():
-                    linkid = prelk + str(initlk + incrlk*linkcnt)
-                    mylink = Link(linkid, linkcnt*2, linkcnt*2+1)
-                    mylink.set_type('PIPE')
-                    mylink.set_wkt(line)                                              
-                    links.append(mylink)
-                    linkcnt += 1
+
+        for line in lines:
+            if 'LINESTRING' in line.upper():
+                linkid = linkprefix + str(linkinit + linkdelta*linkcnt)
+                mylink = Link(linkid, linkcnt*2, linkcnt*2+1)
+                mylink.set_type('PIPE')
+                mylink.set_wkt(line)                                           
+                links.append(mylink)
+                linkcnt += 1
         
         # REDUCING OVERLAPPED POINTS
         usednodes = set()
         cnt = 0
         for i in range(len(links)):
-            assert links[i].get_length() >= 2*t, 'Too short link'        
+            assert links[i].get_length2d() >= 2*t, 'Too short link'        
             if not(links[i].start in usednodes):
                 links[i].start = cnt
                 usednodes.add(cnt)
@@ -300,7 +293,7 @@ class Network:
         nodes = []    
         rename = {}
         for key in avgcoor.keys():
-            nodeid = prene + str(initne + incrne * key)
+            nodeid = nodeprefix + str(nodeinit + nodedelta * key)
             rename[key] = nodeid
             mynode = Node(nodeid)
             mynode.set_geometry(avgcoor[key])
@@ -316,8 +309,8 @@ class Network:
         self.nodes = nodes
         self.links = links        
     
-    def network_from_geocsv(self, nodescsv, linkscsv):
-        '''Import a network from GIS data'
+    def from_csv(self, nodescsv, linkscsv):
+        '''Import a network from geocsv data'
         
         Node data: id, geometry [, type, elevation]
         Link data: id, start, end, geometry [,type]
@@ -326,7 +319,8 @@ class Network:
         ----------
         
         nodescsv: file name, input node file in geocsv format
-        linkscsv: file name, input link file in geocsv format'''  
+        linkscsv: file name, input link file in geocsv format
+        '''  
         # READ NODES FILE AND UPDATING NETWORK
         assert fexits(nodescsv), 'I cannot find file: ' + nodescsv
         with open(nodescsv, encoding='utf-8-sig') as f:
@@ -343,7 +337,7 @@ class Network:
                         newnode.set_type(row['type'])
                 
                 if 'elevation' in reader.fieldnames:
-                    newnode.set_type(row['elevation'])
+                    newnode.elevation = row['elevation']
                     
                 #  IT IS PENDING TO IMPLEMENT THE REST OF PARAMETERS !
             
@@ -376,7 +370,7 @@ class Network:
                 # ADD NEW LINK
                 self.links.append(newlink)  
     
-    def network_from_epanet(self, epanetfn):
+    def from_epanet(self, epanetfn):
         '''Make a network from a epanet file
         
         Node data: id, type, elevation and coordinates.
@@ -397,45 +391,55 @@ class Network:
         # INPUT JUNCTIONS # ID Elev Demand Pattern    
         for line in  mysections['JUNCTIONS']:
             tmp = myht.line_to_tuple(line)
-            junction = Node(tmp[0], nodetype='JUNCTION')
+            junction = Node(tmp[0])
+            junction.set_type('JUNCTION')
+            junction.elevation = tmp[1] 
             self.nodes.append(junction)
             
         # INPUT RESERVOIRS # ID Head Pattern      
         for line in  mysections['RESERVOIRS']:
             tmp = myht.line_to_tuple(line)
-            reservoir = Node(tmp[0], nodetype='RESERVOIR')
+            reservoir = Node(tmp[0])
+            reservoir.set_type('RESERVOIR')
+            reservoir.elevation = tmp[1] 
             self.nodes.append(reservoir)
 
         # INPUT TANKS # ID Elevation InitLevel MinLevel MaxLevel Diameter MinVol VolCurve
         for line in  mysections['TANKS']:      
             tmp = myht.line_to_tuple(line)
-            tank = Node(tmp[0], nodetype='TANK')
+            tank = Node(tmp[0])
+            tank.set_type('TANK')
+            tank.elevation = tmp[1]
             self.nodes.append(tank)
         
         # COORDINATES
         for line in mysections['COORDINATES']:
             nid,x,y = myht.line_to_tuple(line)
             index = self.get_nodeindex(nid)
-            self.nodes[index].x,self.nodes[index].y = float(x),float(y)         
+            self.nodes[index].set_geometry((float(x),float(y)))         
         
         # INPUT PIPES # ID Node1 Node2 Length Diameter Roughness MinorLoss Status
         for line in  mysections['PIPES']:      
             tmp = myht.line_to_tuple(line)
             lid,n1,n2 = tmp[0:3]
-            s = tmp[7]
+            s = tmp[-1]
             pipe = Link(lid, n1, n2)
             if s == "CV":
-                pipe.linktype = 'CVPIPE'
+                pipe.set_type('CVPIPE')
             else:
-                pipe.linktype = 'PIPE'
+                pipe.set_type('PIPE')
                 
+            pipe._length = tmp[3]
+            pipe.diameter = tmp[4]
+            pipe.roughness = tmp[5]            
             self.links.append(pipe)
         
         # INPUT PUMPS #  # ID Node1 Node2 Parameters
         for line in  mysections['PUMPS']:
             tmp = myht.line_to_tuple(line)
             lid,n1,n2 = tmp[0:3]
-            pump = Link(lid, n1, n2, linktype='PUMP' )          
+            pump = Link(lid, n1, n2)
+            pump.set_type('PUMP')          
             self.links.append(pump)
         
         # INPUT VALVES # ID Node1 Node2 Diameter Type Setting MinorLoss
@@ -444,66 +448,75 @@ class Network:
             lid,n1,n2 = tmp[0:3]
             t = tmp[4]
             valve = Link(lid,n1,n2)
-            valve.linktype = t
+            valve.set_type(t)
             self.links.append(valve)
         
         # VERTICES
+        for link in self.links:
+            tmp = [self.nodes[self.get_nodeindex(link.start)].get_geometry()]
+            tmp.append(self.nodes[self.get_nodeindex(link.end)].get_geometry())
+            link.set_geometry(tmp)
+            
         for line in mysections['VERTICES']:
             nid,x,y = myht.line_to_tuple(line)
             index = self.get_linkindex(nid)
-            if type(self.links[index].vertices) == type(None):
-                self.links[index].vertices = [(float(x),float(y))]
-            else:
-               self.links[index].vertices.append((float(x),float(y)))                          
-    
-    def network_to_epanet(self, epanetfn, lengths=True):
+            poly = self.links[index]._polyline
+            poly.insert(-1,(float(x),float(y)))
+            
+    def to_epanet(self, epafn, temfn='./template.inp', lengths=True):
         '''Export network to an epanet file'
         
         Data exported:
             [JUNTIONS]
-            id / default parameters
+            'id' and 'elevation'
             [RESERVOIRS]
-            id / default parameters
+            'id' and 'elevation'
             [TANKS]
-            id / default parameters
+            'id' and 'elevation'
             [PIPES]
-            id start end / default parameters
+            'id', 'start', 'end' and 'length'
             [PUMPS]
-            id start end / default parameters
+            'id', 'start' and 'end'
             [VALVES]
-            id start end / default parameters
+            'id', 'start', and 'end'
             [COORDINATES]
-            id x y
+            'id', 'x' and 'y'
             [VERTICES]
-            id x y
+            'id', 'x' and 'y'
         
         Parameters
         ----------
         
-        epanetfn: epanet file name (*.inp), output epanet model
+        epafn: epanet file name (*.inp), output epanet model
+        temfn: template epanet file name (*.inp)
         lengths: boolean, calculate pipe lengths '''
-
-        # CHECK IF TEMPLATE EXISTS
-        templatefn = './template.inp'
-        assert fexits(templatefn), 'Template file cannot be found'
         
         # READ EPANET FILE TEMPLATE
-        epanetf = ht.Htxtf(templatefn)
+        epanetf = ht.Htxtf(temfn)
         sections = epanetf.read()
         
         # NODES/COORDINATES TO SECTION
         for node in self.nodes:
             nodetype = node.get_type()
-            if (nodetype == 'JUNCTION') or (type(nodetype) == type(None)):
-                tmp = (node.nodeid,0.0,0.0)
+            if (nodetype == 'JUNCTION'):
+                if type(node.elevation) != type(None):
+                    tmp = (node.nodeid,node.elevation,0.0)
+                else:
+                    tmp = (node.nodeid,0.0,0.0)
                 sections['JUNCTIONS'].append(epanetf.tuple_to_line(tmp))
                 
             elif nodetype == 'RESERVOIR':
-                tmp = (node.nodeid,0.0)
+                if type(node.elevation) != type(None):
+                    tmp = (node.nodeid,node.elevation)
+                else:
+                    tmp = (node.nodeid,0.0)
                 sections['RESERVOIRS'].append(epanetf.tuple_to_line(tmp))
             
             elif nodetype == 'TANK':
-                tmp = (node.nodeid,0.0,0.0,0.0,0.0,0.0,0.0)
+                if type(node.elevation) != type(None):
+                    tmp = (node.nodeid,node.elevation,0.0,0.0,0.0,0.0,0.0)
+                else:
+                    tmp = (node.nodeid,0.0,0.0,0.0,0.0,0.0,0.0)
                 sections['TANKS'].append(epanetf.tuple_to_line(tmp))
 
             line = epanetf.tuple_to_line((node.nodeid,node._x,node._y))
@@ -517,9 +530,9 @@ class Network:
             if (linktype in ['PIPE', 'CVPIPE']) or (type(linktype) == type(None)):
                 # length,diameter,roughness,minorLoss, ...
                 if lengths:
-                    tmp = tmp + (link.get_length(),)
+                    tmp = tmp + (link.get_length2d(),0.0,0.0,0.0)
                 else:
-                    tmp = tmp + (0.0,)
+                    tmp = tmp + (0.0,0.0,0.0,0.0)
                 
                 # status)
                 if linktype == 'CVPIPE':
@@ -539,7 +552,7 @@ class Network:
                 sections['PUMPS'].append(epanetf.tuple_to_line(tmp))
             
             elif linktype in ['PRV', 'PSV', 'PBV', 'FCV','TCV','GPV']:
-                tmp = (link.linkid,link.start,link.end,link.linktype,0.0,0.0)
+                tmp = (link.linkid,link.start,link.end,linktype,0.0,0.0)
                 sections['VALVES'].append(epanetf.tuple_to_line(tmp))
             
             vertices = link.get_vertices()
@@ -577,8 +590,8 @@ class Network:
         sections['BACKDROP'] = newsection
         
         # WRITE EPANET INP FILE
-        outputf = open(epanetfn, 'w')
-        outputf.write('; File generated automatically by ppntools.py \n')
+        outputf = open(epafn, 'w')
+        outputf.write('; File generated automatically by nettools.py \n')
         for section in sections:
             outputf.write('[' + section + '] \n')
             for line in sections[section]:
@@ -587,74 +600,74 @@ class Network:
         
         outputf.write('[END] \n')
         outputf.close()
+    
+    def graph_degree(self):
+        '''Get node degrees'''
+        for node in self.nodes:
+            node._degree = 0
+        
+        for link in self.links:
+            self.nodes[self.get_nodeindex(link.start)]._degree += 1
+            self.nodes[self.get_nodeindex(link.end)]._degree += 1
+    
+    def split_polyline(self, polyline, point, tolerance=0.0):
+        '''Split a polyline (2D) at point if point is over the polyline.
+        Polyline is a list/tuple of tuples containing vertex (x,y)'''
+        if type(polyline) == tuple:
+            poly = list(polyline)
+        elif type(polyline) == list:
+            poly = polyline
+        else:
+            raise TypeError('polyline is not a list/tuple')
+        assert type(point) == tuple, 'point is not a tuple'
+               
+        for i in range(len(poly)-1):
+            startp = poly[i]
+            endp = polyline[i+1]
+            a = self.dist2p(startp,point)
+            b = self.dist2p(point, endp)
+            c = self.dist2p(startp,endp)
+            
+            if a + b < c + tolerance:
+                # DIVISION POINT IS NOT START/END POINT
+                d1 = self.dist2p(point,poly[0])
+                d2 = self.dist2p(point,poly[-1])
+                xa,ya = startp[:]
+                xb,yb = endp[:]
+                xp,yp = point[:]
+                d3 = abs((xb-xa)*(yp-ya)-(yb-ya)*(xp-xa))/c
+                if  d1 > tolerance and d2 > tolerance and d3 < tolerance:
+                    # DIVIDE    
+                    cs = ((xp-xa)*(xb-xa)+(yp-ya)*(yb-ya))/(a*c)
+                    x = startp[0] + cs*a/c*(endp[0]-startp[0])
+                    y = startp[1] + cs*a/c*(endp[1]-startp[1])
+                    polya = poly[0:i+1].copy()
+                    polya.append((x,y))
+                    polyb = poly[i+1:].copy()
+                    polyb.insert(0,(x,y))
+                    return True,tuple([polya,polyb])
+                
+        return False,()
 
-
-
-#*#*#*#*#*#*#
-#   TEST    #
-#*#*#*#*#*#*#
-#mynode = Node('N-34')
-#print('1:', type(mynode), mynode.nodeid)
-##print(mynode.get_wkt())
-#mynode.set_geometry((25.3,25.3))
-###mynode.set_geometry(25.3,25.3)
-#print('2:', mynode.get_geometry())
-##mynode.set_geometry('de')
-#print('3:', mynode.get_type())
-#mynode.set_type('JUNCTION')
-##mynode.set_type(25.3)
-##mynode.set_type('APPLE')
-#print('4:', mynode.get_type())
-##print(mynode.get_distance(45.3,44.5))
-##print(mynode.get_distance(25.3))
-#print('5:', mynode.get_distance((45.3,44.5)))
-#print('6:', mynode.get_wkt())
-##mynode.set_wkt('PO 23.5 456.3')
-#mynode.set_wkt('Point (23.5 456.3)')
-#print('7:', mynode.get_wkt())
-#mylink = Link('L-26','N-23','N-45')
-#print('10:', type(mylink), mylink.linkid, mylink.start, mylink.end)
-##mylink.set_geometry(4,6)
-##mylink.set_geometry()
-#tmp = ((34.5,67.34),(125.36,80.36),(235.68,70.68),(400.21,50.36),(425.6,55.36))
-#mylink.set_geometry(tmp)
-#print('11:', mylink._polyline)
-#print('12:', mylink.get_startvertex(), mylink.get_endvertex())
-#print('13:', mylink.get_vertices())
-#print('14:', mylink.get_length())
-##mylink.set_type()
-##mylink.set_type('HG')
-#mylink.set_type('PIPE')
-#print('15:', mylink.get_type())
-#print('16:', mylink.get_wkt())
-##mylink.set_wkt('LINesTRI (25.36 125, 236.25 124 , 256.2 2548, 1.0 2.0)')
-#mylink.set_wkt('LINesTRING (25.36 125, 236.25 124 , 256.2 2548, 1.0 2.0)')
-#print('17:', mylink._polyline)
-
-## EXAMPLE 1
-#geocsvfn = './examples/1_example_lines.csv'
-#mynet = Network()        
-#mynet.network_from_lines(geocsvfn, t=5.0, prene='N-', prelk='L-')
-#
-#print("ID    type    x    y")
-#for node in mynet.nodes:
-#    print(node.nodeid, node.get_type(), node._x, node._y)
-#
-#print("ID    start    end    type    vertices")
-#for link in mynet.links:
-#    print(link.linkid,link.start,link.end,link.get_type(),link.get_length())
-#
-#nodescsv = './examples/1_example_nodes.csv'
-#linkscsv = './examples/1_example_pipes.csv'      
-#mynet.nodes_to_geocsv(nodescsv)
-#mynet.links_to_geocsv(linkscsv)
-#mynet.network_to_epanet('./examples/1_example.inp')
-
-## EXAMPLE 2
-#geocsvfn = './examples/2_example_lines.csv'
-#mynet = Network()        
-#mynet.network_from_lines(geocsvfn, t=0.1, prene='N-', initne=1000, incrne = 10,
-#                         prelk='L-', initlk= 1000, incrlk = 10)
-#
-#mynet.network_to_epanet('./examples/2_example.inp')
-
+    
+    def split_polylines(self, polylines, points, tolerance=0.0):
+        '''Divide polylines (2D) at points if point is over the polyline.
+        polylines is a list of polylines. See divide_polyline().
+        points is a list of tuples (x,y).'''
+        assert type(polylines) == list, 'polyline is not a list' 
+        assert type(points) == list, 'points is not a list'
+        
+        oldpolys = polylines.copy()
+        for point in points:
+            newpolys = []
+            for poly in oldpolys:
+                result,divided = self.split_polyline(poly,point,tolerance)
+                if result:
+                    newpolys.append(divided[0]) # FIRST PART
+                    newpolys.append(divided[1]) # SECOND PART
+                else:
+                    newpolys.append(poly)
+                
+            oldpolys = newpolys.copy()
+            
+        return oldpolys
