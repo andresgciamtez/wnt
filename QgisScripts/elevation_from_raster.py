@@ -4,35 +4,25 @@ NETTOOLS IMPORT/EXPORT WATER NETWORK DATA FROM/TO GIS
 Andrés García Martínez (ppnoptimizer@gmail.com)
 Licensed under the Apache License 2.0. http://www.apache.org/licenses/
 """
-from qgis.PyQt.QtCore import QCoreApplication, QVariant
+from qgis.PyQt.QtCore import QCoreApplication
 from qgis.core import (QgsProcessing,
-                       QgsProcessingFeedback,
                        QgsProcessingAlgorithm,
                        QgsFeatureSink,
-                       QgsFields,
-                       QgsField,
-                       QgsFeature,
                        QgsProcessingParameterRasterLayer,
-                       QgsProcessingParameterString, 
                        QgsProcessingParameterFeatureSource,
                        QgsProcessingParameterFeatureSink,
-                       QgsProcessingParameterField,
-                       QgsProcessingException,
-                       QgsGeometry,
-                       QgsWkbTypes
+                       QgsProcessingParameterField
                       )
-from nettools import Network
  
 class ElevationFromRaster(QgsProcessingAlgorithm):
     """
-    Get elevation form raster.
-    
-    Return
-    ------
-    A Nodes Point vector layer. 
+    Get node elevation from DEM.
     """
+
+    # DEFINE CONSTANTS
+
     NODES_INPUT = 'NODES_INPUT'
-    RASTER_INPUT = 'RASTER_INPUT'
+    DEM_INPUT = 'DEM_INPUT'
     ELEV_FIELD_INPUT = 'ELEV_FIELD_INPUT'
     OUTPUT = 'OUTPUT'
     
@@ -82,7 +72,9 @@ class ElevationFromRaster(QgsProcessingAlgorithm):
         """
         Define the inputs and outputs of the algorithm.
         """
-        # 'INPUT' is the recommended name for the main input parameter.
+        
+        # ADD THE INPUT SOURCES
+        
         self.addParameter(
             QgsProcessingParameterFeatureSource(
                 self.NODES_INPUT,
@@ -93,17 +85,20 @@ class ElevationFromRaster(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterField (
                 self.ELEV_FIELD_INPUT,
-                self.tr('Field containing elevation'),
+                self.tr('Field where write elevation'),
                 'elevation',
                 self.NODES_INPUT
             )
         )
         self.addParameter(
             QgsProcessingParameterRasterLayer(
-                self.RASTER_INPUT,
+                self.DEM_INPUT,
                 self.tr('Input DEM raster layer')
             )
         )
+        
+        #ADD THE OUTPUT SINK
+        
         self.addParameter(
             QgsProcessingParameterFeatureSink(
                 self.OUTPUT,
@@ -118,10 +113,9 @@ class ElevationFromRaster(QgsProcessingAlgorithm):
         
         # INPUT
         
-        input = self.parameterAsSource(parameters, self.NODES_INPUT, context)
-        dem = self.parameterAsRasterLayer(parameters, self.RASTER_INPUT, context)
-        elevf = self.parameterAsString(parameters, self.ELEV_FIELD_INPUT, context)
-        flds = input.fields
+        nodes = self.parameterAsSource(parameters, self.NODES_INPUT, context)
+        dem = self.parameterAsRasterLayer(parameters, self.DEM_INPUT, context)
+        efield = self.parameterAsString(parameters, self.ELEV_FIELD_INPUT, context)
         
         # OUTPUT
         
@@ -129,27 +123,32 @@ class ElevationFromRaster(QgsProcessingAlgorithm):
             parameters,
             self.OUTPUT,
             context,
-            input.fields(),
-            input.wkbType(),
-            input.sourceCrs()
+            nodes.fields(),
+            nodes.wkbType(),
+            nodes.sourceCrs()
             )
 
         # MAIN LOOP READ/WRITE POINTS
-        feedback.pushInfo('*'*4)
-        feedback.pushInfo('CRS is {}'.format(input.sourceCrs().authid()))
+        
+        feedback.pushInfo('CRS is {}'.format(nodes.sourceCrs().authid()))
+        tot = nodes.featureCount()
         pcnt = 0
         ncnt = 0
         
-        for feat in  input.getFeatures():
-            pcnt += 1
+        for feat in  nodes.getFeatures():
             val, res = dem.dataProvider().sample(feat.geometry().asPoint(), 1)
-            if not(res):
+            if res:
+                pcnt += 1
+                feat[efield] = val
+                sink.addFeature(feat, QgsFeatureSink.FastInsert)
+            else:
                 ncnt += 1
-            feat[elevf] = val
-            sink.addFeature(feat, QgsFeatureSink.FastInsert)
+            
+            if (pcnt+ncnt) % 100 == 0:
+                feedback.setProgress(100*(pcnt+ncnt)/tot) # Update the progress bar
         
-        feedback.pushInfo('Proccesed nodes: {},  skipped: {}.'.format(pcnt,ncnt))
-        feedback.pushInfo('*'*4)
+        msg = 'Proccesed nodes: {},  skipped: {}.'.format(pcnt,ncnt)
+        feedback.pushInfo(msg)
         
         # PROCCES CANCELED
         

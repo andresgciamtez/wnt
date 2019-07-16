@@ -1,27 +1,22 @@
 # -*- coding: utf-8 -*-
 """
-NETTOOLS IMPORT/EXPORT WATER NETWORK FROM/TO GIS
+NETTOOLS IMPORT/EXPORT WATER NETWORK DATA FROM/TO GIS
 Andrés García Martínez (ppnoptimizer@gmail.com)
 Licensed under the Apache License 2.0. http://www.apache.org/licenses/
 """
 from PyQt5.QtCore import QCoreApplication
 from qgis.core import (QgsProcessing,
-                       QgsProcessingException,
                        QgsProcessingAlgorithm,
                        QgsProcessingParameterFeatureSource,
-                       QgsProcessingParameterFile,
                        QgsProcessingParameterField,
                        QgsProcessingParameterFileDestination)
-import processing
 
 class DemandScenario(QgsProcessingAlgorithm):
     """
-    Create a epanet scenary file with diameter and roughness
+    Build an epanet scenary file with diameter and roughness.
     """
 
-    # Constants used to refer to parameters and outputs. They will be
-    # used when calling the algorithm from another algorithm, or when
-    # calling from the QGIS console.
+    # DEFINE CONSTANTS
 
     NODES_INPUT = 'NODES_INPUT'
     DE_FIELD_INPUT = 'DE_FIELD_INPUT'
@@ -34,6 +29,9 @@ class DemandScenario(QgsProcessingAlgorithm):
         return QCoreApplication.translate('Processing', string)
 
     def createInstance(self):
+        """
+        Create a instance and return a new copy of algorithm.
+        """
         return DemandScenario()
 
     def name(self):
@@ -44,8 +42,7 @@ class DemandScenario(QgsProcessingAlgorithm):
 
     def displayName(self):
         """
-        Returns the translated algorithm name, which should be used for any
-        user-visible display of the algorithm name.
+        Returns a localised short helper string for the algorithm
         """
         return self.tr('Nodal demand scenario')
 
@@ -63,18 +60,18 @@ class DemandScenario(QgsProcessingAlgorithm):
 
     def shortHelpString(self):
         """
-        Returns a localised short helper string for the algorithm. This string
-        should provide a basic description about what the algorithm does and the
-        parameters and outputs associated with it..
+        Returns a localised short helper string for the algorithm.
         """
         return self.tr("Make an epanet scenario file with nodal demands.")
 
     def initAlgorithm(self, config=None):
         """
-        Here we define the inputs and output of the algorithm, along
-        with some other properties.
+        Define the inputs and outputs of the algorithm.
         """
-        # Adding the input vector features source.
+        
+        # ADD THE INPUT SOURCES
+        
+        # Adding the input vector features source
         self.addParameter(
             QgsProcessingParameterFeatureSource(
                 self.NODES_INPUT,
@@ -82,18 +79,18 @@ class DemandScenario(QgsProcessingAlgorithm):
                 [QgsProcessing.TypeVectorPoint]
             )
         )
-        # Adding fields with demand.
+        # Adding fields with demand
         self.addParameter(
             QgsProcessingParameterField(
                 self.DE_FIELD_INPUT,
-                self.tr('Fields containing demand'),
+                self.tr('Field containing demand'),
                 'demand',
                 self.NODES_INPUT,
                 allowMultiple = True,
                 optional = True
             )
         )
-        # Adding a file destination.
+        # Adding a file destination
         self.addParameter(
             QgsProcessingParameterFileDestination(
                 self.OUTPUT,
@@ -104,30 +101,45 @@ class DemandScenario(QgsProcessingAlgorithm):
         
     def processAlgorithm(self, parameters, context, feedback):
         """
-        Here is where the processing itself takes place.
+        RUN PROCESS
         """
-        # INPUT        
-        nodesinput = self.parameterAsSource(parameters, self.NODES_INPUT, context)
-        dfields = self.parameterAsFields(parameters, self.DE_FIELD_INPUT, context)
         
-        # IF NO FIELD WAS SELECTED RETURN {}  
-        if len(dfields) == 0:
-            return {}
+        # INPUT        
+        
+        input = self.parameterAsSource(parameters, self.NODES_INPUT, context)
+        defields = self.parameterAsFields(parameters, self.DE_FIELD_INPUT, context)
         
         # OUTPUT
+        
         scnfn = self.parameterAsFileOutput(parameters, self.OUTPUT, context)
         file = open(scnfn, 'w')
         
+        
+        # IF NO FIELD WAS SELECTED RETURN {}  
+        if len(defields) == 0:
+            return {}
+        
+        # WRITE FILE
+        
+        cnt = 0
+        scnfn = self.parameterAsFileOutput(parameters, self.OUTPUT, context)
+        file = open(scnfn, 'w')
         file.write('; File generated automatically by nettools.py \n')
         file.write('[DEMANDS] \n')
         file.write(';Node    Demand    Pattern \n')
-        for feat in nodesinput.getFeatures():
-            for field in dfields:
+        feedback.setProgress(5) # Update the progress bar
+        
+        for feat in input.getFeatures():
+            for field in defields:
                 if feat[field] != None and feat['type'] == 'JUNCTION':
+                    cnt += 1
                     line ='{}  {}  {} \n'.format(feat['id'],feat[field], field)
                     file.write(line)
         
         file.close()
+        
+        msg = 'Node demands add: {},  types: {}.'.format(cnt, len(defields))
+        feedback.pushInfo(msg)
 
         # PROCCES CANCELED
         
@@ -136,4 +148,4 @@ class DemandScenario(QgsProcessingAlgorithm):
         
         # OUTPUT
 
-        return {'OUTPUT': scnfn}
+        return {self.OUTPUT: scnfn}

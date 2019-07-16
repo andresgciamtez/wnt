@@ -1,27 +1,22 @@
 # -*- coding: utf-8 -*-
 """
-NETTOOLS IMPORT/EXPORT WATER NETWORK FROM/TO GIS
+NETTOOLS IMPORT/EXPORT WATER NETWORK DATA FROM/TO GIS
 Andrés García Martínez (ppnoptimizer@gmail.com)
 Licensed under the Apache License 2.0. http://www.apache.org/licenses/
 """
 from PyQt5.QtCore import QCoreApplication
 from qgis.core import (QgsProcessing,
-                       QgsProcessingException,
                        QgsProcessingAlgorithm,
                        QgsProcessingParameterFeatureSource,
-                       QgsProcessingParameterFile,
                        QgsProcessingParameterField,
                        QgsProcessingParameterFileDestination)
-import processing
 
 class DiameterAndRoughness(QgsProcessingAlgorithm):
     """
-    Create a epanet scenary file with diameter and roughness
+    Build an epanet scenary file from pipe diameter and roughness.
     """
 
-    # Constants used to refer to parameters and outputs. They will be
-    # used when calling the algorithm from another algorithm, or when
-    # calling from the QGIS console.
+    # DEFINE CONSTANTS
 
     LINKS_INPUT = 'LINKS_INPUT'
     D_FIELD_INPUT = 'D_FIELD_INPUT'
@@ -35,6 +30,9 @@ class DiameterAndRoughness(QgsProcessingAlgorithm):
         return QCoreApplication.translate('Processing', string)
 
     def createInstance(self):
+        """
+        Create a instance and return a new copy of algorithm.
+        """
         return DiameterAndRoughness()
 
     def name(self):
@@ -64,18 +62,17 @@ class DiameterAndRoughness(QgsProcessingAlgorithm):
 
     def shortHelpString(self):
         """
-        Returns a localised short helper string for the algorithm. This string
-        should provide a basic description about what the algorithm does and the
-        parameters and outputs associated with it..
+        Returns a localised short helper string for the algorithm.
         """
-        return self.tr("Make an epanet scenario file with diameter and roughness")
+        return self.tr("Make an epanet scenario file with pipe diameter and roughness.")
 
     def initAlgorithm(self, config=None):
         """
-        Here we define the inputs and output of the algorithm, along
-        with some other properties.
+        Define the inputs and outputs of the algorithm.
         """
-        # Adding the input vector features source.
+        
+        # ADD THE INPUT
+        
         self.addParameter(
             QgsProcessingParameterFeatureSource(
                 self.LINKS_INPUT,
@@ -99,7 +96,10 @@ class DiameterAndRoughness(QgsProcessingAlgorithm):
                 self.LINKS_INPUT
             )
         )
-        # Adding a feature sink in which to store our processed results.
+        
+        
+        # ADD A FILE DESTINATION
+        
         self.addParameter(
             QgsProcessingParameterFileDestination(
                 self.OUTPUT,
@@ -110,30 +110,45 @@ class DiameterAndRoughness(QgsProcessingAlgorithm):
         
     def processAlgorithm(self, parameters, context, feedback):
         """
-        Here is where the processing itself takes place.
+        RUN PROCESS
         """
+        
         # INPUT        
-        linksinput = self.parameterAsSource(parameters, self.LINKS_INPUT, context)
+        
+        links = self.parameterAsSource(parameters, self.LINKS_INPUT, context)
         dfield = self.parameterAsString(parameters, self.D_FIELD_INPUT, context)
         rfield = self.parameterAsString(parameters, self.R_FIELD_INPUT, context)
         
         # OUTPUT
-        scnfn = self.parameterAsFileOutput(parameters, self.OUTPUT, context)
-        f = open(scnfn, 'w')
         
-        f.write('; File generated automatically by nettools.py \n')
-        f.write('[DIAMETERS] \n')
-        f.write(';Pipe    Diameter \n')
-        for feature in linksinput.getFeatures():
-            f.write('{}    {} \n'.format(feature['id'],feature[dfield]))
+        scnfile = self.parameterAsFileOutput(parameters, self.OUTPUT, context)
         
-        f.write(' \n')
-        f.write('[ROUGHNESS] \n')
-        f.write(';Pipe    Roughness \n')
-        for feature in linksinput.getFeatures():
-            f.write('{}    {} \n'.format(feature['id'],feature[rfield]))
+        # WRITE FILE
         
-        f.close()
+        cnt = 0
+        file = open(scnfile, 'w')
+        file.write('; File generated automatically by nettools.py \n')
+        file.write('[DIAMETERS] \n')
+        file.write(';Pipe    Diameter \n')
+        
+        
+        for feature in links.getFeatures():
+            if feature['type'] in ['PIPE', 'CVPIPE']:
+                cnt += 1    
+                file.write('{}    {} \n'.format(feature['id'],feature[dfield]))
+ 
+        file.write(' \n')
+        file.write('[ROUGHNESS] \n')
+        file.write(';Pipe    Roughness \n')
+        
+        for feature in links.getFeatures():
+            if feature['type'] in ['PIPE', 'CVPIPE']:
+                file.write('{}    {} \n'.format(feature['id'],feature[rfield]))
+        
+        file.close()
+        
+        msg = 'Pipe diameter and roughness add: {}.'.format(cnt)
+        feedback.pushInfo(msg)
 
         # PROCCES CANCELED
         
@@ -142,4 +157,4 @@ class DiameterAndRoughness(QgsProcessingAlgorithm):
         
         # OUTPUT
 
-        return {'OUTPUT': scnfn}
+        return {self.OUTPUT: scnfile}

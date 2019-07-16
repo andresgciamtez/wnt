@@ -24,12 +24,10 @@ from nettools import Network
 class NetworkFromLines(QgsProcessingAlgorithm):
     """
     Built a network from 2d lines.
-    
-    Return
-    ------
-    A Links LineString vector layer. Fields: id, start, end, type, length.
-    A Nodes Point vector layer. Fields: id, type, elevation. 
     """
+
+    # DEFINE CONSTANTS
+    
     INPUT = 'INPUT'
     MERGE_DIST = 'MERGE_DIST'
     NODE_PREFIX = 'NODE_PREFIX'
@@ -87,7 +85,8 @@ class NetworkFromLines(QgsProcessingAlgorithm):
         """
         Define the inputs and outputs of the algorithm.
         """
-        # 'INPUT' is the recommended name for the main input parameter.
+        # INPUT
+        
         self.addParameter(
             QgsProcessingParameterFeatureSource(
                 self.INPUT,
@@ -149,7 +148,10 @@ class NetworkFromLines(QgsProcessingAlgorithm):
                 type = QgsProcessingParameterNumber.Integer,
                 defaultValue = 10
             )
-        )      
+        )
+        
+        # ADD NODE AND LINK FEATURE SINK 
+        
         self.addParameter(
             QgsProcessingParameterFeatureSink(
                 self.NODES_OUTPUT,
@@ -165,10 +167,10 @@ class NetworkFromLines(QgsProcessingAlgorithm):
 
     def processAlgorithm(self, parameters, context, feedback):
         """
-        Run the process.
+        RUN PROCESS
         """
         # INPUT
-        input = self.parameterAsSource(parameters, self.INPUT, context)
+        linelayer = self.parameterAsSource(parameters, self.INPUT, context)
         t = self.parameterAsDouble(parameters, self.MERGE_DIST, context)
         np = self.parameterAsString(parameters, self.NODE_PREFIX, context)
         ni = self.parameterAsInt(parameters, self.NODE_INIT, context)
@@ -178,41 +180,49 @@ class NetworkFromLines(QgsProcessingAlgorithm):
         ld = self.parameterAsInt(parameters, self.LINK_DELTA, context)
         
         # SEND INFORMATION TO THE USER
-        feedback.pushInfo('*'*4)
-        feedback.pushInfo('CRS is {}'.format(input.sourceCrs().authid()))       
-        if input.wkbType() == QgsWkbTypes.MultiLineString:
+
+        feedback.pushInfo('CRS is {}'.format(linelayer.sourceCrs().authid()))       
+        
+        if linelayer.wkbType() == QgsWkbTypes.MultiLineString:
             feedback.pushInfo('Source geometry is MultiLineString!')
-            #raise QgsProcessingException('Source geometry is MultiLineString!')
             
         # READ LINESTRINGS AS WKT
-        lines = [line.geometry().asWkt() for line in input.getFeatures()]
+        
+        lines = [line.geometry().asWkt() for line in linelayer.getFeatures()]
         
         # BUILD NETWORK FROM LINES
+        
         newnetwork = Network()
         newnetwork.from_lines(lines, t, np, ni, nd, lp, li, ld)
-        nodes,links = newnetwork.nodes,newnetwork.links
-        msg = '# nodes: {}, # links: {}.'.format(len(nodes),len(links))
-        feedback.pushInfo(msg)
+        nodes = newnetwork.nodes
+        links = newnetwork.links
         
         # GENERATE NODES LAYER
         newfields = QgsFields()     
         newfields.append(QgsField("id", QVariant.String))
         newfields.append(QgsField("type", QVariant.String))
         newfields.append(QgsField("elevation", QVariant.Double))
-        (nodes_sink, nodes_dest_id) = self.parameterAsSink(
+        (nodes_sink, nodes_id) = self.parameterAsSink(
             parameters,
             self.NODES_OUTPUT,
             context,
             newfields,
             QgsWkbTypes.Point,
-            input.sourceCrs()
+            linelayer.sourceCrs()
             )
+        
+        ncnt = 0
+        ntot = len(nodes)
         for node in nodes:
             #add feature to sink
+            ncnt += 1
             f = QgsFeature()
             f.setGeometry(QgsGeometry.fromWkt(node.get_wkt()))
             f.setAttributes([node.nodeid, '', ''])
             nodes_sink.addFeature(f, QgsFeatureSink.FastInsert)
+            
+            if ncnt % 100 == 0:
+                feedback.setProgress(50*ncnt/ntot) # Update the progress bar 
         
         # GENERATE LINKS LAYER
         
@@ -222,24 +232,31 @@ class NetworkFromLines(QgsProcessingAlgorithm):
         newfields.append(QgsField("end", QVariant.String))
         newfields.append(QgsField("type", QVariant.String))
         newfields.append(QgsField("length", QVariant.Double))
-        (links_sink, links_dest_id) = self.parameterAsSink(
+        (links_sink, links_id) = self.parameterAsSink(
             parameters,
             self.LINKS_OUTPUT,
             context,
             newfields,
             QgsWkbTypes.LineString,
-            input.sourceCrs()
+            linelayer.sourceCrs()
             )
 
+        lcnt = 0
+        ltot = len(links)
         for link in links:
             #add feature to sink
+            lcnt += 1
             f = QgsFeature()
             f.setGeometry(QgsGeometry.fromWkt(link.get_wkt()))
-            length = link.get_length()
+            length = link.get_length2d()
             f.setAttributes([link.linkid, link.start, link.end, 'PIPE', length])
-            links_sink.addFeature(f, QgsFeatureSink.FastInsert) 
+            links_sink.addFeature(f, QgsFeatureSink.FastInsert)
+            
+            if lcnt % 100 == 0:
+                feedback.setProgress(50+50*lcnt/ltot) # Update the progress bar 
         
-        feedback.pushInfo('*'*4)
+        msg = 'Add: {} nodes and {} links.'.format(ncnt,lcnt)
+        feedback.pushInfo(msg) 
         
         # PROCCES CANCELED
         
@@ -248,4 +265,4 @@ class NetworkFromLines(QgsProcessingAlgorithm):
         
         # OUTPUT
 
-        return {'NODES_OUTPUT': nodes_dest_id,'LINKS_OUTPUT': links_dest_id}
+        return {self.NODES_OUTPUT: nodes_id,self.LINKS_OUTPUT: links_id}

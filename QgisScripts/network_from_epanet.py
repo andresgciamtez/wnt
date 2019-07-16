@@ -5,17 +5,12 @@ Andrés García Martínez (ppnoptimizer@gmail.com)
 Licensed under the Apache License 2.0. http://www.apache.org/licenses/
 """
 from qgis.PyQt.QtCore import QCoreApplication, QVariant
-from qgis.core import (QgsProcessing,
-                       QgsProcessingAlgorithm,
+from qgis.core import (QgsProcessingAlgorithm,
                        QgsFields,
                        QgsField,
                        QgsFeature,
                        QgsFeatureSink,
                        QgsProcessingParameterFile,
-                       QgsProcessingParameterNumber,
-                       QgsProcessingParameterDistance,
-                       QgsProcessingParameterString, 
-                       QgsProcessingParameterFeatureSource,
                        QgsProcessingParameterFeatureSink,
                        QgsGeometry,
                        QgsWkbTypes
@@ -25,15 +20,9 @@ from nettools import Network
 class NetworkFromEpanet(QgsProcessingAlgorithm):
     """
     Built a network from an epanet file.
-    
-    Return
-    ------
-    links vector layer
-    nodes vector layer
     """
-    # Constants used to refer to parameters and outputs. They will be
-    # used when calling the algorithm from another algorithm, or when
-    # calling from the QGIS console.
+    
+    # DEFINE CONSTANTS
     
     INPUT = 'INPUT'
     NODES_OUTPUT = 'NODES_OUTPUT'
@@ -83,10 +72,11 @@ class NetworkFromEpanet(QgsProcessingAlgorithm):
 
     def initAlgorithm(self, config=None):
         """
-        Here we define the inputs and outputs of the algorithm.
+         Define the inputs and outputs of the algorithm.
         """
-        # 'INPUT' is the recommended name for the main input
-        # parameter.
+        
+        # ADD INPUT FILE
+        
         self.addParameter(
             QgsProcessingParameterFile(
                 self.INPUT,
@@ -95,6 +85,8 @@ class NetworkFromEpanet(QgsProcessingAlgorithm):
             )
         )
 
+        # ADD NODE AND LINK SINKS
+        
         self.addParameter(
             QgsProcessingParameterFeatureSink(
                 self.NODES_OUTPUT,
@@ -110,16 +102,17 @@ class NetworkFromEpanet(QgsProcessingAlgorithm):
 
     def processAlgorithm(self, parameters, context, feedback):
         """
-        Here is where the processing itself takes place.
+        RUN PROCESS
         """
         # INPUT
-        input = self.parameterAsFile(parameters, self.INPUT, context)
+        epanetf = self.parameterAsFile(parameters, self.INPUT, context)
                
         # READ NETWORK
-        print('*',input)
-        newnetwork = Network()
-        newnetwork.from_epanet(input)
-        nodes,links = newnetwork.nodes,newnetwork.links
+
+        network = Network()
+        network.from_epanet(epanetf)
+        nodes = network.nodes
+        links = network.links
         
         # GENERATE NODES LAYER
         
@@ -127,19 +120,26 @@ class NetworkFromEpanet(QgsProcessingAlgorithm):
         newfields.append(QgsField("id", QVariant.String))
         newfields.append(QgsField("type", QVariant.String))
         newfields.append(QgsField("elevation", QVariant.Double))
-        (nodes_sink, nodes_dest_id) = self.parameterAsSink(
+        (nodes_sink, nodes_id) = self.parameterAsSink(
             parameters,
             self.NODES_OUTPUT,
             context,
             newfields,
             QgsWkbTypes.Point
             )
+        
+        ncnt = 0
+        ntot = len(nodes)
         for node in nodes:
             #add feature to sink
+            ncnt += 1
             f = QgsFeature()
             f.setGeometry(QgsGeometry.fromWkt(node.get_wkt()))
             f.setAttributes([node.nodeid, node.get_type(), node.elevation])
             nodes_sink.addFeature(f, QgsFeatureSink.FastInsert) 
+            if ncnt % 100 == 0:
+                feedback.setProgress(50*ncnt/ntot) # Update the progress bar
+        
         
         # GENERATE LINKS LAYER
         
@@ -151,25 +151,28 @@ class NetworkFromEpanet(QgsProcessingAlgorithm):
         newfields.append(QgsField("length", QVariant.Double))
         newfields.append(QgsField("diameter", QVariant.Double))
         newfields.append(QgsField("roughness", QVariant.Double))
-        (links_sink, links_dest_id) = self.parameterAsSink(
+        (links_sink, links_id) = self.parameterAsSink(
             parameters,
             self.LINKS_OUTPUT,
             context,
             newfields,
             QgsWkbTypes.LineString
             )
+        
+        lcnt = 0
+        ltot = len(links)
         for link in links:
             #add feature to sink
+            lcnt += 1
             f = QgsFeature()
             f.setGeometry(QgsGeometry.fromWkt(link.get_wkt()))
             if link.get_type() in ['PIPE', 'CVPIPE']:
-                print('*', link.linkid,link.diameter)
                 f.setAttributes(
                     [link.linkid,
                     link.start,
                     link.end,
                     link.get_type(),
-                    link.get_length(),
+                    link._length,
                     link.diameter,
                     link.roughness]
                     )
@@ -179,12 +182,18 @@ class NetworkFromEpanet(QgsProcessingAlgorithm):
                     link.start,
                     link.end,
                     link.get_type(),
-                    link.get_length(),
+                    link._length,
                     None,
                     None]
                     )
             
-            links_sink.addFeature(f, QgsFeatureSink.FastInsert) 
+            links_sink.addFeature(f, QgsFeatureSink.FastInsert)
+            
+            if lcnt % 100 == 0:
+                feedback.setProgress(50+50*lcnt/ltot) # Update the progress bar
+        
+        msg = 'Add: {} nodes and {} links.'.format(ncnt,lcnt)
+        feedback.pushInfo(msg)                
 
         # PROCCES CANCELED
         
@@ -193,4 +202,4 @@ class NetworkFromEpanet(QgsProcessingAlgorithm):
         
         # OUTPUT
 
-        return {'NODES_OUTPUT': nodes_dest_id,'LINKS_OUTPUT': links_dest_id}
+        return {self.NODES_OUTPUT: nodes_id, self.LINKS_OUTPUT: links_id}

@@ -6,38 +6,22 @@ Licensed under the Apache License 2.0. http://www.apache.org/licenses/
 """
 from PyQt5.QtCore import QCoreApplication
 from qgis.core import (QgsProcessing,
-                       QgsFeatureSink,
-                       QgsProcessingException,
                        QgsProcessingAlgorithm,
                        QgsProcessingParameterFeatureSource,
                        QgsProcessingParameterFile,
-                       QgsProcessingParameterNumber,
-                       QgsProcessingParameterFeatureSink,
                        QgsProcessingParameterFileDestination)
-import processing
 from nettools import Node, Link, Network
 
 class EpanetFromNetwork(QgsProcessingAlgorithm):
     """
-    This is an example algorithm that takes a vector layer and
-    creates a new identical one.
-
-    It is meant to be used as an example of how to create your own
-    algorithms and explain methods and variables used to do it. An
-    algorithm like this will be available in all elements, and there
-    is not need for additional work.
-
-    All Processing algorithms should extend the QgsProcessingAlgorithm
-    class.
+    Build an epanet model file from node and link layers.
     """
 
-    # Constants used to refer to parameters and outputs. They will be
-    # used when calling the algorithm from another algorithm, or when
-    # calling from the QGIS console.
+    # DEFINE CONSTANTS
 
     NODES_INPUT = 'NODES_INPUT'
     LINKS_INPUT = 'LINKS_INPUT'
-    TEMPL_INPUT = 'TEMPL_INPUT'
+    TMPL_INPUT = 'TMPL_INPUT'
     OUTPUT = 'OUTPUT'
     
     def tr(self, string):
@@ -47,6 +31,9 @@ class EpanetFromNetwork(QgsProcessingAlgorithm):
         return QCoreApplication.translate('Processing', string)
 
     def createInstance(self):
+        """
+        Create a instance and return a new copy of algorithm.
+        """
         return EpanetFromNetwork()
 
     def name(self):
@@ -76,9 +63,7 @@ class EpanetFromNetwork(QgsProcessingAlgorithm):
 
     def shortHelpString(self):
         """
-        Returns a localised short helper string for the algorithm. This string
-        should provide a basic description about what the algorithm does and the
-        parameters and outputs associated with it..
+        Returns a localised short helper string for the algorithm.
         """
         msg = "Make an epanet inp file from nodes and links. \n"
         msg += "Pipe diameter and roughness are ignored."
@@ -86,10 +71,11 @@ class EpanetFromNetwork(QgsProcessingAlgorithm):
 
     def initAlgorithm(self, config=None):
         """
-        Here we define the inputs and output of the algorithm, along
-        with some other properties.
+        Define the inputs and outputs of the algorithm.
         """
-        # Adding the input vector features source.
+        
+        # ADD THE INPUT
+        
         self.addParameter(
             QgsProcessingParameterFeatureSource(
                 self.NODES_INPUT,
@@ -106,12 +92,14 @@ class EpanetFromNetwork(QgsProcessingAlgorithm):
         )
         self.addParameter(
             QgsProcessingParameterFile (
-                self.TEMPL_INPUT,
+                self.TMPL_INPUT,
                 self.tr('Epanet template file'),
                 extension='inp'
             )
         )
-        # Adding a feature sink in which to store our processed results.
+            
+        # ADD A FILE DESTINATION
+        
         self.addParameter(
             QgsProcessingParameterFileDestination(
                 self.OUTPUT,
@@ -122,17 +110,17 @@ class EpanetFromNetwork(QgsProcessingAlgorithm):
         
     def processAlgorithm(self, parameters, context, feedback):
         """
-        Here is where the processing itself takes place.
+        RUN PROCESS
         """
         # INPUT
         
-        nodesinput = self.parameterAsSource(parameters, self.NODES_INPUT, context)
-        linksinput = self.parameterAsSource(parameters, self.LINKS_INPUT, context)
-        templinput = self.parameterAsFile(parameters, self.TEMPL_INPUT, context)
+        nodes = self.parameterAsSource(parameters, self.NODES_INPUT, context)
+        links = self.parameterAsSource(parameters, self.LINKS_INPUT, context)
+        template = self.parameterAsFile(parameters, self.TMPL_INPUT, context)
         
         # OUTPUT
         
-        epanetfn = self.parameterAsFileOutput(
+        epanet = self.parameterAsFileOutput(
             parameters,
             self.OUTPUT,
             context
@@ -142,7 +130,10 @@ class EpanetFromNetwork(QgsProcessingAlgorithm):
         
         newnet = Network()
         
-        for f in nodesinput.getFeatures():
+        ncnt = 0
+        ntot = nodes.featureCount()
+        for f in nodes.getFeatures():
+            ncnt += 1
             newnode = Node(f['id'])
             newnode.set_wkt(f.geometry().asWkt())
             msg = 'Bad node type'
@@ -150,8 +141,15 @@ class EpanetFromNetwork(QgsProcessingAlgorithm):
             newnode.set_type(f['type'])
             newnode.elevation = f['elevation']
             newnet.nodes.append(newnode)
-        
-        for f in linksinput.getFeatures():
+            
+            if ncnt % 100 == 0:
+                feedback.setProgress(50*ncnt/ntot) # Update the progress bar 
+            
+            
+        lcnt = 0
+        ltot = links.featureCount()
+        for f in links.getFeatures():
+            lcnt += 1
             newlink = Link(f['id'],f['start'],f['end'])
             newlink.set_wkt(f.geometry().asWkt())
             msg = 'Bad link type'
@@ -159,14 +157,20 @@ class EpanetFromNetwork(QgsProcessingAlgorithm):
                                 'TCV','GPV'], msg
             newlink.set_type(f['type'])
             newnet.links.append(newlink)
-               
-        newnet.to_epanet(epanetfn, templinput)
+            
+            if lcnt % 100 == 0:
+                feedback.setProgress(50+50*lcnt/ltot) # Update the progress bar       
         
-        epanetfn = self.parameterAsFileOutput(
+        newnet.to_epanet(epanet, template)
+        
+        epanet = self.parameterAsFileOutput(
             parameters,
             self.OUTPUT,
             context
             )
+        
+        msg = 'Saved: {} nodes and {} links.'.format(ncnt,lcnt)
+        feedback.pushInfo(msg) 
         
         # PROCCES CANCELED
         
@@ -175,4 +179,4 @@ class EpanetFromNetwork(QgsProcessingAlgorithm):
         
         # OUTPUT
 
-        return {'OUTPUT': epanetfn}
+        return {self.OUTPUT: epanet}
