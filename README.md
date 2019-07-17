@@ -1,4 +1,4 @@
-# nettools
+# wntools
 Water Network Modeling Utilities
 
-Andrés García Martínez (ppnoptimizer@gmail.com)
+2019 Andrés García Martínez (ppnoptimizer@gmail.com)
