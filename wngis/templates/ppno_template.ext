@@ -1,0 +1,23 @@
+[TITLE]
+; This file is a template used by nettools 
+
+[INP]
+; Epanet inp file
+
+
+[OPTIONS]
+; GD (Gradient Descent), DE (Differential Evolution), DA (Dual Annaeling) or NSGA2 (NSGA-II)
+; Polish will make a slight final improvement, YES/NO
+; SolvedFN is the solved epanet file network
+
+[PIPES]
+; ID   series
+
+[PRESSURES]
+; ID node required_pressure
+
+[CATALOG]
+; PVC serie example
+; Series    diameter    roughness    price
+
+[END]
