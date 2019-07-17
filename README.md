@@ -1,4 +1,4 @@
 # nettools
-Water Network Modelling Utilities
+Water Network Modeling Utilities
 
 Andrés García Martínez (ppnoptimizer@gmail.com)
