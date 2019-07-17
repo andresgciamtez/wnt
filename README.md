@@ -1,4 +1,4 @@
 # nettools
-IMPORT/EXPORT WATER NETWORK DATA FROM/TO GIS
+Water Network Modelling Utilities
 
 Andrés García Martínez (ppnoptimizer@gmail.com)
