@@ -1,5 +1,0 @@
-include README.md
-include LICENSE
-include template.inp
-include examples/*
-include doc/*
