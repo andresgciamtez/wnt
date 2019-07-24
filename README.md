@@ -7,5 +7,7 @@ Water Network Modelling Utilities
 As Administrator open OSGeo4W sell
 
 > py3_env
+
 > python -m ensurepip --default-pip
+
 > python -m pip install epanettk
