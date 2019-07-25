@@ -64,7 +64,7 @@ class ScnFromDemandsAlgorithm(QgsProcessingAlgorithm):
         """
         Returns the unique algorithm name, used for identifying the algorithm.
         """
-        return 'nodal_demand_scenario'
+        return 'scn_from_demand'
 
     def displayName(self):
         """

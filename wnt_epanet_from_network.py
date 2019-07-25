@@ -66,14 +66,14 @@ class EpanetFromNetworkAlgorithm(QgsProcessingAlgorithm):
         """
         Returns the unique algorithm name, used for identifying the algorithm.
         """
-        return 'network_to_epanet'
+        return 'epanet_from_network'
 
     def displayName(self):
         """
         Returns the translated algorithm name, which should be used for any
         user-visible display of the algorithm name.
         """
-        return self.tr('Network to epanet')
+        return self.tr('Epanet file from network')
 
     def group(self):
         """

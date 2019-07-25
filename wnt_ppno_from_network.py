@@ -73,7 +73,7 @@ class PpnoFromNetworkAlgorithm(QgsProcessingAlgorithm):
         """
         Returns the unique algorithm name, used for identifying the algorithm.
         """
-        return 'network_to_ppno'
+        return 'ppno_from_network'
 
     def displayName(self):
         """

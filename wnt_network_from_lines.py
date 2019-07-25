@@ -81,13 +81,13 @@ class NetworkFromLinesAlgorithm(QgsProcessingAlgorithm):
         """
         Returns the unique algorithm name, used for identifying the algorithm.
         """
-        return 'NetworkFromLinesAlgorithm'
+        return 'network_from_lines'
 
     def displayName(self):
         """
         Returns the translated algorithm name.
         """
-        return self.tr('Build a network from lines')
+        return self.tr('Network from lines')
 
     def group(self):
         """

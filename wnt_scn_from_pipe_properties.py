@@ -72,7 +72,7 @@ class ScnFromPipePropertiesAlgorithm(QgsProcessingAlgorithm):
         Returns the translated algorithm name, which should be used for any
         user-visible display of the algorithm name.
         """
-        return self.tr('Scenario from pipe properties: diameter and roughness')
+        return self.tr('Scenario from pipe properties')
 
     def group(self):
         """
@@ -90,7 +90,7 @@ class ScnFromPipePropertiesAlgorithm(QgsProcessingAlgorithm):
         """
         Returns a localised short helper string for the algorithm.
         """
-        return self.tr("Make an epanet scenario file with pipe diameter and roughness.")
+        return self.tr("Make an epanet scenario file from pipe diameter and roughness.")
 
     def initAlgorithm(self, config=None):
         """

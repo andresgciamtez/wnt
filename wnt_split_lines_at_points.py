@@ -73,7 +73,7 @@ class SplitLinesAtPointsAlgorithm(QgsProcessingAlgorithm):
         """
         Returns the unique algorithm name, used for identifying the algorithm.
         """
-        return 'Split_lines_at_points'
+        return 'split_lines_at_points'
 
     def displayName(self):
         """

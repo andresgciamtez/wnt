@@ -30,22 +30,19 @@ __copyright__ = '(C) 2019 by Andrés García Martínez'
 
 __revision__ = '$Format:%H$'
 
-from qgis.PyQt.QtCore import QCoreApplication, QVariant
-from qgis.core import (QgsProcessingAlgorithm,
-                       QgsFields,
-                       QgsField,
-                       QgsFeature,
-                       QgsFeatureSink,
+from PyQt5.QtCore import QCoreApplication
+from qgis.core import (QgsProcessing,
+                       QgsProcessingParameterEnum,
+                       QgsProcessingAlgorithm,
+                       QgsProcessingParameterFeatureSource,
+                       QgsProcessingParameterField,
                        QgsProcessingParameterFile,
-                       QgsProcessingParameterFeatureSink,
-                       QgsGeometry,
-                       QgsWkbTypes
-                      )
-from . import tools
+                       QgsProcessingParameterFileDestination)                      
 
-class NetworkFromEpanetAlgorithm(QgsProcessingAlgorithm):
+
+class ResultsFromEpanetAlgorithm(QgsProcessingAlgorithm):
     """
-    Built a network from an epanet file.
+    Import epanet result from epanet toolkit.
     """
     
     # DEFINE CONSTANTS
@@ -64,25 +61,25 @@ class NetworkFromEpanetAlgorithm(QgsProcessingAlgorithm):
         """
         createInstance must return a new copy of algorithm.
         """
-        return NetworkFromEpanetAlgorithm()
+        return ResultsFromEpanetAlgorithm()
 
     def name(self):
         """
         Returns the unique algorithm name, used for identifying the algorithm.
         """
-        return 'network_from_epanet'
+        return 'results_from_epanet'
 
     def displayName(self):
         """
         Returns the translated algorithm name.
         """
-        return self.tr('Network from epanet file')
+        return self.tr('Results from epanet')
 
     def group(self):
         """
         Returns the name of the group this algorithm belongs to.
         """
-        return self.tr('Water Network Tools')
+        return self.tr('Water Network tools')
 
     def groupId(self):
         """
@@ -92,9 +89,9 @@ class NetworkFromEpanetAlgorithm(QgsProcessingAlgorithm):
 
     def shortHelpString(self):
         """
-        Returns a localised short help string for the algorithm.
+        Returns a localised short helper string for the algorithm.
         """
-        return self.tr('Build network (nodes and links) from epanet file.')
+        return self.tr('Build results layers (nodes and links).')
 
     def initAlgorithm(self, config=None):
         """
@@ -133,19 +130,17 @@ class NetworkFromEpanetAlgorithm(QgsProcessingAlgorithm):
         # INPUT
         epanetf = self.parameterAsFile(parameters, self.INPUT, context)
                
-        # READ NETWORK
+        # OPEN TOOLKIK
 
-        network = tools.Network()
-        network.from_epanet(epanetf)
-        nodes = network.nodes
-        links = network.links
+        
         
         # GENERATE NODES LAYER
         
         newfields = QgsFields()
         newfields.append(QgsField("id", QVariant.String))
-        newfields.append(QgsField("type", QVariant.String))
-        newfields.append(QgsField("elevation", QVariant.Double))
+        newfields.append(QgsField("flow", QVariant.Double))
+        newfields.append(QgsField("head", QVariant.Double))
+        newfields.append(QgsField("pressure", QVariant.Double))
         (nodes_sink, nodes_id) = self.parameterAsSink(
             parameters,
             self.NODES_OUTPUT,
@@ -171,12 +166,11 @@ class NetworkFromEpanetAlgorithm(QgsProcessingAlgorithm):
         
         newfields = QgsFields()
         newfields.append(QgsField("id", QVariant.String))
-        newfields.append(QgsField("start", QVariant.String))
-        newfields.append(QgsField("end", QVariant.String))
-        newfields.append(QgsField("type", QVariant.String))
-        newfields.append(QgsField("length", QVariant.Double))
-        newfields.append(QgsField("diameter", QVariant.Double))
-        newfields.append(QgsField("roughness", QVariant.Double))
+        newfields.append(QgsField("flow", QVariant.Double))
+        newfields.append(QgsField("velocity", QVariant.Double))
+        newfields.append(QgsField("unit_headloss", QVariant.Double))
+        newfields.append(QgsField("friction_factor", QVariant.Double))
+        newfields.append(QgsField("status", QVariant.String))
         (links_sink, links_id) = self.parameterAsSink(
             parameters,
             self.LINKS_OUTPUT,

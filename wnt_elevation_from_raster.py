@@ -68,13 +68,13 @@ class ElevationFromRasterAlgorithm(QgsProcessingAlgorithm):
         """
         Returns the unique algorithm name, used for identifying the algorithm.
         """
-        return 'ElevationFromRasterAlgorithm'
+        return 'elevation_from_raster'
 
     def displayName(self):
         """
         Returns the translated algorithm name.
         """
-        return self.tr('Get nodes elevation from raster')
+        return self.tr('Node elevation from DEM')
 
     def group(self):
         """
