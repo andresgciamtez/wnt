@@ -13,5 +13,6 @@ A set of QGIS processes for water network modelling.
 
 ## Soon
 - Load results
+- Export graph network to TGF
 
 2019 Andrés García Martínez (ppnoptimizer@gmail.com)
