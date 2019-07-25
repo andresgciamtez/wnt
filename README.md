@@ -2,7 +2,7 @@
 A set of QGIS processes aimed to water network modelling.
 ## Capabilities
 ### Build a network topology and geometry from lines
-### Split polylines at point, correcting models that ignore connection point (T, X, n-points)
+### Split polylines at points, correcting models that ignore connection points (T, X, n-points)
 ### Add elevation to nodes from a dem
 ### Build an epanet model file from network
 ### build an epanet scenario file with pipe propierties (diameter and roughness)
