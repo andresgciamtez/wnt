@@ -5,13 +5,12 @@
  WaterNetworkTools
                                  A QGIS plugin
  Water Network Modelling Utilities
- 
+
                               -------------------
         begin                : 2019-07-19
         copyright            : (C) 2019 by Andrés García Martínez
         email                : ppnoptimizer@gmail.com
  ***************************************************************************/
-
 /***************************************************************************
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -31,8 +30,7 @@ __copyright__ = '(C) 2019 by Andrés García Martínez'
 __revision__ = '$Format:%H$'
 
 from qgis.PyQt.QtCore import QCoreApplication, QVariant
-from qgis.core import (QgsFeatureSink,
-                       QgsFeature,
+from qgis.core import (QgsFeature,
                        QgsField,
                        QgsFields,
                        QgsGeometry,
@@ -46,25 +44,24 @@ from qgis.core import (QgsFeatureSink,
                        QgsProcessingParameterFeatureSource
                       )
 from . import tools
- 
+
 class NetworkFromLinesAlgorithm(QgsProcessingAlgorithm):
     """
-    Built a network from 2d lines.
+    Built a network from lines.
     """
 
     # DEFINE CONSTANTS
-    
     INPUT = 'INPUT'
-    MERGE_DIST = 'MERGE_DIST'
+    TOLERANCE = 'TOLERANCE'
     NODE_PREFIX = 'NODE_PREFIX'
     NODE_INIT = 'NODE_INIT'
     NODE_DELTA = 'NODE_DELTA'
     LINK_PREFIX = 'LINK_PREFIX'
     LINK_INIT = 'LINK_INIT'
     LINK_DELTA = 'LINK_DELTA'
-    NODES_OUTPUT = 'NODES_OUTPUT'
-    LINKS_OUTPUT = 'LINKS_OUTPUT'
-    
+    NODE_OUTPUT = 'NODE_OUTPUT'
+    LINK_OUTPUT = 'LINK_OUTPUT'
+
     def tr(self, string):
         """
         Returns a translatable string with the self.tr() function.
@@ -105,89 +102,88 @@ class NetworkFromLinesAlgorithm(QgsProcessingAlgorithm):
         """
         Returns a localised short help string for the algorithm.
         """
-        return self.tr('Build a network (nodes and links) from 2D (poly)lines.')
+        return self.tr('Build a network (nodes and links) from lines.')
 
     def initAlgorithm(self, config=None):
         """
         Define the inputs and outputs of the algorithm.
         """
+
         # INPUT
-        
         self.addParameter(
             QgsProcessingParameterFeatureSource(
                 self.INPUT,
                 self.tr('Input LineString vector layer'),
                 types=[QgsProcessing.TypeVectorLine]
+                )
             )
-        )
         self.addParameter(
             QgsProcessingParameterDistance(
-                self.MERGE_DIST,
+                self.TOLERANCE,
                 self.tr('Minimum node separation, also merge them'),
-                defaultValue = 0.1,
-                minValue = 0.0,
-                maxValue = 100.0
+                defaultValue=0.001,
+                minValue=0.0001,
+                maxValue=1.0
+                )
             )
-        )
         self.addParameter(
-                QgsProcessingParameterString(
+            QgsProcessingParameterString(
                 self.NODE_PREFIX,
                 self.tr('Node prefix'),
-                defaultValue = 'N-'
+                defaultValue='N-'
+                )
             )
-        )       
         self.addParameter(
             QgsProcessingParameterNumber(
                 self.NODE_INIT,
                 self.tr('Node start number'),
-                type = QgsProcessingParameterNumber.Integer,
-                defaultValue = 1000
+                type=QgsProcessingParameterNumber.Integer,
+                defaultValue=1000
+                )
             )
-        )
         self.addParameter(
             QgsProcessingParameterNumber(
                 self.NODE_DELTA,
                 self.tr('Node number increment'),
-                type = QgsProcessingParameterNumber.Integer,
-                defaultValue = 10
+                type=QgsProcessingParameterNumber.Integer,
+                defaultValue=1
+                )
             )
-        )
         self.addParameter(
             QgsProcessingParameterString(
                 self.LINK_PREFIX,
                 self.tr('Link prefix'),
-                defaultValue = 'L-'
+                defaultValue='L-'
+                )
             )
-        )       
         self.addParameter(
             QgsProcessingParameterNumber(
                 self.LINK_INIT,
                 self.tr('Link start number'),
-                type = QgsProcessingParameterNumber.Integer,
-                defaultValue = 1000
+                type=QgsProcessingParameterNumber.Integer,
+                defaultValue=1000
+                )
             )
-        )
         self.addParameter(
             QgsProcessingParameterNumber(
                 self.LINK_DELTA,
                 self.tr('Link number increment'),
-                type = QgsProcessingParameterNumber.Integer,
-                defaultValue = 10
+                type=QgsProcessingParameterNumber.Integer,
+                defaultValue=1
+                )
             )
-        )
-        
-        # ADD NODE AND LINK FEATURE SINK 
-        
+
+        # ADD NODE AND LINK FEATURE SINK
         self.addParameter(
             QgsProcessingParameterFeatureSink(
-                self.NODES_OUTPUT,
-                self.tr('Nodes layer')
+                self.NODE_OUTPUT,
+                self.tr('Node layer')
             )
         )
         self.addParameter(
             QgsProcessingParameterFeatureSink(
-                self.LINKS_OUTPUT,
-                self.tr('Links layer')
+                self.LINK_OUTPUT,
+                self.tr('Link layer')
             )
         )
 
@@ -197,98 +193,102 @@ class NetworkFromLinesAlgorithm(QgsProcessingAlgorithm):
         """
         # INPUT
         linelayer = self.parameterAsSource(parameters, self.INPUT, context)
-        t = self.parameterAsDouble(parameters, self.MERGE_DIST, context)
+        tol = self.parameterAsDouble(parameters, self.TOLERANCE, context)
         np = self.parameterAsString(parameters, self.NODE_PREFIX, context)
         ni = self.parameterAsInt(parameters, self.NODE_INIT, context)
         nd = self.parameterAsInt(parameters, self.NODE_DELTA, context)
         lp = self.parameterAsString(parameters, self.LINK_PREFIX, context)
         li = self.parameterAsInt(parameters, self.LINK_INIT, context)
         ld = self.parameterAsInt(parameters, self.LINK_DELTA, context)
-        
+
         # SEND INFORMATION TO THE USER
 
-        feedback.pushInfo('CRS is {}'.format(linelayer.sourceCrs().authid()))       
-        
+        feedback.pushInfo('CRS is {}'.format(linelayer.sourceCrs().authid()))
+
         if linelayer.wkbType() == QgsWkbTypes.MultiLineString:
             feedback.pushInfo('Source geometry is MultiLineString!')
-            
+
         # READ LINESTRINGS AS WKT
-        
+
         lines = [line.geometry().asWkt() for line in linelayer.getFeatures()]
-        
+
         # BUILD NETWORK FROM LINES
-        
+
         newnetwork = tools.Network()
-        newnetwork.from_lines(lines, t, np, ni, nd, lp, li, ld)
+        newnetwork.from_lines(lines, tol, np, ni, nd, lp, li, ld)
         nodes = newnetwork.nodes
         links = newnetwork.links
-        
-        # GENERATE NODES LAYER
-        newfields = QgsFields()     
+
+        # GENERATE NODE LAYER
+        newfields = QgsFields()
         newfields.append(QgsField("id", QVariant.String))
         newfields.append(QgsField("type", QVariant.String))
         newfields.append(QgsField("elevation", QVariant.Double))
-        (nodes_sink, nodes_id) = self.parameterAsSink(
+        (node_sink, node_id) = self.parameterAsSink(
             parameters,
-            self.NODES_OUTPUT,
+            self.NODE_OUTPUT,
             context,
             newfields,
             QgsWkbTypes.Point,
             linelayer.sourceCrs()
             )
-        
+
+        # ADD FEATURES
         ncnt = 0
-        ntot = len(nodes)
+        f = QgsFeature()
         for node in nodes:
-            #add feature to sink
-            ncnt += 1
-            f = QgsFeature()
-            f.setGeometry(QgsGeometry.fromWkt(node.get_wkt()))
+            f.setGeometry(QgsGeometry.fromWkt(node.to_wkt()))
             f.setAttributes([node.nodeid, '', ''])
-            nodes_sink.addFeature(f, QgsFeatureSink.FastInsert)
-            
+            node_sink.addFeature(f)
+            ncnt += 1
+
+            # SHOW PROGRESS
             if ncnt % 100 == 0:
-                feedback.setProgress(50*ncnt/ntot) # Update the progress bar 
-        
-        # GENERATE LINKS LAYER
-        
+                feedback.setProgress(50*ncnt/len(nodes))
+
+        # GENERATE LINK LAYER
         newfields = QgsFields()
         newfields.append(QgsField("id", QVariant.String))
         newfields.append(QgsField("start", QVariant.String))
         newfields.append(QgsField("end", QVariant.String))
         newfields.append(QgsField("type", QVariant.String))
         newfields.append(QgsField("length", QVariant.Double))
-        (links_sink, links_id) = self.parameterAsSink(
+        newfields.extend(linelayer.fields())
+        (link_sink, link_id) = self.parameterAsSink(
             parameters,
-            self.LINKS_OUTPUT,
+            self.LINK_OUTPUT,
             context,
             newfields,
             QgsWkbTypes.LineString,
             linelayer.sourceCrs()
             )
 
+        # ADD FEATURES
         lcnt = 0
-        ltot = len(links)
-        for link in links:
-            #add feature to sink
+        g = QgsFeature()
+        for f in linelayer.getFeatures():
+            link = links[lcnt]
+
+            # UPDATE GEOMETRY (NODE -> AVERAGE POINT COOORDINATES)
+            attr = [link.linkid, link.start, link.end, 'PIPE', link.length]
+            attr.extend(f.attributes())
+            g.setAttributes(attr)
+            g.setGeometry(QgsGeometry.fromWkt(link.to_wkt()))
+            link_sink.addFeature(g)
             lcnt += 1
-            f = QgsFeature()
-            f.setGeometry(QgsGeometry.fromWkt(link.get_wkt()))
-            length = link.get_length2d()
-            f.setAttributes([link.linkid, link.start, link.end, 'PIPE', length])
-            links_sink.addFeature(f, QgsFeatureSink.FastInsert)
-            
+
+            # SHOW PROGRESS
             if lcnt % 100 == 0:
-                feedback.setProgress(50+50*lcnt/ltot) # Update the progress bar 
-        
-        msg = 'Add: {} nodes and {} links.'.format(ncnt,lcnt)
-        feedback.pushInfo(msg) 
-        
+                feedback.setProgress(50+50*lcnt/len(links))
+
+        msg = 'Added: {} nodes and {} links.'.format(ncnt, lcnt)
+        feedback.pushInfo(msg)
+
         # PROCCES CANCELED
-        
+
         if feedback.isCanceled():
             return {}
-        
+
         # OUTPUT
 
-        return {self.NODES_OUTPUT: nodes_id,self.LINKS_OUTPUT: links_id}
+        return {self.NODE_OUTPUT: node_id, self.LINK_OUTPUT: link_id}

@@ -5,7 +5,7 @@
  WaterNetworkTools
                                  A QGIS plugin
  Water Network Modelling Utilities
- 
+
                               -------------------
         begin                : 2019-07-19
         copyright            : (C) 2019 by Andrés García Martínez
@@ -39,19 +39,19 @@ from qgis.core import (QgsProcessing,
                        QgsProcessingParameterFeatureSink,
                        QgsProcessingParameterField
                       )
- 
+
 class ElevationFromRasterAlgorithm(QgsProcessingAlgorithm):
     """
-    Get node elevation from DEM.
+    Set the node elevation from a DEM in raster format.
     """
 
     # DEFINE CONSTANTS
 
-    NODES_INPUT = 'NODES_INPUT'
+    NODE_INPUT = 'NODE_INPUT'
     DEM_INPUT = 'DEM_INPUT'
-    ELEV_FIELD_INPUT = 'ELEV_FIELD_INPUT'
+    ELEV_FIELD = 'ELEV_FIELD'
     OUTPUT = 'OUTPUT'
-    
+
     def tr(self, string):
         """
         Returns a translatable string with the self.tr() function.
@@ -92,59 +92,55 @@ class ElevationFromRasterAlgorithm(QgsProcessingAlgorithm):
         """
         Returns a localised short help string for the algorithm.
         """
-        return self.tr('Get nodes elevation from DEM raster.')
+        return self.tr('Set node elevation from DEM in raster format.')
 
     def initAlgorithm(self, config=None):
         """
         Define the inputs and outputs of the algorithm.
         """
-        
+
         # ADD THE INPUT SOURCES
-        
         self.addParameter(
             QgsProcessingParameterFeatureSource(
-                self.NODES_INPUT,
+                self.NODE_INPUT,
                 self.tr('Input nodes vector layer'),
                 types=[QgsProcessing.TypeVectorPoint]
+                )
             )
-        )
         self.addParameter(
-            QgsProcessingParameterField (
-                self.ELEV_FIELD_INPUT,
+            QgsProcessingParameterField(
+                self.ELEV_FIELD,
                 self.tr('Field where write elevation'),
                 'elevation',
-                self.NODES_INPUT
+                self.NODE_INPUT
+                )
             )
-        )
         self.addParameter(
             QgsProcessingParameterRasterLayer(
                 self.DEM_INPUT,
                 self.tr('Input DEM raster layer')
+                )
             )
-        )
-        
+
         #ADD THE OUTPUT SINK
-        
         self.addParameter(
             QgsProcessingParameterFeatureSink(
                 self.OUTPUT,
-                self.tr('Output nodes layer with elevation'),
+                self.tr('Node with elevation layer'),
+                )
             )
-        )
 
     def processAlgorithm(self, parameters, context, feedback):
         """
-        Run the process.
+        RUN PROCESS
         """
-        
+
         # INPUT
-        
-        nodes = self.parameterAsSource(parameters, self.NODES_INPUT, context)
+        nodes = self.parameterAsSource(parameters, self.NODE_INPUT, context)
         dem = self.parameterAsRasterLayer(parameters, self.DEM_INPUT, context)
-        efield = self.parameterAsString(parameters, self.ELEV_FIELD_INPUT, context)
-        
+        efield = self.parameterAsString(parameters, self.ELEV_FIELD, context)
+
         # OUTPUT
-        
         (sink, dest_id) = self.parameterAsSink(
             parameters,
             self.OUTPUT,
@@ -155,12 +151,11 @@ class ElevationFromRasterAlgorithm(QgsProcessingAlgorithm):
             )
 
         # MAIN LOOP READ/WRITE POINTS
-        
         feedback.pushInfo('CRS is {}'.format(nodes.sourceCrs().authid()))
         tot = nodes.featureCount()
         pcnt = 0
         ncnt = 0
-        
+
         for feat in  nodes.getFeatures():
             val, res = dem.dataProvider().sample(feat.geometry().asPoint(), 1)
             if res:
@@ -169,18 +164,16 @@ class ElevationFromRasterAlgorithm(QgsProcessingAlgorithm):
                 sink.addFeature(feat, QgsFeatureSink.FastInsert)
             else:
                 ncnt += 1
-            
+
+            # SHOW PROGRESS
             if (pcnt+ncnt) % 100 == 0:
-                feedback.setProgress(100*(pcnt+ncnt)/tot) # Update the progress bar
-        
-        msg = 'Proccesed nodes: {},  skipped: {}.'.format(pcnt,ncnt)
+                feedback.setProgress(100*(pcnt+ncnt)/tot)
+        msg = 'Proccesed nodes: {}. skipped: {}.'.format(pcnt, ncnt)
         feedback.pushInfo(msg)
-        
+
         # PROCCES CANCELED
-        
         if feedback.isCanceled():
             return {}
-        
-        # OUTPUT
 
+        # OUTPUT
         return {self.OUTPUT: dest_id}

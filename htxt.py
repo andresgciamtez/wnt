@@ -2,7 +2,6 @@
 """
 READ AND WRITE FROM/TO []-HEADED TXT FILES
 Andrés García Martínez (ppnoptimizer@gmail.com)
-
 /***************************************************************************
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -22,21 +21,50 @@ __copyright__ = '(C) 2019 by Andrés García Martínez'
 __revision__ = '$Format:%H$'
 from os.path import exists as fexits
 
-class Htxtf(object):
-    """Read and write sections of headed txt files"""
-    def __init__(self, fname):
+def line_to_tuple(line):
+    """Converts a line text into a tuple.
+
+    Parameters
+    ----------
+
+    line: str, a txt line
+    """
+    return tuple(c.strip() for c in line.split())
+
+def tuple_to_line(tup, sep='    '):
+    """Converts a tuple into a line text. Values are separated by separator.
+
+    Parameters
+    ----------
+
+    tup: tuple, to covert into a line txt
+    sep: str, separator 4-spaces by default
+    """
+    line = ''
+    for i in tup[:-1]:
+        line += str(i)
+        line += sep
+    return line + str(tup[-1])
+
+class Htxtf():
+    """Read and write sections of headed txt files."""
+    def __init__(self):
+        self.sections = {}
+
+    def read(self, fname):
+        """Read a []-headed txt file and store it as a dictionary, where:
+        key = section name
+        value = txt lines.
+
+        Parameters
+        ----------
+
+        fname: str, file name
+        """
         assert fexits(fname), 'I cannot find file: ' + fname
-        self.file = open(fname, 'r')
-        
-    def __del__(self):
-        self.file.close()
-    
-    def read(self):
-        """Return a dictionary which keys are the section names, and the values
-        the lines."""
-        sections = {}
+        file = open(fname, 'r')
         secname = None
-        for line in self.file:
+        for line in file:
             txt = line[0:line.find(';')]
             if '[' in txt:
                 # CHANGE
@@ -44,35 +72,24 @@ class Htxtf(object):
                 if 'END' in txt:
                     break
                 else:
-                    sections[secname] = []
+                    self.sections[secname] = []
             else:
-                if len(txt.strip()) > 0:
-                    sections[secname].append(txt)
-        return sections
-    
-    def write(self, sections, fn):
-        '''Write a []-headed txt to file'''
-        f = open(fn, 'w')
-        
-        for section,lines in sections.items():
+                if txt.strip():
+                    self.sections[secname].append(txt)
+
+    def write(self, fname):
+        """Write a []-headed txt to file.
+
+        Parameters
+        ----------
+
+        fname: str, file name.
+        """
+        f = open(fname, 'w')
+        for section, lines in self.sections.items():
             f.write('[{}]\n'.format(section))
             for line in lines:
                 f.write(line + '\n')
-            
             f.write('\n')
-        
         f.write('[END]\n')
-        f.close()       
-    
-    def line_to_tuple(self, line):
-        '''Converts a line text to a tuple'''
-        return tuple( c.strip() for c in line.split())
-    
-    def tuple_to_line(self, tup, sep='    '):
-        '''Converts a tuple to a line text. Values are separated by sep.'''
-        line = ''
-        for i in tup[:-1]:
-            line += str(i)
-            line += sep
-        line += str(tup[-1])
-        return line
+        f.close()

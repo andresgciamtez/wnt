@@ -5,7 +5,7 @@
  WaterNetworkTools
                                  A QGIS plugin
  Water Network Modelling Utilities
- 
+
                               -------------------
         begin                : 2019-07-19
         copyright            : (C) 2019 by Andrés García Martínez
@@ -45,11 +45,11 @@ class EpanetFromNetworkAlgorithm(QgsProcessingAlgorithm):
 
     # DEFINE CONSTANTS
 
-    NODES_INPUT = 'NODES_INPUT'
-    LINKS_INPUT = 'LINKS_INPUT'
-    TMPL_INPUT = 'TMPL_INPUT'
+    NODE_INPUT = 'NODE_INPUT'
+    LINK_INPUT = 'LINK_INPUT'
+    TEMPLATE = 'TEMPLATE'
     OUTPUT = 'OUTPUT'
-    
+
     def tr(self, string):
         """
         Returns a translatable string with the self.tr() function.
@@ -99,110 +99,106 @@ class EpanetFromNetworkAlgorithm(QgsProcessingAlgorithm):
         """
         Define the inputs and outputs of the algorithm.
         """
-        
+
         # ADD THE INPUT
-        
         self.addParameter(
             QgsProcessingParameterFeatureSource(
-                self.NODES_INPUT,
+                self.NODE_INPUT,
                 self.tr('Input nodes layer'),
                 [QgsProcessing.TypeVectorPoint]
+                )
             )
-        )
         self.addParameter(
             QgsProcessingParameterFeatureSource(
-                self.LINKS_INPUT,
+                self.LINK_INPUT,
                 self.tr('Input links layer'),
                 [QgsProcessing.TypeVectorLine]
+                )
             )
-        )
         self.addParameter(
-            QgsProcessingParameterFile (
-                self.TMPL_INPUT,
+            QgsProcessingParameterFile(
+                self.TEMPLATE,
                 self.tr('Epanet template file'),
                 extension='inp'
+                )
             )
-        )
-            
+
         # ADD A FILE DESTINATION
-        
         self.addParameter(
             QgsProcessingParameterFileDestination(
                 self.OUTPUT,
                 self.tr('Epanet model file'),
                 fileFilter='*.inp'
+                )
             )
-        )
-        
+
     def processAlgorithm(self, parameters, context, feedback):
         """
         RUN PROCESS
         """
         # INPUT
-        
-        nodes = self.parameterAsSource(parameters, self.NODES_INPUT, context)
-        links = self.parameterAsSource(parameters, self.LINKS_INPUT, context)
-        template = self.parameterAsFile(parameters, self.TMPL_INPUT, context)
-        
+        nodes = self.parameterAsSource(parameters, self.NODE_INPUT, context)
+        links = self.parameterAsSource(parameters, self.LINK_INPUT, context)
+        template = self.parameterAsFile(parameters, self.TEMPLATE, context)
+
         # OUTPUT
-        
         epanet = self.parameterAsFileOutput(
             parameters,
             self.OUTPUT,
             context
             )
-        
+
         # BUILD NETWORK
-        
         newnet = tools.Network()
-        
+
+        # NODES
         ncnt = 0
-        ntot = nodes.featureCount()
         for f in nodes.getFeatures():
             ncnt += 1
             newnode = tools.Node(f['id'])
-            newnode.set_wkt(f.geometry().asWkt())
+            newnode.from_wkt(f.geometry().asWkt())
             msg = 'Bad node type'
             assert f['type'] in ['JUNCTION', 'RESERVOIR', 'TANK'], msg
             newnode.set_type(f['type'])
             newnode.elevation = f['elevation']
             newnet.nodes.append(newnode)
-            
+
+            # SHOW PROGRESS
             if ncnt % 100 == 0:
-                feedback.setProgress(50*ncnt/ntot) # Update the progress bar 
-            
-            
+                feedback.setProgress(50*ncnt/nodes.featureCount())
+
+        # LINKS
         lcnt = 0
-        ltot = links.featureCount()
         for f in links.getFeatures():
             lcnt += 1
-            newlink = tools.Link(f['id'],f['start'],f['end'])
-            newlink.set_wkt(f.geometry().asWkt())
+            newlink = tools.Link(f['id'], f['start'], f['end'])
+            newlink.from_wkt(f.geometry().asWkt())
+            newlink.length = f['length']
             msg = 'Bad link type'
             assert f['type'] in ['PIPE', 'PUMP', 'PRV', 'PSV', 'PBV', 'FCV', \
-                                'TCV','GPV'], msg
+                                'TCV', 'GPV'], msg
             newlink.set_type(f['type'])
             newnet.links.append(newlink)
-            
+
+            # SHOW POROGRESS
             if lcnt % 100 == 0:
-                feedback.setProgress(50+50*lcnt/ltot) # Update the progress bar       
-        
+                feedback.setProgress(50+50*lcnt/links.featureCount())
+
+        # WRITE NET
         newnet.to_epanet(epanet, template)
-        
         epanet = self.parameterAsFileOutput(
             parameters,
             self.OUTPUT,
             context
             )
-        
-        msg = 'Saved: {} nodes and {} links.'.format(ncnt,lcnt)
-        feedback.pushInfo(msg) 
-        
+
+        # SHOW INFO
+        msg = 'Saved: {} nodes and {} links.'.format(ncnt, lcnt)
+        feedback.pushInfo(msg)
+
         # PROCCES CANCELED
-        
         if feedback.isCanceled():
             return {}
-        
-        # OUTPUT
 
+        # OUTPUT
         return {self.OUTPUT: epanet}
