@@ -8,7 +8,7 @@ A set of QGIS processes for water network modelling.
 - Build an epanet model file from network
 - Build an epanet scenario file with pipe propierties (diameter and roughness)
 - Build an epanet scenario file with nodal demand
-- Build a pressurized pipe network optimizer (ppno) data file-
+- Build a pressurized pipe network optimizer (ppno) data file
 - Import an epanet file (nodes and link)
 
 ## Soon
