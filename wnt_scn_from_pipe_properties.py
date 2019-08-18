@@ -147,7 +147,8 @@ class ScnFromPipePropertiesAlgorithm(QgsProcessingAlgorithm):
         # WRITE FILE
         cnt = 0
         file = open(scnfile, 'w')
-        file.write('; File generated automatically by WNT \n')
+        msg = '; File generated automatically by Water Network Tools \n'
+        file.write(msg)
         file.write('[DIAMETERS] \n')
         file.write(';Pipe    Diameter \n')
 

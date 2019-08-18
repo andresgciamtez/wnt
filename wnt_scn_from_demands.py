@@ -141,7 +141,8 @@ class ScnFromDemandsAlgorithm(QgsProcessingAlgorithm):
         cnt = 0
         scnfn = self.parameterAsFileOutput(parameters, self.OUTPUT, context)
         file = open(scnfn, 'w')
-        file.write('; File generated automatically by WNT \n')
+        msg = '; File generated automatically by Water Network Tools \n'
+        file.write('msg')
         file.write('[DEMANDS] \n')
         file.write(';Node    Demand    Pattern \n')
         feedback.setProgress(5) # Update the progress bar

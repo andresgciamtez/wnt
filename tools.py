@@ -753,7 +753,7 @@ class Network:
         sections['BACKDROP'] = newsection
 
         # WRITE EPANET INP FILE
-        msg = '; File generated automatically by nettools.py \n'
+        msg = '; File generated automatically by Water Network Tools \n'
         sections['TITLE'].append(msg)
         outf.write(inpfname)
 
