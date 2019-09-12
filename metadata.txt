@@ -6,7 +6,7 @@
 name=Water Network Tools
 qgisMinimumVersion=3.0
 description=Water Network Modelling Utilities
-version=0.1
+version=0.2
 author=Andrés García Martínez
 email=ppnoptimizer@gmail.com
 
