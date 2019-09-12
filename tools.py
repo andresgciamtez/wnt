@@ -30,9 +30,11 @@ __copyright__ = '(C) 2019 by Andrés García Martínez'
 
 __revision__ = '$Format:%H$'
 
+from math import copysign
 from os.path import exists as fexits
 import csv
 from . import htxt
+
 
 def dist_2_p(point1, point2):
     """Return the distance, 2D, between 2 points, (x1,y1) and (x2,y2)."""
@@ -48,9 +50,9 @@ def split_linestring(linestring, point, tolerance=0.0):
     """Return the splitted linestring by the intersecting point. The result is:
 
     If intersection exists, a tuple containing the two parts:
-        (firstpart, secondpart), where:
-        firstpart = [initial_point, ..., point]
-        secondpart = [point, ..., end_point]
+        (fpart, spart), where:
+        fpart = [initial_point, ..., point]
+        spart = [point, ..., end_point]
     Otherwwise return None.
 
     Arguments
@@ -68,51 +70,58 @@ def split_linestring(linestring, point, tolerance=0.0):
     # SEGMENT LOOP
     n = len(linestring)-1
     for i in range(n):
-        xa, ya = linestring[i][0:2]
-        xb, yb = linestring[i+1][0:2]
-        ab = dist_2_p((xa, ya), (xb, yb))
+        xs, ys = linestring[i][0:2]
+        x1e, y1e = linestring[i+1][0]-xs, linestring[i+1][1]-ys
+        x1p, y1p = point[0]-xs, point[1]-ys
+        cteta = x1e / (x1e**2 + y1e**2)**0.5
+        steta = copysign((1-cteta**2)**0.5, y1e)
+        b = x1e*cteta + y1e*steta
+        d = -x1p*steta + y1p*cteta
+        a = x1p*cteta + y1p*steta
+        xi = xs + a*cteta
+        yi = ys + a*steta
+#        from math import acos, pi
+#        print(180*acos(cteta)/pi)
+#        print('Cos(teta) =', cteta)
+#        print('Sin(teta) =', steta)
+#        print('a =', a)
+#        print('b =', b)
+#        print('d =', d)
+#        print ('xi =', xi, 'yi =', yi)
 
         # IGNORE TOO SHORT SEGMENT
-        if ab > tolerance:
-            xp, yp = point[0:2]
-            pc = abs((xb-xa)*(yp-ya)-(yb-ya)*(xp-xa))/ab
-
+        if b > tolerance:
             # DETECT PROXIMITY
-            if pc <= tolerance:
-
-                # IGNORE INTERSECTION AT START POINT
-                ap = dist_2_p((xa, ya), (xp, yp))
-                if i == 0 and ap <= tolerance:
-                    return None
-
-                # IGNORE INTERSECTION AT END POINT
-                bp = dist_2_p((xb, yb), (xp, yp))
-                if i == n-1 and bp <= tolerance:
-                    return None
-
-                # CHECK INNER INTERSECTION
-                cs = ((xp-xa)*(xb-xa)+(yp-ya)*(yb-ya))/(ap*ab)
-                xc = xa + cs*ap/ab*(xb-xa)
-                yc = ya + cs*ap/ab*(yb-ya)
-                ac = dist_2_p((xa, ya), (xc, yc))
-                bc = dist_2_p((xb, yb), (xc, yc))
-
-                # SPLIT
-                # INTERSECTION AT VEXTEX
-                if bc <= tolerance:
-                    firstpart = linestring[0:i+2].copy()
-                    secondpart = linestring[i+1:].copy()
-                    return (firstpart, secondpart)
-
-                # INTERSECTION AT SEGMENT
-                if abs(ac + bc - ab) <= tolerance/10:
-                    firstpart = linestring[0:i+1].copy()
-                    firstpart.append((xc, yc))
-                    secondpart = linestring[i+1:].copy()
-                    secondpart.insert(0, (xc, yc))
-                    return (firstpart, secondpart)
-
-    # NO CUT POINT FOUND
+            if abs(d) <= tolerance:
+                if -tolerance <= a <= tolerance:
+                    if i == 0:
+                        print('Near start point')
+                        return None # IGNORE INTERSECTION AT START POINT
+                    # SPLIT AT INITIAL SEGMENT POINT
+                    print('Splitted at vertex')
+                    fpart = linestring[0:i+2].copy()
+                    spart = linestring[i+1:].copy()
+                    return (fpart, spart)
+                if b-tolerance <= a <= b+tolerance:
+                    if i == n-1:
+                        print('Near end point')
+                        return None # IGNORE INTERSECTION AT END POINT
+                    # SPLIT AT FINAL SEGMENT POINT
+                    print('Splitted at vertex')
+                    fpart = linestring[0:i+2].copy()
+                    spart = linestring[i+1:].copy()
+                    return(fpart, spart)
+                if tolerance < a < b-tolerance:
+                    # SPLIT AT SEGMENT
+                    print('Splitted at inner point')
+                    fpart = linestring[0:i+1].copy()
+                    fpart.append((xi, yi))
+                    spart = linestring[i+1:].copy()
+                    spart.insert(0, (xi, yi))
+                    return (fpart, spart)
+        else:
+            print('Too short segment')
+    # SPLITTING POINT NOT FOUND
     return None
 
 def split_linestring_m(linestring, points, tolerance=0.0):
@@ -666,21 +675,21 @@ class Network:
         for node in self.nodes:
             nodetype = node.get_type()
             if nodetype == 'JUNCTION':
-                if not node.elevation:
+                if node.elevation:
                     tmp = (node.nodeid, node.elevation, 0.0)
                 else:
                     tmp = (node.nodeid, 0.0, 0.0)
                 sections['JUNCTIONS'].append(htxt.tuple_to_line(tmp))
 
-            elif nodetype == 'RESERVOIR':
-                if not node.elevation:
+            if nodetype == 'RESERVOIR':
+                if node.elevation:
                     tmp = (node.nodeid, node.elevation)
                 else:
                     tmp = (node.nodeid, 0.0)
                 sections['RESERVOIRS'].append(htxt.tuple_to_line(tmp))
 
-            elif nodetype == 'TANK':
-                if not node.elevation:
+            if nodetype == 'TANK':
+                if node.elevation:
                     tmp = (node.nodeid, node.elevation, 0.0, 0.0, 0.0, 0.0, 0.0)
                 else:
                     tmp = (node.nodeid, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
@@ -775,13 +784,52 @@ class Network:
         tgffile.close()
 
     def validate(self):
-        """ Return the number of orphan nodes. Analyze the network graph."""
+        """Return the problems detected in the network.
+
+        Analyse the network graph and retrieve: (onodes, dnodes, dlinks, unodes)
+        onodes: set, the orphan nodes in the network
+        dnodes: set, the duplicated nodes in network
+        unodes: set, no defined nodes in the network
+        dlinks: set, the duplicated links in network"""
+
+        # ORPHAN NODES SEARCH
+        onodes = set()
+        for node in self.nodes:
+            onodes.add(node.nodeid)
+
+        for link in self.links:
+            onodes.discard(link.start)
+            onodes.discard(link.end)
+
+        # DUPLICATE NODEID SEARCH
+        dnodes = set()
+        for i in range(len(self.nodes)-1):
+            for j in range(i+1, len(self.nodes)):
+                if self.nodes[i].nodeid == self.nodes[j].nodeid:
+                    dnodes.add(self.nodes[j.nodeid])
+
+        # UNDEFINED START AND END NODES
+        unodes = set()
+        for link in self.links:
+            if not isinstance(self.get_nodeindex(link.start), int):
+                unodes.add(link.start)
+            if not isinstance(self.get_nodeindex(link.end), int):
+                unodes.add(link.end)
+
+        # DUPLICATED LINKID SEARCH
+        dlinks = set()
+        for i in range(len(self.links)-1):
+            for j in range(i+1, len(self.links)):
+                if self.links[i].linkid == self.links[j].linkid:
+                    dlinks.add(self.links[j].linkid)
+
+        return onodes, dnodes, unodes, dlinks
+
+    def degree(self):
+        """Calculate the node degrees."""
         # CALCULATE DEGREE
         for node in self.nodes:
             node.degree = 0
         for link in self.links:
             self.nodes[self.get_nodeindex(link.start)].degree += 1
             self.nodes[self.get_nodeindex(link.end)].degree += 1
-
-        # RETURN ORPHAN NODE COUNT
-        return sum([node.degree == 0 for node in self.nodes])
