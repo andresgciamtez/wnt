@@ -274,7 +274,7 @@ class NetworkFromLinesAlgorithm(QgsProcessingAlgorithm):
             lcnt += 1
             f = QgsFeature()
             f.setGeometry(QgsGeometry.fromWkt(link.get_wkt()))
-            length = link.get_length2d()
+            length = link.length2d()
             f.setAttributes([link.linkid, link.start, link.end, 'PIPE', length])
             links_sink.addFeature(f, QgsFeatureSink.FastInsert)
             
