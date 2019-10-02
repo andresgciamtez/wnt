@@ -83,19 +83,34 @@ class NetworkFromEpanetAlgorithm(QgsProcessingAlgorithm):
         """
         Returns the name of the group this algorithm belongs to.
         """
-        return self.tr('Water Network Tools')
+        return self.tr('Import')
 
     def groupId(self):
         """
         Returns the unique ID of the group this algorithm belongs to.
         """
-        return 'wnt'
+        return 'import'
 
     def shortHelpString(self):
         """
         Returns a localised short help string for the algorithm.
         """
-        return self.tr('Build network (nodes and links) from epanet file.')
+        msg = 'Import an epanet inp file and generate a network defined by '
+        msg += 'a node layer, a link layer and a epanet model template.\n'
+        msg += 'The epanet data imported is:\n'
+        msg += '- Nodes\n'
+        msg += '* id\n'
+        msg += '* type (JUNCTIONS/RESERVOIRS/TANK)\n'
+        msg += '* elevation\n'
+        msg += '- Links\n'
+        msg += '* id\n'
+        msg += '* start\n'
+        msg += '* end\n'
+        msg += '* type (PIPE*/CVPIPE/PUMP/PRV/PSV/PBV/FCV/TCV/GPV\n'
+        msg += '* length (if type is PIPE or CVPIPE, otherwise void)\n'
+        msg += '* diameter\n'
+        msg += '* roughness\n'
+        return self.tr(msg)
 
     def initAlgorithm(self, config=None):
         """
@@ -137,6 +152,10 @@ class NetworkFromEpanetAlgorithm(QgsProcessingAlgorithm):
         # INPUT
         epanetf = self.parameterAsFile(parameters, self.INPUT, context)
         crs = self.parameterAsCrs(parameters, self.CRS, context)
+
+        # SHOW INFO
+        feedback.pushInfo('='*40)
+        feedback.pushInfo('CRS is {}'.format(crs.authid()))
 
         # READ NETWORK
         network = tools.Network()
@@ -232,6 +251,7 @@ class NetworkFromEpanetAlgorithm(QgsProcessingAlgorithm):
         # SHOW INFO
         msg = 'Added: {} nodes and {} links.'.format(ncnt, lcnt)
         feedback.pushInfo(msg)
+        feedback.pushInfo('='*40)
 
         # PROCCES CANCELED
         if feedback.isCanceled():
