@@ -80,14 +80,6 @@ def split_linestring(linestring, point, tolerance=0.0):
         a = x1p*cteta + y1p*steta
         xi = xs + a*cteta
         yi = ys + a*steta
-#        from math import acos, pi
-#        print(180*acos(cteta)/pi)
-#        print('Cos(teta) =', cteta)
-#        print('Sin(teta) =', steta)
-#        print('a =', a)
-#        print('b =', b)
-#        print('d =', d)
-#        print ('xi =', xi, 'yi =', yi)
 
         # IGNORE TOO SHORT SEGMENT
         if b > tolerance:
@@ -121,6 +113,7 @@ def split_linestring(linestring, point, tolerance=0.0):
                     return (fpart, spart)
         else:
             print('Too short segment')
+
     # SPLITTING POINT NOT FOUND
     return None
 
@@ -157,7 +150,6 @@ def split_linestring_m(linestring, points, tolerance=0.0):
 
     # RETURN RESULT
     return result
-
 
 class Node:
     """Node class."""
@@ -556,7 +548,7 @@ class Network:
         epanetfn: epanet file name (*.inp), input epanet model
         """
         # READ EPANET FILE
-        htxtfile = htxt.Htxtf()
+        htxtfile = htxt.HeaderTxt()
         htxtfile.read(epanetfn)
         sections = htxtfile.sections
 
@@ -665,7 +657,7 @@ class Network:
         """
 
         # READ EPANET FILE TEMPLATE
-        outf = htxt.Htxtf()
+        outf = htxt.HeaderTxt()
 
         # LOAD TEMPLATE
         outf.read(tplfname)
@@ -786,11 +778,15 @@ class Network:
     def validate(self):
         """Return the problems detected in the network.
 
-        Analyse the network graph and retrieve: (onodes, dnodes, dlinks, unodes)
-        onodes: set, the orphan nodes in the network
-        dnodes: set, the duplicated nodes in network
-        unodes: set, no defined nodes in the network
-        dlinks: set, the duplicated links in network"""
+        Analyse the network graph and retrieve the tuple:
+            (onodes, dnodes, dlinks, unodes, llinks)
+        where:
+            onodes: set, the orphan nodes in the network
+            dnodes: set, the duplicated nodes in network
+            unodes: set, the undefined nodes in the network
+            dlinks: set, the duplicated links in network
+            llinks: set, internal loop start node id = end node id
+        """
 
         # ORPHAN NODES SEARCH
         onodes = set()
@@ -801,35 +797,44 @@ class Network:
             onodes.discard(link.start)
             onodes.discard(link.end)
 
-        # DUPLICATE NODEID SEARCH
+        # DUPLICATE NODE ID SEARCH
         dnodes = set()
         for i in range(len(self.nodes)-1):
             for j in range(i+1, len(self.nodes)):
                 if self.nodes[i].nodeid == self.nodes[j].nodeid:
-                    dnodes.add(self.nodes[j.nodeid])
+                    dnodes.add(self.nodes[j].nodeid)
 
         # UNDEFINED START AND END NODES
         unodes = set()
+        llinks = set()
         for link in self.links:
             if not isinstance(self.get_nodeindex(link.start), int):
                 unodes.add(link.start)
             if not isinstance(self.get_nodeindex(link.end), int):
                 unodes.add(link.end)
 
-        # DUPLICATED LINKID SEARCH
+            # START NODE ID = END NODE ID
+            if link.start == link.end:
+                llinks.add(link.linkid)
+
+        # DUPLICATED LINK ID SEARCH
         dlinks = set()
         for i in range(len(self.links)-1):
             for j in range(i+1, len(self.links)):
                 if self.links[i].linkid == self.links[j].linkid:
                     dlinks.add(self.links[j].linkid)
 
-        return onodes, dnodes, unodes, dlinks
+        return onodes, dnodes, unodes, dlinks, llinks
 
     def degree(self):
-        """Calculate the node degrees."""
+        """Return a dictionary, where: key: node id and value: node degree.
+        """
+        degrees = {}
+
         # CALCULATE DEGREE
         for node in self.nodes:
-            node.degree = 0
+            degrees[node.nodeid] = 0
         for link in self.links:
-            self.nodes[self.get_nodeindex(link.start)].degree += 1
-            self.nodes[self.get_nodeindex(link.end)].degree += 1
+            degrees[link.start] += 1
+            degrees[link.end] += 1
+        return degrees
