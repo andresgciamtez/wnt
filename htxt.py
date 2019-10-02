@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-READ AND WRITE FROM/TO []-HEADED TXT FILES
+READ AND WRITE FROM/TO []-HEADER TXT FILES
 Andrés García Martínez (ppnoptimizer@gmail.com)
 /***************************************************************************
  *                                                                         *
@@ -46,7 +46,7 @@ def tuple_to_line(tup, sep='    '):
         line += sep
     return line + str(tup[-1])
 
-class Htxtf():
+class HeaderTxt():
     """Read and write sections of headed txt files."""
     def __init__(self):
         self.sections = {}
