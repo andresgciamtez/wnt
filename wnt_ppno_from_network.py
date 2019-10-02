@@ -85,25 +85,28 @@ class PpnoFromNetworkAlgorithm(QgsProcessingAlgorithm):
         """
          Returns the name of the group this algorithm belongs to.
         """
-        return self.tr('Water Network tools')
+        return self.tr('Export')
 
     def groupId(self):
         """
         Returns the unique ID of the group this algorithm belongs to.
         """
-        return 'wnt'
+        return 'export'
 
     def shortHelpString(self):
         """
         Returns a localised short helper string for the algorithm.
         """
-        msg = 'Build a ppno ext file from nodes and links. \n'
+        msg = 'Generate a ppno ext file from a network defined by '
+        msg += 'a node layer and a link layer. \n'
         msg += 'In the node layer must be defined the pressure required. \n'
         msg += 'In the link layer must be defined the pipe series. \n'
-        msg += 'Select the optimization algorithm, among: \n'
+        msg += 'Select the optimization algorithm, among: '
         msg += 'GD, DE, DA or NSGA-II \n'
-        msg += 'https://github.com/andresgciamtez/ppno \n'
-        msg += 'The template must contain the pipe series.'
+        msg += 'The template must contain the pipe series. \n'
+        msg += '-'*40
+        msg += '\n Pressurized Pipe Network Optimizer \n'
+        msg += 'https://github.com/andresgciamtez/ppno'
         return self.tr(msg)
 
     def initAlgorithm(self, config=None):
@@ -200,8 +203,14 @@ class PpnoFromNetworkAlgorithm(QgsProcessingAlgorithm):
             context
             )
 
+        # CHECK CRS
+        if nodes.sourceCrs() != links.sourceCrs():
+            msg = 'ERROR: Layers have different CRS!'
+            feedback.reportError(msg)
+            return {}
+
         # TEMPLATE
-        ppnof = htxt.Htxtf()
+        ppnof = htxt.HeaderTxt()
         ppnof.read(template)
 
         # TITLE SECTION
@@ -216,19 +225,19 @@ class PpnoFromNetworkAlgorithm(QgsProcessingAlgorithm):
         ppnof.sections['OPTIONS'].append(line)
 
         # PRESSURES SECTION
-        pcnt = 0
+        ncnt = 0
         for feature in nodes.getFeatures():
             if feature[pfield]:
                 print(feature[pfield])
-                pcnt += 1
+                ncnt += 1
                 line = feature['id']+' '*4 + str(feature[pfield])
                 ppnof.sections['PRESSURES'].append(line)
 
-        # SERIES SECTION
-        scnt = 0
+        # PIPES SECTION
+        pcnt = 0
         for feature in links.getFeatures():
             if feature[sfield]:
-                scnt += 1
+                pcnt += 1
                 line = (feature['id']+' '*4 + str(feature[sfield]))
                 ppnof.sections['PIPES'].append(line)
 
@@ -236,9 +245,12 @@ class PpnoFromNetworkAlgorithm(QgsProcessingAlgorithm):
         ppnof.write(extfile)
 
         # SHOW INFO
-        msg = 'Nodes processed: {}.  Pipes: {}.'.format(pcnt, scnt)
+        feedback.pushInfo('='*40)
+        msg = 'Nodes with min pressure especified: {}'.format(ncnt)
         feedback.pushInfo(msg)
-
+        msg = 'Pipes to size: {}.'.format(pcnt)
+        feedback.pushInfo(msg)
+        feedback.pushInfo('='*40)
         # PROCCES CANCELED
         if feedback.isCanceled():
             return {}

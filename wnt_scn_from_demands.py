@@ -69,25 +69,31 @@ class ScnFromDemandsAlgorithm(QgsProcessingAlgorithm):
         """
         Returns a localised short helper string for the algorithm.
         """
-        return self.tr('Scenario from nodal demands')
+        return self.tr('Scenario from node demands')
 
     def group(self):
         """
          Returns the name of the group this algorithm belongs to.
         """
-        return self.tr('Water Network Tools')
+        return self.tr('Export')
 
     def groupId(self):
         """
         Returns the unique ID of the group this algorithm belongs to.
         """
-        return 'wnt'
+        return 'export'
 
     def shortHelpString(self):
         """
         Returns a localised short helper string for the algorithm.
         """
-        return self.tr("Make an epanet nodal demand scenario file.")
+        msg = 'Generate an epanet demand scenario file. \n'
+        msg += 'Each demand category must be defined '
+        msg += 'as a field in the node layer. \n'
+        msg += 'Note: patterns must be declared in epanet with the same name.\n'
+        msg += 'Suggestion: import escenario in epanet from '
+        msg += 'menu: File/Import/Scenario'
+        return self.tr(msg)
 
     def initAlgorithm(self, config=None):
         """
@@ -141,7 +147,7 @@ class ScnFromDemandsAlgorithm(QgsProcessingAlgorithm):
         cnt = 0
         scnfn = self.parameterAsFileOutput(parameters, self.OUTPUT, context)
         file = open(scnfn, 'w')
-        msg = '; File generated automatically by Water Network Tools \n'
+        file.write('; File generated automatically by Water Network Tools \n')
         file.write('[DEMANDS] \n')
         file.write(';Node    Demand    Pattern \n')
         feedback.setProgress(5) # Update the progress bar
@@ -155,9 +161,10 @@ class ScnFromDemandsAlgorithm(QgsProcessingAlgorithm):
         file.close()
 
         # SHOW INFO
-        msg = 'Node demands added: {}, Categories: {}.'
-        msg = msg.format(cnt, len(defields))
-        feedback.pushInfo(msg)
+        feedback.pushInfo('='*40)
+        msg = 'Node demands added: {}, Categories: {}'
+        feedback.pushInfo(msg.format(cnt, len(defields)))
+        feedback.pushInfo('='*40)
 
         # PROCCES CANCELED
         if feedback.isCanceled():

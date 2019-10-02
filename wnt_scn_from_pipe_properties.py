@@ -78,19 +78,22 @@ class ScnFromPipePropertiesAlgorithm(QgsProcessingAlgorithm):
         """
          Returns the name of the group this algorithm belongs to.
         """
-        return self.tr('Water Network tools')
+        return self.tr('Export')
 
     def groupId(self):
         """
         Returns the unique ID of the group this algorithm belongs to.
         """
-        return 'wnt'
+        return 'export'
 
     def shortHelpString(self):
         """
         Returns a localised short helper string for the algorithm.
         """
-        return self.tr("Make an epanet diameter and roughness scenario file.")
+        msg = 'Generate an epanet diameter and roughness scenario file.\n'
+        msg += 'Suggestion: import escenario in epanet from '
+        msg += 'menu: File/Import/Scenario'
+        return self.tr(msg)
 
     def initAlgorithm(self, config=None):
         """
@@ -147,8 +150,7 @@ class ScnFromPipePropertiesAlgorithm(QgsProcessingAlgorithm):
         # WRITE FILE
         cnt = 0
         file = open(scnfile, 'w')
-        msg = '; File generated automatically by Water Network Tools \n'
-        file.write(msg)
+        file.write('; File generated automatically by Water Network Tools \n')
         file.write('[DIAMETERS] \n')
         file.write(';Pipe    Diameter \n')
 
@@ -168,8 +170,10 @@ class ScnFromPipePropertiesAlgorithm(QgsProcessingAlgorithm):
         file.close()
 
         # SHOW INFO
+        feedback.pushInfo('='*40)
         msg = 'Pipe diameter and roughness added: {}.'.format(cnt)
         feedback.pushInfo(msg)
+        feedback.pushInfo('='*40)
 
         # PROCCES CANCELED
         if feedback.isCanceled():
