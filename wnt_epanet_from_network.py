@@ -79,20 +79,34 @@ class EpanetFromNetworkAlgorithm(QgsProcessingAlgorithm):
         """
          Returns the name of the group this algorithm belongs to.
         """
-        return self.tr('Water Network tools')
+        return self.tr('Export')
 
     def groupId(self):
         """
         Returns the unique ID of the group this algorithm belongs to.
         """
-        return 'wnt'
+        return 'export'
 
     def shortHelpString(self):
         """
         Returns a localised short helper string for the algorithm.
         """
-        msg = "Make an epanet inp file from nodes and links. \n"
-        msg += "Pipe diameter and roughness are ignored."
+        msg = 'Generate an epanet inp file from a network defined '
+        msg += 'by a node layer, a link layer and a epanet model template.\n'
+        msg += 'The final epanet model contain the templated data adding:\n'
+        msg += '- JUNCTIONS/RESERVOIRS/TANK\n'
+        msg += '* id\n'
+        msg += '* elevation\n'
+        msg += '- PIPES\n'
+        msg += '* id\n'
+        msg += '* start\n'
+        msg += '* end\n'
+        msg += 'Note: diameter and roughness are ignored '
+        msg += '(add them by means of scenarios).\n'
+        msg += 'Coordinates and vertex are exported.\n'
+        msg += 'Suggestions:\n'
+        msg += '- You can complete a model stored in the template '
+        msg += 'adding the nodes and links to it.'
         return self.tr(msg)
 
     def initAlgorithm(self, config=None):
@@ -140,6 +154,18 @@ class EpanetFromNetworkAlgorithm(QgsProcessingAlgorithm):
         nodes = self.parameterAsSource(parameters, self.NODE_INPUT, context)
         links = self.parameterAsSource(parameters, self.LINK_INPUT, context)
         template = self.parameterAsFile(parameters, self.TEMPLATE, context)
+
+        # CHECK CRS
+        crs = nodes.sourceCrs()
+        if crs == links.sourceCrs():
+
+            # SEND INFORMATION TO THE USER
+            feedback.pushInfo('='*40)
+            feedback.pushInfo('CRS is {}'.format(crs.authid()))
+        else:
+            msg = 'ERROR: Layers have different CRS!'
+            feedback.reportError(msg)
+            return {}
 
         # OUTPUT
         epanet = self.parameterAsFileOutput(
@@ -193,8 +219,9 @@ class EpanetFromNetworkAlgorithm(QgsProcessingAlgorithm):
             )
 
         # SHOW INFO
-        msg = 'Saved: {} nodes and {} links.'.format(ncnt, lcnt)
+        msg = 'Model contains: {} nodes and {} links.'.format(ncnt, lcnt)
         feedback.pushInfo(msg)
+        feedback.pushInfo('='*40)
 
         # PROCCES CANCELED
         if feedback.isCanceled():

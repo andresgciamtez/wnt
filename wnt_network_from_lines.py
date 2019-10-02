@@ -90,19 +90,41 @@ class NetworkFromLinesAlgorithm(QgsProcessingAlgorithm):
         """
         Returns the name of the group this algorithm belongs to.
         """
-        return self.tr('Water Network tools')
+        return self.tr('Build')
 
     def groupId(self):
         """
         Returns the unique ID of the group this algorithm belongs to.
         """
-        return 'wnt'
+        return 'build'
 
     def shortHelpString(self):
         """
         Returns a localised short help string for the algorithm.
         """
-        return self.tr('Build a network (nodes and links) from lines.')
+        msg = 'Build a epanet network from a line layer.\n'
+        msg += 'Network defined by a node and a link layer.\n'
+        msg += '- Node layer contain the fields,\n'
+        msg += '* id: node identifier according to input parameters\n'
+        msg += '* type: void (must be specified among JUNCTION/RESERVOIR/TANK)\n'
+        msg += '* elevation: void\n'
+        msg += '- Link layer contain the fields,\n'
+        msg += '* id: link identifier according to input parameters\n'
+        msg += '* start: node identifier'
+        msg += '* end: node identifier\n'
+        msg += '* type: PIPE (can be changed to '
+        msg += 'CVPIPE, PUMP, PRV, PSV, PBV, FCV, TCV, GPV)\n'
+        msg += '* length: line XY length, it is calculated from line layer\n'
+        msg += 'Note:\n'
+        msg += 'The line input layer fields are preserved.\n'
+        msg += 'Consider to use it for obtaining pipe diameter and roughness.\n'
+        msg += 'Limitations:\n'
+        msg += '- MultiGeometry is not supported\n'
+        msg += '- Z coordinate is ignored\n'
+        msg += '- Suggestion:\n'
+        msg += '- Check zero-length lines\n'
+        msg += '- Audit the network with Validate'
+        return self.tr(msg)
 
     def initAlgorithm(self, config=None):
         """
@@ -113,14 +135,14 @@ class NetworkFromLinesAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterFeatureSource(
                 self.INPUT,
-                self.tr('Input LineString vector layer'),
+                self.tr('Line vector layer input'),
                 types=[QgsProcessing.TypeVectorLine]
                 )
             )
         self.addParameter(
             QgsProcessingParameterDistance(
                 self.TOLERANCE,
-                self.tr('Minimum node separation, also merge them'),
+                self.tr('Minimum node separation, otherwise merge them'),
                 defaultValue=0.001,
                 minValue=0.0001,
                 maxValue=1.0
@@ -136,7 +158,7 @@ class NetworkFromLinesAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterNumber(
                 self.NODE_INIT,
-                self.tr('Node start number'),
+                self.tr('Number of the first node'),
                 type=QgsProcessingParameterNumber.Integer,
                 defaultValue=1000
                 )
@@ -144,7 +166,7 @@ class NetworkFromLinesAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterNumber(
                 self.NODE_DELTA,
-                self.tr('Node number increment'),
+                self.tr('Node increment'),
                 type=QgsProcessingParameterNumber.Integer,
                 defaultValue=1
                 )
@@ -159,7 +181,7 @@ class NetworkFromLinesAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterNumber(
                 self.LINK_INIT,
-                self.tr('Link start number'),
+                self.tr('Number of first link'),
                 type=QgsProcessingParameterNumber.Integer,
                 defaultValue=1000
                 )
@@ -167,7 +189,7 @@ class NetworkFromLinesAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterNumber(
                 self.LINK_DELTA,
-                self.tr('Link number increment'),
+                self.tr('Link increment'),
                 type=QgsProcessingParameterNumber.Integer,
                 defaultValue=1
                 )
@@ -177,13 +199,13 @@ class NetworkFromLinesAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterFeatureSink(
                 self.NODE_OUTPUT,
-                self.tr('Node layer')
+                self.tr('Network node layer')
             )
         )
         self.addParameter(
             QgsProcessingParameterFeatureSink(
                 self.LINK_OUTPUT,
-                self.tr('Link layer')
+                self.tr('Network link layer')
             )
         )
 
@@ -202,11 +224,11 @@ class NetworkFromLinesAlgorithm(QgsProcessingAlgorithm):
         ld = self.parameterAsInt(parameters, self.LINK_DELTA, context)
 
         # SEND INFORMATION TO THE USER
-
+        feedback.pushInfo('='*40)
         feedback.pushInfo('CRS is {}'.format(linelayer.sourceCrs().authid()))
 
         if linelayer.wkbType() == QgsWkbTypes.MultiLineString:
-            feedback.pushInfo('Source geometry is MultiLineString!')
+            feedback.reportError('ERROR: Source geometry is MultiLineString!')
 
         # READ LINESTRINGS AS WKT
 
@@ -281,8 +303,11 @@ class NetworkFromLinesAlgorithm(QgsProcessingAlgorithm):
             if lcnt % 100 == 0:
                 feedback.setProgress(50+50*lcnt/len(links))
 
-        msg = 'Added: {} nodes and {} links.'.format(ncnt, lcnt)
+        msg = 'Generated network'.format(ncnt, lcnt)
         feedback.pushInfo(msg)
+        msg = 'Containing: {} nodes and {} links'.format(ncnt, lcnt)
+        feedback.pushInfo(msg)
+        feedback.pushInfo('='*40)
 
         # PROCCES CANCELED
 
