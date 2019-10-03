@@ -10,7 +10,7 @@ A set of QGIS processes for water network modelling.
 ### Export
 - Build an epanet model file from network: http://y2u.be/L7Kp5l67kOc
 - Build an epanet scenario file containing demands: http://y2u.be/FOxZgZUgjq4
-- Build an epanet scenario file containing pipe propierties (diameter and roughness): http://y2u.be/wvbyWapAu2I
+- Build an epanet scenario file containing pipe properties (diameter and roughness): http://y2u.be/wvbyWapAu2I
 - Build a pressurized pipe network optimizer (ppno) data file: http://y2u.be/S9445JLldRE
 ### Modify
 - Add elevation to nodes from a DEM: http://y2u.be/IfDK1yyEPIE
