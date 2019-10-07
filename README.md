@@ -17,6 +17,7 @@ A set of QGIS processes for water network modelling.
 - Split polylines at points, correcting models that ignore connection points (T, X, n-junctions): http://y2u.be/yJ_75TPSk6o
 - Merge networks
 ### Graph
+- Classify (branched and meshed zones)
 - Export graph network to TGF: http://y2u.be/gMYElJa37bg
 - Get node degrees
 - Validate network
