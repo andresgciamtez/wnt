@@ -58,10 +58,10 @@ def main(parameters, arguments):
 def hide_password(url, start=6):
     """Returns the http url with password part replaced with '*'.
 
-    :param url: URL to upload the plugin to.
+    :param url: URL to upload the plugin to
     :type url: str
 
-    :param start: Position of start of password.
+    :param start: Position of start of password
     :type start: int
     """
     start_position = url.find(':', start) + 1
