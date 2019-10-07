@@ -31,17 +31,20 @@ __copyright__ = '(C) 2019 by Andrés García Martínez'
 __revision__ = '$Format:%H$'
 
 from qgis.core import QgsProcessingProvider
-
-
 from .wnt_elevation_from_raster import ElevationFromRasterAlgorithm
 from .wnt_epanet_from_network import EpanetFromNetworkAlgorithm
+from .wnt_graph_from_network import GraphFromNetworkAlgorithm
+from .wnt_classify import ClassifyAlgorithm
+from .wnt_merge_networks import MergeNetworksAlgorithm
 from .wnt_network_from_epanet import NetworkFromEpanetAlgorithm
 from .wnt_network_from_lines import NetworkFromLinesAlgorithm
+from .wnt_node_degrees import NodeDegreesAlgorithm
 from .wnt_ppno_from_network import PpnoFromNetworkAlgorithm
-#from .wnt_results_from_epanet import ResultsFromEpanetAlgorithm
+from .wnt_results_from_epanet import ResultsFromEpanetAlgorithm
 from .wnt_scn_from_demands import ScnFromDemandsAlgorithm
 from .wnt_scn_from_pipe_properties import ScnFromPipePropertiesAlgorithm
 from .wnt_split_lines_at_points import SplitLinesAtPointsAlgorithm
+from .wnt_validate import ValidateAlgorithm
 
 class WaterNetworkToolsProvider(QgsProcessingProvider):
     """Main class"""
@@ -56,22 +59,26 @@ class WaterNetworkToolsProvider(QgsProcessingProvider):
         Unloads the provider. Any tear-down steps required by the provider
         should be implemented here.
         """
-
+        pass
 
     def loadAlgorithms(self):
         """
         Loads all algorithms belonging to this provider.
         """
-
         self.addAlgorithm(ElevationFromRasterAlgorithm())
         self.addAlgorithm(EpanetFromNetworkAlgorithm())
+        self.addAlgorithm(GraphFromNetworkAlgorithm())
+        self.addAlgorithm(ClassifyAlgorithm())
+        self.addAlgorithm(MergeNetworksAlgorithm())
         self.addAlgorithm(NetworkFromEpanetAlgorithm())
         self.addAlgorithm(NetworkFromLinesAlgorithm())
+        self.addAlgorithm(NodeDegreesAlgorithm())
         self.addAlgorithm(PpnoFromNetworkAlgorithm())
-        #self.addAlgorithm(ResultsFromEpanetAlgorithm())
+        self.addAlgorithm(ResultsFromEpanetAlgorithm())
         self.addAlgorithm(ScnFromDemandsAlgorithm())
         self.addAlgorithm(ScnFromPipePropertiesAlgorithm())
         self.addAlgorithm(SplitLinesAtPointsAlgorithm())
+        self.addAlgorithm(ValidateAlgorithm())
 
     def id(self):
         """
@@ -85,10 +92,8 @@ class WaterNetworkToolsProvider(QgsProcessingProvider):
         """
         Returns the provider name, which is used to describe the provider
         within the GUI.
-
-        This string should be short (e.g. "Lastools") and localised.
         """
-        return self.tr('WNT')
+        return self.tr('Water Network Tools')
 
     def icon(self):
         """
@@ -100,7 +105,7 @@ class WaterNetworkToolsProvider(QgsProcessingProvider):
     def longName(self):
         """
         Returns the a longer version of the provider name, which can include
-        extra details such as version numbers. E.g. "Lastools LIDAR tools
+        extra details such as version numbers. E.g. "Water Network Tools
         (version 2.2.1)". This string should be localised. The default
         implementation returns the same string as name().
         """
