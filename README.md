@@ -1,5 +1,5 @@
 # Water Network Tools (WNT)
-A set of QGIS processes for water network modelling.
+A set of QGIS processes for water network modeling.
 
 ## Recipes
 ### Build
