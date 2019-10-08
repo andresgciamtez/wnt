@@ -1,6 +1,4 @@
-# This file contains metadata for your plugin.
-# This file should be included when you package your plugin.
-# Mandatory items:
+
 [general]
 name=Water Network Tools
 qgisMinimumVersion=3.0
@@ -12,7 +10,6 @@ about=WNT Water Network Tools is a QGIS plugin containing a set of QGIS processe
 tracker=https://github.com/andresgciamtez/wnt/issues
 repository=https://github.com/andresgciamtez/wnt
 # End of mandatory metadata
-
 # Recommended items:
 hasProcessingProvider=yes
 
@@ -28,17 +25,13 @@ icon=icon.png
 
 # experimental flag
 experimental=True
-
 # deprecated flag (applies to the whole plugin, not just a single version)
 deprecated=False
-
 # Since QGIS 3.8, a comma separated list of plugins to be installed
 # (or upgraded) can be specified.
 # Check the documentation for more information.
 # plugin_dependencies=
-
 Category of the plugin: Raster, Vector, Database or Web
 # category=
-
 # If the plugin can run on QGIS Server.
 server=False
