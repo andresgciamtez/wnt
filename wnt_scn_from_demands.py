@@ -5,7 +5,7 @@
  WaterNetworkTools
                                  A QGIS plugin
  Water Network Modelling Utilities
- 
+
                               -------------------
         begin                : 2019-07-19
         copyright            : (C) 2019 by Andrés García Martínez
@@ -43,11 +43,10 @@ class ScnFromDemandsAlgorithm(QgsProcessingAlgorithm):
     """
 
     # DEFINE CONSTANTS
-
-    NODES_INPUT = 'NODES_INPUT'
-    DE_FIELD_INPUT = 'DE_FIELD_INPUT'
+    NODE_INPUT = 'NODE_INPUT'
+    DEM_FIELD = 'DEM_FIELD'
     OUTPUT = 'OUTPUT'
-    
+
     def tr(self, string):
         """
         Returns a translatable string with the self.tr() function.
@@ -68,110 +67,108 @@ class ScnFromDemandsAlgorithm(QgsProcessingAlgorithm):
 
     def displayName(self):
         """
-        Returns a localised short helper string for the algorithm
+        Returns a localised short helper string for the algorithm.
         """
-        return self.tr('Scenario from nodal demands')
+        return self.tr('Scenario from node demands')
 
     def group(self):
         """
          Returns the name of the group this algorithm belongs to.
         """
-        return self.tr('Water Network Tools')
+        return self.tr('Export')
 
     def groupId(self):
         """
         Returns the unique ID of the group this algorithm belongs to.
         """
-        return 'wnt'
+        return 'export'
 
     def shortHelpString(self):
         """
         Returns a localised short helper string for the algorithm.
         """
-        return self.tr("Make an epanet scenario file with nodal demands.")
+        msg = 'Generate an epanet demand scenario file. \n'
+        msg += 'Each demand category must be defined '
+        msg += 'as a field in the node layer. \n'
+        msg += 'Note: patterns must be declared in epanet with the same name.\n'
+        msg += 'Suggestion: import escenario in epanet from '
+        msg += 'menu: File/Import/Scenario'
+        return self.tr(msg)
 
     def initAlgorithm(self, config=None):
         """
         Define the inputs and outputs of the algorithm.
         """
-        
+
         # ADD THE INPUT SOURCES
-        
-        # Adding the input vector features source
         self.addParameter(
             QgsProcessingParameterFeatureSource(
-                self.NODES_INPUT,
-                self.tr('Input nodes layer'),
+                self.NODE_INPUT,
+                self.tr('Input node layer'),
                 [QgsProcessing.TypeVectorPoint]
+                )
             )
-        )
-        # Adding fields with demand
         self.addParameter(
             QgsProcessingParameterField(
-                self.DE_FIELD_INPUT,
+                self.DEM_FIELD,
                 self.tr('Field containing demand'),
                 'demand',
-                self.NODES_INPUT,
-                allowMultiple = True,
-                optional = True
+                self.NODE_INPUT,
+                allowMultiple=True,
+                optional=True
+                )
             )
-        )
-        # Adding a file destination
         self.addParameter(
             QgsProcessingParameterFileDestination(
                 self.OUTPUT,
                 self.tr('Epanet scenario file'),
                 fileFilter='*.scn'
+                )
             )
-        )
-        
+
     def processAlgorithm(self, parameters, context, feedback):
         """
         RUN PROCESS
         """
-        
-        # INPUT        
-        
-        input = self.parameterAsSource(parameters, self.NODES_INPUT, context)
-        defields = self.parameterAsFields(parameters, self.DE_FIELD_INPUT, context)
-        
+
+        # INPUT
+        nodes = self.parameterAsSource(parameters, self.NODE_INPUT, context)
+        defields = self.parameterAsFields(parameters, self.DEM_FIELD, context)
+
         # OUTPUT
-        
         scnfn = self.parameterAsFileOutput(parameters, self.OUTPUT, context)
         file = open(scnfn, 'w')
-        
-        
-        # IF NO FIELD WAS SELECTED RETURN {}  
-        if len(defields) == 0:
+
+        # IF NO FIELD WAS SELECTED RETURN {}
+        if not defields:
             return {}
-        
+
         # WRITE FILE
-        
         cnt = 0
         scnfn = self.parameterAsFileOutput(parameters, self.OUTPUT, context)
         file = open(scnfn, 'w')
-        file.write('; File generated automatically by nettools.py \n')
+        file.write('; File generated automatically by Water Network Tools \n')
         file.write('[DEMANDS] \n')
         file.write(';Node    Demand    Pattern \n')
         feedback.setProgress(5) # Update the progress bar
-        
-        for feat in input.getFeatures():
+
+        for f in nodes.getFeatures():
             for field in defields:
-                if feat[field] != None and feat['type'] == 'JUNCTION':
+                if f[field] and f['type'] == 'JUNCTION':
                     cnt += 1
-                    line ='{}  {}  {} \n'.format(feat['id'],feat[field], field)
+                    line = '{}  {}  {} \n'.format(f['id'], f[field], field)
                     file.write(line)
-        
         file.close()
-        
-        msg = 'Node demands add: {},  types: {}.'.format(cnt, len(defields))
-        feedback.pushInfo(msg)
+
+        # SHOW INFO
+        feedback.pushInfo('='*40)
+        msg = 'Node demands added: {}, Categories: {}'
+        feedback.pushInfo(msg.format(cnt, len(defields)))
+        feedback.pushInfo('='*40)
 
         # PROCCES CANCELED
-        
         if feedback.isCanceled():
             return {}
-        
-        # OUTPUT
 
+        # OUTPUT
         return {self.OUTPUT: scnfn}

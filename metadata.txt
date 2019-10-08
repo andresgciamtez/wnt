@@ -1,23 +1,28 @@
+
 [general]
 name=Water Network Tools
 qgisMinimumVersion=3.0
 description=Water Network Modelling Utilities
-version=0.2
+version=0.3
 author=Andrés García Martínez
 email=ppnoptimizer@gmail.com
-about=WNT Water Network Tools is a QGIS plugin containing a set of QGIS processes useful for water network modelling. It is aimed to help in the entire design cycle. Capabilities: Build a network topology and geometry from lines. Split polylines at points so models that ignore connection points (T, X, n-junctions) are corrected. Add elevation to nodes from a DEM. Build an epanet model file from network. Build an epanet scenario file with pipe diameter and roughness. Build an epanet scenario file with nodal demand. Build a pressurized pipe network optimizer (ppno) data file. Import an epanet file (nodes and link). Soon: Import results from epanet. Export graph network to TGF. And more…
+about=WNT Water Network Tools is a QGIS plugin containing a set of QGIS processes useful for water network modelling. It is aimed to help in the entire design cycle. Capabilities: Build a network from lines. Add elevation to nodes. Split lines at points. Build an epanet model file from network. Build demand and pipe property epanet scenario file. Export graph network to TGF. Build a pressurized pipe network optimizer (ppno) data file. Import an epanet file (nodes and link). Tutorial: http://yt.vu/p/PLzE4DxrnNT-Fg0Ztku6jbIG8QEEOHqYEH Autor LinkedIn: https://bit.ly/2m8otrB
 tracker=https://github.com/andresgciamtez/wnt/issues
 repository=https://github.com/andresgciamtez/wnt
 # End of mandatory metadata
 # Recommended items:
 hasProcessingProvider=yes
+
 # Uncomment the following line and add your changelog:
-# changelog=
+#changelog=
+
 # Tags are comma separated with spaces allowed
-tags=hydraulics , network analysis , processing
+tags=water, hydraulics , water network analysis, epanet, WDS modelling
+
 homepage=https://github.com/andresgciamtez/wnt
 category=Analysis
 icon=icon.png
+
 # experimental flag
 experimental=True
 # deprecated flag (applies to the whole plugin, not just a single version)

@@ -5,7 +5,7 @@
  WaterNetworkTools
                                  A QGIS plugin
  Water Network Modelling Utilities
- 
+
                               -------------------
         begin                : 2019-07-19
         copyright            : (C) 2019 by Andrés García Martínez
@@ -35,9 +35,9 @@ from qgis.core import (QgsProcessingAlgorithm,
                        QgsFields,
                        QgsField,
                        QgsFeature,
-                       QgsFeatureSink,
                        QgsProcessingParameterFile,
                        QgsProcessingParameterFeatureSink,
+                       QgsProcessingParameterCrs,
                        QgsGeometry,
                        QgsWkbTypes
                       )
@@ -47,13 +47,14 @@ class NetworkFromEpanetAlgorithm(QgsProcessingAlgorithm):
     """
     Built a network from an epanet file.
     """
-    
+
     # DEFINE CONSTANTS
-    
+
     INPUT = 'INPUT'
-    NODES_OUTPUT = 'NODES_OUTPUT'
-    LINKS_OUTPUT = 'LINKS_OUTPUT'
-    
+    NODE_OUTPUT = 'NODE_OUTPUT'
+    LINK_OUTPUT = 'LINK_OUTPUT'
+    CRS = 'CRS'
+
     def tr(self, string):
         """
         Returns a translatable string with the self.tr() function.
@@ -82,49 +83,67 @@ class NetworkFromEpanetAlgorithm(QgsProcessingAlgorithm):
         """
         Returns the name of the group this algorithm belongs to.
         """
-        return self.tr('Water Network Tools')
+        return self.tr('Import')
 
     def groupId(self):
         """
         Returns the unique ID of the group this algorithm belongs to.
         """
-        return 'wnt'
+        return 'import'
 
     def shortHelpString(self):
         """
         Returns a localised short help string for the algorithm.
         """
-        return self.tr('Build network (nodes and links) from epanet file.')
+        msg = 'Import an epanet inp file and generate a network defined by '
+        msg += 'a node layer, a link layer and a epanet model template.\n'
+        msg += 'The epanet data imported is:\n'
+        msg += '- Nodes\n'
+        msg += '* id\n'
+        msg += '* type (JUNCTIONS/RESERVOIRS/TANK)\n'
+        msg += '* elevation\n'
+        msg += '- Links\n'
+        msg += '* id\n'
+        msg += '* start\n'
+        msg += '* end\n'
+        msg += '* type (PIPE*/CVPIPE/PUMP/PRV/PSV/PBV/FCV/TCV/GPV\n'
+        msg += '* length (if type is PIPE or CVPIPE, otherwise void)\n'
+        msg += '* diameter\n'
+        msg += '* roughness\n'
+        return self.tr(msg)
 
     def initAlgorithm(self, config=None):
         """
          Define the inputs and outputs of the algorithm.
         """
-        
-        # ADD INPUT FILE
-        
+
+        # ADD INPUT FILE AND CRS SELECTOR
         self.addParameter(
             QgsProcessingParameterFile(
                 self.INPUT,
                 self.tr('Epanet file'),
-                 extension='inp'
+                extension='inp'
+                )
             )
-        )
-
+        self.addParameter(
+            QgsProcessingParameterCrs(
+                self.CRS,
+                self.tr('Coordinate reference system (CRS)')
+                )
+            )
         # ADD NODE AND LINK SINKS
-        
         self.addParameter(
             QgsProcessingParameterFeatureSink(
-                self.NODES_OUTPUT,
-                self.tr('Nodes')
+                self.NODE_OUTPUT,
+                self.tr('Epanet nodes')
+                )
             )
-        )
         self.addParameter(
             QgsProcessingParameterFeatureSink(
-                self.LINKS_OUTPUT,
-                self.tr('Links'),
+                self.LINK_OUTPUT,
+                self.tr('Epanet links'),
+                )
             )
-        )
 
     def processAlgorithm(self, parameters, context, feedback):
         """
@@ -132,43 +151,51 @@ class NetworkFromEpanetAlgorithm(QgsProcessingAlgorithm):
         """
         # INPUT
         epanetf = self.parameterAsFile(parameters, self.INPUT, context)
-               
-        # READ NETWORK
+        crs = self.parameterAsCrs(parameters, self.CRS, context)
 
+        # SHOW INFO
+        feedback.pushInfo('='*40)
+        feedback.pushInfo('CRS is {}'.format(crs.authid()))
+
+        # READ NETWORK
         network = tools.Network()
         network.from_epanet(epanetf)
         nodes = network.nodes
         links = network.links
-        
+
         # GENERATE NODES LAYER
-        
         newfields = QgsFields()
         newfields.append(QgsField("id", QVariant.String))
         newfields.append(QgsField("type", QVariant.String))
         newfields.append(QgsField("elevation", QVariant.Double))
-        (nodes_sink, nodes_id) = self.parameterAsSink(
+        (node_sink, node_id) = self.parameterAsSink(
             parameters,
-            self.NODES_OUTPUT,
+            self.NODE_OUTPUT,
             context,
             newfields,
-            QgsWkbTypes.Point
+            QgsWkbTypes.Point,
+            crs
             )
-        
+
+        # ADD NODES
         ncnt = 0
         ntot = len(nodes)
         for node in nodes:
             #add feature to sink
             ncnt += 1
             f = QgsFeature()
-            f.setGeometry(QgsGeometry.fromWkt(node.get_wkt()))
+            f.setGeometry(QgsGeometry.fromWkt(node.to_wkt()))
             f.setAttributes([node.nodeid, node.get_type(), node.elevation])
-            nodes_sink.addFeature(f, QgsFeatureSink.FastInsert) 
+
+            # ADD NODE
+            node_sink.addFeature(f)
+
+            # SHOW PROGRESS
             if ncnt % 100 == 0:
                 feedback.setProgress(50*ncnt/ntot) # Update the progress bar
-        
-        
+
+
         # GENERATE LINKS LAYER
-        
         newfields = QgsFields()
         newfields.append(QgsField("id", QVariant.String))
         newfields.append(QgsField("start", QVariant.String))
@@ -177,55 +204,58 @@ class NetworkFromEpanetAlgorithm(QgsProcessingAlgorithm):
         newfields.append(QgsField("length", QVariant.Double))
         newfields.append(QgsField("diameter", QVariant.Double))
         newfields.append(QgsField("roughness", QVariant.Double))
-        (links_sink, links_id) = self.parameterAsSink(
+        (link_sink, link_id) = self.parameterAsSink(
             parameters,
-            self.LINKS_OUTPUT,
+            self.LINK_OUTPUT,
             context,
             newfields,
-            QgsWkbTypes.LineString
+            QgsWkbTypes.LineString,
+            crs
             )
-        
+
+        # ADD LINKS
         lcnt = 0
         ltot = len(links)
         for link in links:
-            #add feature to sink
             lcnt += 1
             f = QgsFeature()
-            f.setGeometry(QgsGeometry.fromWkt(link.get_wkt()))
+            f.setGeometry(QgsGeometry.fromWkt(link.to_wkt()))
             if link.get_type() in ['PIPE', 'CVPIPE']:
                 f.setAttributes(
                     [link.linkid,
-                    link.start,
-                    link.end,
-                    link.get_type(),
-                    link._length,
-                    link.diameter,
-                    link.roughness]
+                     link.start,
+                     link.end,
+                     link.get_type(),
+                     link.length,
+                     link.diameter,
+                     link.roughness]
                     )
             else:
                 f.setAttributes(
                     [link.linkid,
-                    link.start,
-                    link.end,
-                    link.get_type(),
-                    link._length,
-                    None,
-                    None]
+                     link.start,
+                     link.end,
+                     link.get_type(),
+                     link.length,
+                     None,
+                     None]
                     )
-            
-            links_sink.addFeature(f, QgsFeatureSink.FastInsert)
-            
+
+            # ADD LINK
+            link_sink.addFeature(f)
+
+            # SHOW PROGRESS
             if lcnt % 100 == 0:
                 feedback.setProgress(50+50*lcnt/ltot) # Update the progress bar
-        
-        msg = 'Add: {} nodes and {} links.'.format(ncnt,lcnt)
-        feedback.pushInfo(msg)                
+
+        # SHOW INFO
+        msg = 'Added: {} nodes and {} links.'.format(ncnt, lcnt)
+        feedback.pushInfo(msg)
+        feedback.pushInfo('='*40)
 
         # PROCCES CANCELED
-        
         if feedback.isCanceled():
             return {}
-        
-        # OUTPUT
 
-        return {self.NODES_OUTPUT: nodes_id, self.LINKS_OUTPUT: links_id}
+        # OUTPUT
+        return {self.NODE_OUTPUT: node_id, self.LINK_OUTPUT: link_id}

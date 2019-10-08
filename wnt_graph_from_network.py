@@ -30,23 +30,23 @@ __copyright__ = '(C) 2019 by Andrés García Martínez'
 
 __revision__ = '$Format:%H$'
 
-from PyQt5.QtCore import QCoreApplication
+from qgis.PyQt.QtCore import QCoreApplication
 from qgis.core import (QgsProcessing,
                        QgsProcessingAlgorithm,
                        QgsProcessingParameterFeatureSource,
-                       QgsProcessingParameterField,
-                       QgsProcessingParameterFileDestination)
+                       QgsProcessingParameterFileDestination
+                      )
+from . import tools
 
-class ScnFromPipePropertiesAlgorithm(QgsProcessingAlgorithm):
+class GraphFromNetworkAlgorithm(QgsProcessingAlgorithm):
     """
-    Build an epanet scenary file from pipe diameter and roughness.
+    Set the node elevation from a DEM in raster format.
     """
 
     # DEFINE CONSTANTS
 
+    NODE_INPUT = 'NODE_INPUT'
     LINK_INPUT = 'LINK_INPUT'
-    DIA_FIELD = 'DIA_FIELD'
-    ROU_FIELD = 'ROU_FIELD'
     OUTPUT = 'OUTPUT'
 
     def tr(self, string):
@@ -59,40 +59,40 @@ class ScnFromPipePropertiesAlgorithm(QgsProcessingAlgorithm):
         """
         Create a instance and return a new copy of algorithm.
         """
-        return ScnFromPipePropertiesAlgorithm()
+        return GraphFromNetworkAlgorithm()
 
     def name(self):
         """
         Returns the unique algorithm name, used for identifying the algorithm.
         """
-        return 'scn_from_pipe_properties'
+        return 'graph_from_network'
 
     def displayName(self):
         """
-        Returns the translated algorithm name, which should be used for any
-        user-visible display of the algorithm name.
+        Returns the translated algorithm name.
         """
-        return self.tr('Scenario from pipe properties')
+        return self.tr('Graph from network')
 
     def group(self):
         """
-         Returns the name of the group this algorithm belongs to.
+        Returns the name of the group this algorithm belongs to.
         """
-        return self.tr('Export')
+        return self.tr('Graph')
 
     def groupId(self):
         """
         Returns the unique ID of the group this algorithm belongs to.
         """
-        return 'export'
+        return 'graph'
 
     def shortHelpString(self):
         """
-        Returns a localised short helper string for the algorithm.
+        Returns a localised short help string for the algorithm.
         """
-        msg = 'Generate an epanet diameter and roughness scenario file.\n'
-        msg += 'Suggestion: import escenario in epanet from '
-        msg += 'menu: File/Import/Scenario'
+        msg = 'Generate a graph from the network.\n'
+        msg += 'Format: Trivial Graph Format\n'
+        msg += 'Suggestion: disconnected zones can be easily detected looking '
+        msg += ' the graph of the network, also it is useful for sectorizing.'
         return self.tr(msg)
 
     def initAlgorithm(self, config=None):
@@ -100,37 +100,29 @@ class ScnFromPipePropertiesAlgorithm(QgsProcessingAlgorithm):
         Define the inputs and outputs of the algorithm.
         """
 
-        # ADD THE INPUT
+        # ADD THE INPUT SOURCES
+        self.addParameter(
+            QgsProcessingParameterFeatureSource(
+                self.NODE_INPUT,
+                self.tr('Input node vector layer'),
+                types=[QgsProcessing.TypeVectorPoint]
+                )
+            )
         self.addParameter(
             QgsProcessingParameterFeatureSource(
                 self.LINK_INPUT,
-                self.tr('Input link layer'),
-                [QgsProcessing.TypeVectorLine]
-                )
-            )
-        self.addParameter(
-            QgsProcessingParameterField(
-                self.DIA_FIELD,
-                self.tr('Diameter field'),
-                'diameter',
-                self.LINK_INPUT
-                )
-            )
-        self.addParameter(
-            QgsProcessingParameterField(
-                self.ROU_FIELD,
-                self.tr('Roughness field'),
-                'roughness',
-                self.LINK_INPUT
+                self.tr('Input link vector layer'),
+                types=[QgsProcessing.TypeVectorLine]
                 )
             )
 
+        #ADD THE OUTPUT SINK
         # ADD A FILE DESTINATION
         self.addParameter(
             QgsProcessingParameterFileDestination(
                 self.OUTPUT,
-                self.tr('Epanet scenario file'),
-                fileFilter='*.scn'
+                self.tr('Trivial Graph Format file'),
+                fileFilter='*.tgf'
                 )
             )
 
@@ -140,38 +132,26 @@ class ScnFromPipePropertiesAlgorithm(QgsProcessingAlgorithm):
         """
 
         # INPUT
+        nodes = self.parameterAsSource(parameters, self.NODE_INPUT, context)
         links = self.parameterAsSource(parameters, self.LINK_INPUT, context)
-        dfield = self.parameterAsString(parameters, self.DIA_FIELD, context)
-        rfield = self.parameterAsString(parameters, self.ROU_FIELD, context)
 
         # OUTPUT
-        scnfile = self.parameterAsFileOutput(parameters, self.OUTPUT, context)
+        graphfile = self.parameterAsFileOutput(parameters, self.OUTPUT, context)
 
-        # WRITE FILE
-        cnt = 0
-        file = open(scnfile, 'w')
-        file.write('; File generated automatically by Water Network Tools \n')
-        file.write('[DIAMETERS] \n')
-        file.write(';Pipe    Diameter \n')
+        # GENERATE NETWORK
+        n = tools.Network()
+        for f in nodes.getFeatures():
+            n.nodes.append(tools.Node(f['id']))
+        for f in links.getFeatures():
+            n.links.append(tools.Link(f['id'], f['start'], f['end']))
 
-
-        for feature in links.getFeatures():
-            if feature['type'] in ['PIPE', 'CVPIPE']:
-                cnt += 1
-                file.write('{}    {} \n'.format(feature['id'], feature[dfield]))
-
-        file.write(' \n')
-        file.write('[ROUGHNESS] \n')
-        file.write(';Pipe    Roughness \n')
-
-        for feature in links.getFeatures():
-            if feature['type'] in ['PIPE', 'CVPIPE']:
-                file.write('{}    {} \n'.format(feature['id'], feature[rfield]))
-        file.close()
+        # GENERATE GRAPH
+        n.to_tgf(graphfile)
 
         # SHOW INFO
         feedback.pushInfo('='*40)
-        msg = 'Pipe diameter and roughness added: {}.'.format(cnt)
+        msg = 'Graph generated. Nodes: {}. Edges: {}.'
+        msg = msg.format(nodes.featureCount(), links.featureCount())
         feedback.pushInfo(msg)
         feedback.pushInfo('='*40)
 
@@ -180,4 +160,4 @@ class ScnFromPipePropertiesAlgorithm(QgsProcessingAlgorithm):
             return {}
 
         # OUTPUT
-        return {self.OUTPUT: scnfile}
+        return {self.OUTPUT: graphfile}

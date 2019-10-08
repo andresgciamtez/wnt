@@ -5,7 +5,7 @@
  WaterNetworkTools
                                  A QGIS plugin
  Water Network Modelling Utilities
- 
+
                               -------------------
         begin                : 2019-07-19
         copyright            : (C) 2019 by Andrés García Martínez
@@ -32,8 +32,6 @@ __revision__ = '$Format:%H$'
 
 from PyQt5.QtCore import QCoreApplication
 from qgis.core import (QgsFeatureSink,
-                       QgsFeature,
-                       QgsFields,
                        QgsGeometry,
                        QgsWkbTypes,
                        QgsPoint,
@@ -51,12 +49,11 @@ class SplitLinesAtPointsAlgorithm(QgsProcessingAlgorithm):
     """
 
     # DEFINE CONSTANTS
-    
-    POINTS_INPUT = 'POINTS_INPUT'
-    LINES_INPUT = 'LINES_INPUT'
-    TOLERANCE_INPUT = 'TOLERANCE_DIST'
+    POINT_INPUT = 'POINT_INPUT'
+    LINE_INPUT = 'LINE_INPUT'
+    TOLERANCE = 'TOLERANCE'
     OUTPUT = 'OUTPUT'
-    
+
     def tr(self, string):
         """
         Returns a translatable string with the self.tr() function.
@@ -98,122 +95,139 @@ class SplitLinesAtPointsAlgorithm(QgsProcessingAlgorithm):
         """
         Returns a localised short help string for the algorithm.
         """
-        msg = "Split lines at points positions. \n"
-        msg += "Use for add 'T', 'X' and n-junction"
+        msg = "Split lines at point positions. \n"
+        msg += "Use for add 'T', 'X' and n-junction."
         return self.tr(msg)
 
     def initAlgorithm(self, config=None):
         """
         Define the inputs and outputs of the algorithm.
         """
-        
-        # INPUT
-        
+
+        #   DEFINE INPUT
         self.addParameter(
             QgsProcessingParameterFeatureSource(
-                self.POINTS_INPUT,
-                self.tr('Input points layer'),
+                self.POINT_INPUT,
+                self.tr('Input point layer'),
                 [QgsProcessing.TypeVectorPoint]
+                )
             )
-        )
         self.addParameter(
             QgsProcessingParameterFeatureSource(
-                self.LINES_INPUT,
-                self.tr('Input lines layer'),
+                self.LINE_INPUT,
+                self.tr('Input line layer'),
                 [QgsProcessing.TypeVectorLine]
+                )
             )
-        )
         self.addParameter(
             QgsProcessingParameterDistance(
-                self.TOLERANCE_INPUT,
+                self.TOLERANCE,
                 self.tr('Tolerance distance'),
-                defaultValue = 0.01,
-                minValue = 0.0,
-                maxValue = 100.0
+                defaultValue=0.001,
+                minValue=0.0001,
+                maxValue=1.0
+                )
             )
-        )
-        
-        # OUTPUT
-        
+
+        # DEFINE OUTPUT
         self.addParameter(
             QgsProcessingParameterFeatureSink(
                 self.OUTPUT,
-                self.tr('Output lines layer')
+                self.tr('Splitted line layer')
+                )
             )
-        )
-        
+
     def processAlgorithm(self, parameters, context, feedback):
         """
         RUN PROCESS
         """
         # INPUT
-        
-        pntlayer = self.parameterAsSource(parameters, self.POINTS_INPUT, context)
-        linlayer = self.parameterAsSource(parameters, self.LINES_INPUT, context)
-        tolerance = self.parameterAsDouble(parameters, self.TOLERANCE_INPUT, context)
-        
+        pntlayer = self.parameterAsSource(parameters, self.POINT_INPUT, context)
+        linlayer = self.parameterAsSource(parameters, self.LINE_INPUT, context)
+        tolerance = self.parameterAsDouble(parameters, self.TOLERANCE, context)
+
         # OUTPUT
-        
         (sink, dest_id) = self.parameterAsSink(
             parameters,
             self.OUTPUT,
             context,
-            QgsFields(),
+            linlayer.fields(),
             QgsWkbTypes.LineString,
             linlayer.sourceCrs()
             )
-        
-        # BIND TO SPLIT FUNCTION
-        
-        split = tools.Network().split_polylines
-        
-        
-        # LOAD POINTS AND LINES
-        
+
+        # LOAD AND FILTER OVERLAPPED POINTS
         points = []
-        lines = []
-        
         for f in pntlayer.getFeatures():
-            x,y = f.geometry().asPoint().x(),f.geometry().asPoint().y()
-            points.append((x,y))
-            
+            x, y = f.geometry().asPoint().x(), f.geometry().asPoint().y()
+            mindist = 1e24
+            for point in points:
+                mindist = min(mindist, tools.dist_2_p((x, y), point))
+            if mindist > tolerance:
+                points.append((x, y))
+
+        # SHOW PROGRESS
+        msg = 'Final splitting points: {}. Discarted overlapped points: {}.'
+        msg = msg.format(len(points), pntlayer.featureCount() - len(points))
+        feedback.pushInfo(msg)
+
+        # LOAD AND SPLIT LINES
+        cnt = 0                         # link counter
+        tot = linlayer.featureCount()
+        x1 = y1 = 1e24                   # initialize x boundbox
+        x2 = y2 = -1e24                  # initialize y boundbox
+
+        # LINES LOOP
         for f in linlayer.getFeatures():
-            newline = []
+            line = []
             for vertex in f.geometry().asPolyline():
-                x,y = vertex.x(),vertex.y() 
-                newline.append((x,y))
-                
-            lines.append(newline)
-                      
-        
-        # SPLIT LINES 
-        
-        
-        newlines = split(lines, points, tolerance)
-        
-        for line in newlines:
-            #add feature to sink
-            polyline = []
-            f = QgsFeature()
-            for vertex in line:
-                x = vertex[0]
-                y = vertex[1]
-                polyline.append(QgsPoint(x,y))
-            f.setGeometry(QgsGeometry.fromPolyline(polyline))
-            sink.addFeature(f, QgsFeatureSink.FastInsert) 
-        
-        
-        icnt = linlayer.featureCount()
-        fcnt = len(newlines)
-        
-        msg = 'Split points: {} final line number: {}.'.format(icnt,fcnt)
-        feedback.pushInfo(msg)  
-        
+                x, y = vertex.x(), vertex.y()
+                line.append((x, y))
+
+                # CALCULATE BOUNDBOX
+                x1, y1 = min(x1, x), min(y1, y)
+                x2, y2 = max(x2, x), max(y2, y)
+            x1, y1 = x1-tolerance, y1-tolerance
+            x2, y2 = x2+tolerance, y2+tolerance
+
+            # FILTER POINTS
+            fpoints = []
+            for point in points:
+                if x1 <= point[0] <= x2 and y1 <= point[1] <= y2:
+                    fpoints.append(point)
+           # SPLIT
+            if fpoints:
+                splitted = tools.split_linestring_m(line, fpoints, tolerance)
+                if splitted:
+
+                    # ADD NEW LINESTRINGS
+                    for part in splitted:
+                        newpolyline = []
+                        for vertex in part:
+                            x, y = vertex[0:2]
+                            newpolyline.append(QgsPoint(x, y))
+                        f.setGeometry(QgsGeometry.fromPolyline(newpolyline))
+                        sink.addFeature(f)
+                        #sink.addFeature(f, QgsFeatureSink.FastInsert)
+                        cnt += 1
+                else:
+
+                    # KEEP ORIGINAL FEATURE
+                    sink.addFeature(f, QgsFeatureSink.FastInsert)
+                    cnt += 1
+
+            # SHOW PROGRESS
+            feedback.setProgress(100*cnt/tot) # Update the progress bar
+
+        msg = 'Final line number: {}. From: {}.'
+        msg = msg.format(cnt, tot)
+        feedback.pushInfo(msg)
+
         # PROCCES CANCELED
-        
+
         if feedback.isCanceled():
             return {}
-        
+
         # OUTPUT
 
         return {self.OUTPUT: dest_id}

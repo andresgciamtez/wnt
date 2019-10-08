@@ -31,7 +31,7 @@ __copyright__ = '(C) 2019 by Andrés García Martínez'
 def classFactory(iface):  # pylint: disable=invalid-name
     """Load WaterNetworkTools class from file WaterNetworkTools.
 
-    :param iface: A QGIS interface instance.
+    :param iface: A QGIS interface instance
     :type iface: QgsInterface
     """
     #

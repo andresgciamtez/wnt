@@ -1,11 +1,11 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 
 """
 /***************************************************************************
  WaterNetworkTools
                                  A QGIS plugin
  Water Network Modelling Utilities
- 
+
                               -------------------
         begin                : 2019-07-19
         copyright            : (C) 2019 by Andrés García Martínez
@@ -30,27 +30,25 @@ __copyright__ = '(C) 2019 by Andrés García Martínez'
 
 __revision__ = '$Format:%H$'
 
-from PyQt5.QtCore import QCoreApplication
-from qgis.core import (QgsProcessing,
-                       QgsProcessingParameterEnum,
+from PyQt5.QtCore import QCoreApplication, QVariant
+from qgis.core import (QgsFeature,
+                       QgsField,
+                       QgsFields,
                        QgsProcessingAlgorithm,
-                       QgsProcessingParameterFeatureSource,
-                       QgsProcessingParameterField,
-                       QgsProcessingParameterFile,
-                       QgsProcessingParameterFileDestination)                      
-
+                       QgsProcessingParameterFeatureSink,
+                       QgsProcessingParameterFile)
+from . import toolkit as et
 
 class ResultsFromEpanetAlgorithm(QgsProcessingAlgorithm):
     """
     Import epanet result from epanet toolkit.
     """
-    
+
     # DEFINE CONSTANTS
-    
     INPUT = 'INPUT'
-    NODES_OUTPUT = 'NODES_OUTPUT'
-    LINKS_OUTPUT = 'LINKS_OUTPUT'
-    
+    NODE_OUTPUT = 'NODE_OUTPUT'
+    LINK_OUTPUT = 'LINK_OUTPUT'
+
     def tr(self, string):
         """
         Returns a translatable string with the self.tr() function.
@@ -79,47 +77,60 @@ class ResultsFromEpanetAlgorithm(QgsProcessingAlgorithm):
         """
         Returns the name of the group this algorithm belongs to.
         """
-        return self.tr('Water Network tools')
+        return self.tr('Import')
 
     def groupId(self):
         """
         Returns the unique ID of the group this algorithm belongs to.
         """
-        return 'wnt'
+        return 'import'
 
     def shortHelpString(self):
         """
         Returns a localised short helper string for the algorithm.
         """
-        return self.tr('Build results layers (nodes and links).')
+        msg = 'Import results from an epanet simulation.\n'
+        msg += 'Imported results:\n'
+        msg += '- Nodes\n'
+        msg += '* time\n'
+        msg += '* demand\n'
+        msg += '* head\n'
+        msg += '* pressure\n'
+        msg += '- Links\n'
+        msg += '* time\n'
+        msg += '* flow\n'
+        msg += '* velocity\n'
+        msg += '* headloss\n'
+        msg += '* status\n'
+        msg += '* setting\n'
+        msg += '* energy\n'
+        return self.tr(msg)
 
     def initAlgorithm(self, config=None):
         """
          Define the inputs and outputs of the algorithm.
         """
-        
+
         # ADD INPUT FILE
-        
         self.addParameter(
             QgsProcessingParameterFile(
                 self.INPUT,
                 self.tr('Epanet file'),
-                 extension='inp'
+                extension='inp'
             )
         )
 
         # ADD NODE AND LINK SINKS
-        
         self.addParameter(
             QgsProcessingParameterFeatureSink(
-                self.NODES_OUTPUT,
-                self.tr('Nodes')
+                self.NODE_OUTPUT,
+                self.tr('Node results')
             )
         )
         self.addParameter(
             QgsProcessingParameterFeatureSink(
-                self.LINKS_OUTPUT,
-                self.tr('Links'),
+                self.LINK_OUTPUT,
+                self.tr('Link results'),
             )
         )
 
@@ -129,97 +140,95 @@ class ResultsFromEpanetAlgorithm(QgsProcessingAlgorithm):
         """
         # INPUT
         epanetf = self.parameterAsFile(parameters, self.INPUT, context)
-               
-        # OPEN TOOLKIK
 
-        
-        
-        # GENERATE NODES LAYER
-        
+        # OPEN TOOLKIT
+        et.ENopen(epanetf, epanetf[:-4]+'.rpt')
+
+        # DEFINE NODE LAYER
         newfields = QgsFields()
-        newfields.append(QgsField("id", QVariant.String))
-        newfields.append(QgsField("flow", QVariant.Double))
+        newfields.append(QgsField("id", QVariant.Char))
+        newfields.append(QgsField("time", QVariant.Time))
+        newfields.append(QgsField("demand", QVariant.Double))
         newfields.append(QgsField("head", QVariant.Double))
         newfields.append(QgsField("pressure", QVariant.Double))
-        (nodes_sink, nodes_id) = self.parameterAsSink(
+        #newfields.append(QgsField("quality", QVariant.Double))
+        #newfields.append(QgsField("sourcemass", QVariant.Double))
+        (node_sink, nodes_id) = self.parameterAsSink(
             parameters,
-            self.NODES_OUTPUT,
+            self.NODE_OUTPUT,
             context,
-            newfields,
-            QgsWkbTypes.Point
+            newfields
             )
-        
-        ncnt = 0
-        ntot = len(nodes)
-        for node in nodes:
-            #add feature to sink
-            ncnt += 1
-            f = QgsFeature()
-            f.setGeometry(QgsGeometry.fromWkt(node.get_wkt()))
-            f.setAttributes([node.nodeid, node.get_type(), node.elevation])
-            nodes_sink.addFeature(f, QgsFeatureSink.FastInsert) 
-            if ncnt % 100 == 0:
-                feedback.setProgress(50*ncnt/ntot) # Update the progress bar
-        
-        
-        # GENERATE LINKS LAYER
-        
+
+        # DEFINE LINK LAYER
         newfields = QgsFields()
-        newfields.append(QgsField("id", QVariant.String))
+        newfields.append(QgsField("id", QVariant.Char))
+        newfields.append(QgsField("time", QVariant.Time))
         newfields.append(QgsField("flow", QVariant.Double))
         newfields.append(QgsField("velocity", QVariant.Double))
-        newfields.append(QgsField("unit_headloss", QVariant.Double))
-        newfields.append(QgsField("friction_factor", QVariant.Double))
+        newfields.append(QgsField("headloss", QVariant.Double))
         newfields.append(QgsField("status", QVariant.String))
-        (links_sink, links_id) = self.parameterAsSink(
+        newfields.append(QgsField("setting", QVariant.Double))
+        newfields.append(QgsField("energy", QVariant.Double))
+        (link_sink, links_id) = self.parameterAsSink(
             parameters,
-            self.LINKS_OUTPUT,
+            self.LINK_OUTPUT,
             context,
-            newfields,
-            QgsWkbTypes.LineString
+            newfields
             )
-        
-        lcnt = 0
-        ltot = len(links)
-        for link in links:
-            #add feature to sink
-            lcnt += 1
-            f = QgsFeature()
-            f.setGeometry(QgsGeometry.fromWkt(link.get_wkt()))
-            if link.get_type() in ['PIPE', 'CVPIPE']:
-                f.setAttributes(
-                    [link.linkid,
-                    link.start,
-                    link.end,
-                    link.get_type(),
-                    link._length,
-                    link.diameter,
-                    link.roughness]
-                    )
-            else:
-                f.setAttributes(
-                    [link.linkid,
-                    link.start,
-                    link.end,
-                    link.get_type(),
-                    link._length,
-                    None,
-                    None]
-                    )
-            
-            links_sink.addFeature(f, QgsFeatureSink.FastInsert)
-            
-            if lcnt % 100 == 0:
-                feedback.setProgress(50+50*lcnt/ltot) # Update the progress bar
-        
-        msg = 'Add: {} nodes and {} links.'.format(ncnt,lcnt)
-        feedback.pushInfo(msg)                
 
-        # PROCCES CANCELED
+        # GET AND WRITE RESULTS
+        stepcount = 0
+        nodecount = et.ENgetcount(et.EN_NODECOUNT)
+        linkcount = et.ENgetcount(et.EN_LINKCOUNT)
+        et.ENopenH()
+        et.ENinitH(0)
+        while True:
+            # RUN A TIME SETP
+            stepcount += 1
+            time = et.ENrunH()
+            for nodeix in range(nodecount):
+                nodeid = str(et.ENgetnodeid(nodeix+1), encoding='utf-8')
+                demand = et.ENgetnodevalue(nodeix+1, et.EN_DEMAND)
+                head = et.ENgetnodevalue(nodeix+1, et.EN_HEAD)
+                pressure = et.ENgetnodevalue(nodeix+1, et.EN_PRESSURE)
+                f = QgsFeature()
+                f.setAttributes([nodeid, time, demand, head, pressure])
+                node_sink.addFeature(f)
+            for linkix in range(linkcount):
+                linkid = str(et.ENgetlinkid(linkix+1), encoding='utf-8')
+                flow = et.ENgetlinkvalue(linkix+1, et.EN_FLOW)
+                velocity = et.ENgetlinkvalue(linkix+1, et.EN_VELOCITY)
+                headloss = et.ENgetlinkvalue(linkix+1, et.EN_HEADLOSS)
+                if et.ENgetlinkvalue(linkix+1, et.EN_STATUS):
+                    status = 'OPEN'
+                else:
+                    status = 'CLOSED'
+                setting = et.ENgetlinkvalue(nodeix+1, et.EN_SETTING)
+                energy = et.ENgetlinkvalue(nodeix+1, et.EN_ENERGY)
+                f = QgsFeature()
+                f.setAttributes([linkid, time, flow, velocity, headloss, \
+                                 status, setting, energy])
+                link_sink.addFeature(f)
+
+            # END OF SIMULATON
+            if et.ENnextH() == 0:
+                break
         
+        # CLOSE MODEL
+        et.ENclose()
+       
+        # SHOW NODES AND LINKS PROCESSED
+        feedback.pushInfo('='*40)
+        msg = 'Number of hydraulic time steps: {}'.format(stepcount)
+        feedback.pushInfo(msg)
+        msg = 'Read results: {} nodes and {} link'.format(nodecount, linkcount)
+        feedback.pushInfo(msg)
+        feedback.pushInfo('='*40)
+        
+        # PROCCES CANCELED
         if feedback.isCanceled():
             return {}
-        
-        # OUTPUT
 
-        return {self.NODES_OUTPUT: nodes_id, self.LINKS_OUTPUT: links_id}
+        # OUTPUT
+        return {self.NODE_OUTPUT: nodes_id, self.LINK_OUTPUT: links_id}
