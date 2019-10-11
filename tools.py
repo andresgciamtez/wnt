@@ -361,8 +361,11 @@ class Network:
                 newlink = Link(linkid, linkcnt*2, linkcnt*2+1)
                 newlink.set_type('PIPE')
                 newlink.from_wkt(line)
-                links.append(newlink)
-                linkcnt += 1
+
+                # IGNORE ZERO-LENGTH LINES
+                if newlink.length2d() > 0:
+                    links.append(newlink)
+                    linkcnt += 1
 
         # REDUCING OVERLAPPED POINTS
         usednodes = set()
