@@ -3,7 +3,7 @@
 name=Water Network Tools
 qgisMinimumVersion=3.0
 description=Water Network Modelling Utilities
-version=0.3
+version=0.3.1
 author=Andrés García Martínez
 email=ppnoptimizer@gmail.com
 about=WNT Water Network Tools is a QGIS plugin containing a set of QGIS processes useful for water network modelling. It is aimed to help in the entire design cycle. Capabilities: Build a network from lines. Add elevation to nodes. Split lines at points. Build an epanet model file from network. Build demand and pipe property epanet scenario file. Export graph network to TGF. Build a pressurized pipe network optimizer (ppno) data file. Import an epanet file (nodes and link). Tutorial: http://yt.vu/p/PLzE4DxrnNT-Fg0Ztku6jbIG8QEEOHqYEH Autor LinkedIn: https://bit.ly/2m8otrB
