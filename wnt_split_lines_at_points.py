@@ -31,8 +31,7 @@ __copyright__ = '(C) 2019 by Andrés García Martínez'
 __revision__ = '$Format:%H$'
 
 from PyQt5.QtCore import QCoreApplication
-from qgis.core import (QgsFeatureSink,
-                       QgsGeometry,
+from qgis.core import (QgsGeometry,
                        QgsWkbTypes,
                        QgsPoint,
                        QgsProcessing,
@@ -83,13 +82,13 @@ class SplitLinesAtPointsAlgorithm(QgsProcessingAlgorithm):
         """
          Returns the name of the group this algorithm belongs to.
         """
-        return self.tr('Water Network tools')
+        return self.tr('Modify')
 
     def groupId(self):
         """
         Returns the unique ID of the group this algorithm belongs to.
         """
-        return 'wnt'
+        return 'modify'
 
     def shortHelpString(self):
         """
@@ -145,6 +144,18 @@ class SplitLinesAtPointsAlgorithm(QgsProcessingAlgorithm):
         pntlayer = self.parameterAsSource(parameters, self.POINT_INPUT, context)
         linlayer = self.parameterAsSource(parameters, self.LINE_INPUT, context)
         tolerance = self.parameterAsDouble(parameters, self.TOLERANCE, context)
+
+        # CHECK CRS
+        crs = pntlayer.sourceCrs()
+        if crs == linlayer.sourceCrs():
+
+            # SEND INFORMATION TO THE USER
+            feedback.pushInfo('='*40)
+            feedback.pushInfo('CRS is {}'.format(crs.authid()))
+        else:
+            msg = 'ERROR: Layers have different CRS!'
+            feedback.reportError(msg)
+            return {}
 
         # OUTPUT
         (sink, dest_id) = self.parameterAsSink(
@@ -208,20 +219,19 @@ class SplitLinesAtPointsAlgorithm(QgsProcessingAlgorithm):
                             newpolyline.append(QgsPoint(x, y))
                         f.setGeometry(QgsGeometry.fromPolyline(newpolyline))
                         sink.addFeature(f)
-                        #sink.addFeature(f, QgsFeatureSink.FastInsert)
                         cnt += 1
-                else:
+            else:
 
-                    # KEEP ORIGINAL FEATURE
-                    sink.addFeature(f, QgsFeatureSink.FastInsert)
-                    cnt += 1
+                # KEEP ORIGINAL FEATURE
+                sink.addFeature(f)
+                cnt += 1
 
             # SHOW PROGRESS
             feedback.setProgress(100*cnt/tot) # Update the progress bar
 
         msg = 'Final line number: {}. From: {}.'
-        msg = msg.format(cnt, tot)
-        feedback.pushInfo(msg)
+        feedback.pushInfo(msg.format(cnt, tot))
+        feedback.pushInfo('='*40)
 
         # PROCCES CANCELED
 
