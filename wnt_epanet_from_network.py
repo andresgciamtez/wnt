@@ -97,12 +97,17 @@ class EpanetFromNetworkAlgorithm(QgsProcessingAlgorithm):
         msg += '- JUNCTIONS/RESERVOIRS/TANK\n'
         msg += '* id\n'
         msg += '* elevation\n'
-        msg += '- PIPES\n'
+        msg += '- PIPES/PUMPS\n'
         msg += '* id\n'
         msg += '* start\n'
         msg += '* end\n'
-        msg += 'Note: diameter and roughness are ignored '
+        msg += 'Note: pipe diameter and roughness are ignored '
         msg += '(add them by means of scenarios).\n'
+        msg += '- VALVES\n'
+        msg += '* id\n'
+        msg += '* start\n'
+        msg += '* end\n'
+        msg += '* type\n'
         msg += 'Coordinates and vertex are exported.\n'
         msg += 'Suggestions:\n'
         msg += '- You can complete a model stored in the template '
@@ -183,8 +188,6 @@ class EpanetFromNetworkAlgorithm(QgsProcessingAlgorithm):
             ncnt += 1
             newnode = tools.Node(f['id'])
             newnode.from_wkt(f.geometry().asWkt())
-            msg = 'Bad node type'
-            assert f['type'] in ['JUNCTION', 'RESERVOIR', 'TANK'], msg
             newnode.set_type(f['type'])
             newnode.elevation = f['elevation']
             newnet.nodes.append(newnode)
@@ -200,9 +203,6 @@ class EpanetFromNetworkAlgorithm(QgsProcessingAlgorithm):
             newlink = tools.Link(f['id'], f['start'], f['end'])
             newlink.from_wkt(f.geometry().asWkt())
             newlink.length = f['length']
-            msg = 'Bad link type'
-            assert f['type'] in ['PIPE', 'PUMP', 'PRV', 'PSV', 'PBV', 'FCV', \
-                                'TCV', 'GPV'], msg
             newlink.set_type(f['type'])
             newnet.links.append(newlink)
 

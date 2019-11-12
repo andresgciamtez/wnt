@@ -259,8 +259,8 @@ class Link:
         msg = 'Incorrect link type, it must be: '
         msg += 'PIPE/CVPIPE/PUMP/PRV/PSV/PBV/FCV/TCV/GPV.'
         assert isinstance(linktype, str), msg
-        linktypes = ['PIPE', 'CV', 'PUMP', 'PRV', 'PSV', 'PBV', 'FCV', 'TCV', \
-                     'GPV']
+        linktypes = ['PIPE', 'CVPIPE', 'PUMP', 'PRV', 'PSV', 'PBV', 'FCV', \
+                     'TCV', 'GPV']
         linktype = linktype.upper()
         assert linktype in linktypes, msg
         self._type = linktype
