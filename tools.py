@@ -259,8 +259,8 @@ class Link:
         msg = 'Incorrect link type, it must be: '
         msg += 'PIPE/CVPIPE/PUMP/PRV/PSV/PBV/FCV/TCV/GPV.'
         assert isinstance(linktype, str), msg
-        linktypes = ['PIPE', 'CV', 'PUMP', 'PRV', 'PSV', 'PBV', 'FCV', 'TCV', \
-                     'GPV']
+        linktypes = ['PIPE', 'CVPIPE', 'PUMP', 'PRV', 'PSV', 'PBV', 'FCV', \
+                     'TCV', 'GPV']
         linktype = linktype.upper()
         assert linktype in linktypes, msg
         self._type = linktype
@@ -361,8 +361,11 @@ class Network:
                 newlink = Link(linkid, linkcnt*2, linkcnt*2+1)
                 newlink.set_type('PIPE')
                 newlink.from_wkt(line)
-                links.append(newlink)
-                linkcnt += 1
+
+                # IGNORE ZERO-LENGTH LINES
+                if newlink.length2d() > 0:
+                    links.append(newlink)
+                    linkcnt += 1
 
         # REDUCING OVERLAPPED POINTS
         usednodes = set()
