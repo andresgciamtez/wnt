@@ -40,7 +40,6 @@ from .wnt_network_from_epanet import NetworkFromEpanetAlgorithm
 from .wnt_network_from_lines import NetworkFromLinesAlgorithm
 from .wnt_node_degrees import NodeDegreesAlgorithm
 from .wnt_ppno_from_network import PpnoFromNetworkAlgorithm
-from .wnt_results_from_epanet import ResultsFromEpanetAlgorithm
 from .wnt_scn_from_demands import ScnFromDemandsAlgorithm
 from .wnt_scn_from_pipe_properties import ScnFromPipePropertiesAlgorithm
 from .wnt_split_lines_at_points import SplitLinesAtPointsAlgorithm
@@ -74,7 +73,6 @@ class WaterNetworkToolsProvider(QgsProcessingProvider):
         self.addAlgorithm(NetworkFromLinesAlgorithm())
         self.addAlgorithm(NodeDegreesAlgorithm())
         self.addAlgorithm(PpnoFromNetworkAlgorithm())
-        self.addAlgorithm(ResultsFromEpanetAlgorithm())
         self.addAlgorithm(ScnFromDemandsAlgorithm())
         self.addAlgorithm(ScnFromPipePropertiesAlgorithm())
         self.addAlgorithm(SplitLinesAtPointsAlgorithm())
