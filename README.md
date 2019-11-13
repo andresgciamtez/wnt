@@ -6,7 +6,6 @@ A set of QGIS processes for water network modeling.
 - Build a network, topology and geometry, from lines:http://y2u.be/Mjtwar1H1jA
 ### Import
 - Import an epanet file (nodes and link): http://y2u.be/fxhAPB4ZIyg
-- Import epanet results
 ### Export
 - Build an epanet model file from network: http://y2u.be/L7Kp5l67kOc
 - Build an epanet scenario file containing demands: http://y2u.be/FOxZgZUgjq4
