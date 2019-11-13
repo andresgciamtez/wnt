@@ -31,8 +31,7 @@ __copyright__ = '(C) 2019 by Andrés García Martínez'
 __revision__ = '$Format:%H$'
 
 from PyQt5.QtCore import QCoreApplication, QVariant
-from qgis.core import (QgsFeature,
-                       QgsField,
+from qgis.core import (QgsField,
                        QgsProcessing,
                        QgsProcessingAlgorithm,
                        QgsProcessingParameterFeatureSource,

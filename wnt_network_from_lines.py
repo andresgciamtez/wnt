@@ -122,7 +122,6 @@ class NetworkFromLinesAlgorithm(QgsProcessingAlgorithm):
         msg += '- MultiGeometry is not supported\n'
         msg += '- Z coordinate is ignored\n'
         msg += '- Suggestion:\n'
-        msg += '- Check zero-length lines\n'
         msg += '- Audit the network with Validate'
         return self.tr(msg)
 
@@ -300,12 +299,6 @@ class NetworkFromLinesAlgorithm(QgsProcessingAlgorithm):
             lcnt += 1
 
             # SHOW PROGRESS
-            f = QgsFeature()
-            f.setGeometry(QgsGeometry.fromWkt(link.get_wkt()))
-            length = link.length2d()
-            f.setAttributes([link.linkid, link.start, link.end, 'PIPE', length])
-            links_sink.addFeature(f, QgsFeatureSink.FastInsert)
-            
             if lcnt % 100 == 0:
                 feedback.setProgress(50+50*lcnt/len(links))
 

@@ -46,7 +46,6 @@ class ElevationFromRasterAlgorithm(QgsProcessingAlgorithm):
     """
 
     # DEFINE CONSTANTS
-
     NODE_INPUT = 'NODE_INPUT'
     DEM_INPUT = 'DEM_INPUT'
     ELEV_FIELD = 'ELEV_FIELD'
@@ -80,13 +79,13 @@ class ElevationFromRasterAlgorithm(QgsProcessingAlgorithm):
         """
         Returns the name of the group this algorithm belongs to.
         """
-        return self.tr('Water Network tools')
+        return self.tr('Modify')
 
     def groupId(self):
         """
         Returns the unique ID of the group this algorithm belongs to.
         """
-        return 'wnt'
+        return 'modify'
 
     def shortHelpString(self):
         """
@@ -103,14 +102,14 @@ class ElevationFromRasterAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterFeatureSource(
                 self.NODE_INPUT,
-                self.tr('Input nodes vector layer'),
+                self.tr('Node vector layer input'),
                 types=[QgsProcessing.TypeVectorPoint]
                 )
             )
         self.addParameter(
             QgsProcessingParameterField(
                 self.ELEV_FIELD,
-                self.tr('Field where write elevation'),
+                self.tr('Field where will write elevation'),
                 'elevation',
                 self.NODE_INPUT
                 )
@@ -118,7 +117,7 @@ class ElevationFromRasterAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterRasterLayer(
                 self.DEM_INPUT,
-                self.tr('Input DEM raster layer')
+                self.tr('DEM raster layer input')
                 )
             )
 
@@ -140,6 +139,18 @@ class ElevationFromRasterAlgorithm(QgsProcessingAlgorithm):
         dem = self.parameterAsRasterLayer(parameters, self.DEM_INPUT, context)
         efield = self.parameterAsString(parameters, self.ELEV_FIELD, context)
 
+        # CHECK CRS
+        crs = nodes.sourceCrs()
+        if crs == dem.crs():
+
+            # SEND INFORMATION TO THE USER
+            feedback.pushInfo('='*40)
+            feedback.pushInfo('CRS is {}'.format(crs.authid()))
+        else:
+            msg = 'ERROR: Layers have different CRS!'
+            feedback.reportError(msg)
+            return {}
+
         # OUTPUT
         (sink, dest_id) = self.parameterAsSink(
             parameters,
@@ -151,7 +162,6 @@ class ElevationFromRasterAlgorithm(QgsProcessingAlgorithm):
             )
 
         # MAIN LOOP READ/WRITE POINTS
-        feedback.pushInfo('CRS is {}'.format(nodes.sourceCrs().authid()))
         tot = nodes.featureCount()
         pcnt = 0
         ncnt = 0
@@ -170,6 +180,7 @@ class ElevationFromRasterAlgorithm(QgsProcessingAlgorithm):
                 feedback.setProgress(100*(pcnt+ncnt)/tot)
         msg = 'Proccesed nodes: {}. skipped: {}.'.format(pcnt, ncnt)
         feedback.pushInfo(msg)
+        feedback.pushInfo('='*40)
 
         # PROCCES CANCELED
         if feedback.isCanceled():

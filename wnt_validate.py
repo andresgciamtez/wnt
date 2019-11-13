@@ -31,8 +31,7 @@ __copyright__ = '(C) 2019 by Andrés García Martínez'
 __revision__ = '$Format:%H$'
 
 from PyQt5.QtCore import QCoreApplication, QVariant
-from qgis.core import (QgsFeature,
-                       QgsField,
+from qgis.core import (QgsField,
                        QgsWkbTypes,
                        QgsProcessing,
                        QgsProcessingAlgorithm,
@@ -52,7 +51,6 @@ class ValidateAlgorithm(QgsProcessingAlgorithm):
     LINK_INPUT = 'LINK_INPUT'
     NODE_OUTPUT = 'NODE_OUTPUT'
     LINK_OUTPUT = 'LINK_OUTPUT'
-
 
     def tr(self, string):
         """
@@ -209,7 +207,6 @@ class ValidateAlgorithm(QgsProcessingAlgorithm):
         onodes, dnodes, unodes, dlinks, _ = net.validate()
 
         # WRITE OUTPUT
-        g = QgsFeature()
 
         # WRITE NODE PROBLEMS
         ncnt = 0
@@ -230,8 +227,8 @@ class ValidateAlgorithm(QgsProcessingAlgorithm):
             # ADD FEATURE
             attrib = f.attributes()
             attrib.extend([problems])
-            g.setAttributes(attrib)
-            node_sink.addFeature(g)
+            f.setAttributes(attrib)
+            node_sink.addFeature(f)
 
             # SHOW PROGRESS
             if ncnt % 100 == 0:
@@ -268,8 +265,8 @@ class ValidateAlgorithm(QgsProcessingAlgorithm):
             # ADD FEATURE
             attrib = f.attributes()
             attrib.extend([problems])
-            g.setAttributes(attrib)
-            link_sink.addFeature(g)
+            f.setAttributes(attrib)
+            link_sink.addFeature(f)
 
             # SHOW PROGRESS
             if lcnt % 100 == 0:
