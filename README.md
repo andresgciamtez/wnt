@@ -5,7 +5,7 @@ A set of processes for modelling water networks. Starting from scratch or expand
 
 ## Recipes
 ### Build
-- Build a network, topology and geometry, from lines:http://y2u.be/Mjtwar1H1jA
+- Build a network, topology and geometry, from lines: http://y2u.be/Mjtwar1H1jA
 ### Export
 - Build an epanet model file from network: http://y2u.be/L7Kp5l67kOc
 - Build an epanet scenario file containing demands: http://y2u.be/FOxZgZUgjq4
