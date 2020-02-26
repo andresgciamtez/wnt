@@ -1,4 +1,4 @@
-![WNT Logo](/wnt.png)
+![WNT Logo](/wnt.png =345)
 
 # Water Network Tools (WNT)
 A set of processes for modelling water networks. Starting from scratch or expanding an existing network, it is possible to import and export models, scenarios and other files for network analysis or optimization.
