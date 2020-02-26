@@ -31,7 +31,7 @@ def line_to_tuple(line):
     """
     return tuple(c.strip() for c in line.split())
 
-def tuple_to_line(tup, sep='    '):
+def tuple_to_line(tup, sep=' '*4):
     """Converts a tuple into a line text. Values are separated by separator.
 
     Parameters
@@ -62,7 +62,7 @@ class HeaderTxt():
         fname: str, file name
         """
         assert fexits(fname), 'I cannot find file: ' + fname
-        file = open(fname, 'r')
+        file = open(fname, 'r', encoding='latin-1')
         secname = None
         for line in file:
             txt = line[0:line.find(';')]

@@ -95,22 +95,26 @@ class NetworkFromEpanetAlgorithm(QgsProcessingAlgorithm):
         """
         Returns a localised short help string for the algorithm.
         """
-        msg = 'Import an epanet inp file and generate a network defined by '
-        msg += 'a node layer, a link layer and a epanet model template.\n'
-        msg += 'The epanet data imported is:\n'
-        msg += '- Nodes\n'
-        msg += '* id\n'
-        msg += '* type (JUNCTIONS/RESERVOIRS/TANK)\n'
-        msg += '* elevation\n'
-        msg += '- Links\n'
-        msg += '* id\n'
-        msg += '* start\n'
-        msg += '* end\n'
-        msg += '* type (PIPE*/CVPIPE/PUMP/PRV/PSV/PBV/FCV/TCV/GPV\n'
-        msg += '* length (if type is PIPE or CVPIPE, otherwise void)\n'
-        msg += '* diameter\n'
-        msg += '* roughness\n'
-        return self.tr(msg)
+        return self.tr('''Import an epanet inp file generating a network.
+        The epanet data imported is:
+        - Nodes
+        * id * type (JUNCTIONS/RESERVOIRS/TANK) * elevation
+        - Links
+        * id * start * end
+        * type (PIPE/CVPIPE/PUMP/PRV/PSV/PBV/FCV/TCV/GPV
+        * length (if type is PIPE or CVPIPE, otherwise void)
+        * diameter * roughness
+        ===
+        Importa un archivo epanet inp y genera una red.
+        Los datos importados de epanet son:
+        - Nodos
+         * ID * tipo (UNIONES / RESERVAS / TANQUE) * elevación
+         - Líneas
+         * ID * start * end
+         * tipo (PIPE/CVPIPE/PUMP/PRV/PSV/PBV/FCV/TCV/GPV)
+         * longitud (si el tipo es PIPE o CVPIPE, de lo contrario será nulo)
+         * diámetro * rugosidad
+        ''')
 
     def initAlgorithm(self, config=None):
         """

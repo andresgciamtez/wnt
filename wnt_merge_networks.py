@@ -91,12 +91,23 @@ class MergeNetworksAlgorithm(QgsProcessingAlgorithm):
         """
         Returns a localised short help string for the algorithm.
         """
-        msg = 'Merge 2 networks combining nodes and links. \n'
-        msg += 'Connection points must have the same ID. \n'
-        msg += 'If distance between connection points is bigger than zero, '
-        msg += 'it is showed in the register. \n'
-        msg += 'Suggestion: Check the final network with *Validate Network*'
-        return self.tr(msg)
+        return self.tr('''Merge 2 networks from nodes and lines.
+        Connection nodes must have the same ID.
+        
+        Note: The network is generated even if the distance between the 
+        connection points is not zero. The max distance is shown.
+        
+        Tip: Check the final network with *Validate*
+
+        ===
+        Combina 2 redes a partir de sus nodos y líneas.
+        Los nodos de conexión deben tener la misma ID.
+        
+        Nota: La red se genera, aunque la distancia entre los puntos de 
+        conexión no sea cero. La distancia máxima se muestra en el registro.
+        
+        Consejo: Revise la red final con *Validar*        
+        ''')
 
     def initAlgorithm(self, config=None):
         """
@@ -201,6 +212,10 @@ class MergeNetworksAlgorithm(QgsProcessingAlgorithm):
         f = QgsFeature()
         g = QgsFeature()
 
+        # CHECK DISTANCE
+        dmax = 0
+        ndmax = None
+
         # ADD NODES FROM FIRST NODE LAYER
         cnt = 0
         over = 0
@@ -227,14 +242,19 @@ class MergeNetworksAlgorithm(QgsProcessingAlgorithm):
                     if g['id'] == f['id']:
                         over += 1
                         dist = f.geometry().distance(g.geometry())
-                        if dist > 0:
-                            msg = 'WARNING: Connection node {} distance: {}'
-                            msg = msg.format(f['id'], dist)
-                            feedback.pushInfo(msg)
+                        if dist > dmax:
+                            dmax = dist
+                            ndmax = f['id']
 
             # SHOW PROGRESS
             if cnt % 100 == 0:
                 feedback.setProgress(50*cnt/nofn)
+
+        # SHOW DISTANCE MAX
+        if dist > 0:
+            msg = 'WARNING: Connection node {} distance: {}'
+            msg = msg.format(ndmax, dmax)
+            feedback.pushInfo(msg)
 
         # ADD LINKS
         cnt = 0

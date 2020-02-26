@@ -75,7 +75,7 @@ class ValidateAlgorithm(QgsProcessingAlgorithm):
         Returns the translated algorithm name, which should be used for any
         user-visible display of the algorithm name.
         """
-        return self.tr('Validate network')
+        return self.tr('Validate')
 
     def group(self):
         """
@@ -93,13 +93,24 @@ class ValidateAlgorithm(QgsProcessingAlgorithm):
         """
         Returns a localised short helper string for the algorithm.
         """
-        msg = 'Analyse the network graph and generate a node '
-        msg += 'layer with a field containing detected problems: \n'
-        msg += '- the orphan nodes in the network \n'
-        msg += '- the duplicated nodes in network \n'
-        msg += '- undefined nodes in the network \n'
-        msg += '- the duplicated links in network.'
-        return self.tr(msg)
+        return self.tr('''Analyse the network graph, verifying:
+        - Orphan nodes
+        - Duplicate nodes
+        - Lines with undefined ends
+        - Duplicate lines
+        - Loops (lines with the same start and end node)
+        
+        The problems detected are stored in the field: ‘problems’ 
+        ===
+        Analiza el grafo de red, verificando:
+        - Nodos huérfanos
+        - Nodos duplicados
+        - Líneas con extremos no definidos
+        - Líneas duplicadas
+        - Bucles (líneas con igual nodo de inicio y final)
+        
+        Los problemas detectados se almacenan en el campo: ‘problems’.
+        ''')
 
     def initAlgorithm(self, config=None):
         """
@@ -143,18 +154,6 @@ class ValidateAlgorithm(QgsProcessingAlgorithm):
         # INPUT
         nodelay = self.parameterAsSource(parameters, self.NODE_INPUT, context)
         linklay = self.parameterAsSource(parameters, self.LINK_INPUT, context)
-
-        # CHECK CRS
-        crs = nodelay.sourceCrs()
-        if crs == linklay.sourceCrs():
-
-            # SEND INFORMATION TO THE USER
-            feedback.pushInfo('='*40)
-            feedback.pushInfo('CRS is {}'.format(crs.authid()))
-        else:
-            msg = 'ERROR: Layers have different CRS!'
-            feedback.reportError(msg)
-            return {}
 
         # OUTPUT
         newfields = nodelay.fields()
@@ -204,67 +203,62 @@ class ValidateAlgorithm(QgsProcessingAlgorithm):
                 feedback.setProgress(25+25*lcnt/linklay.featureCount())
 
         # VALIDATE
-        onodes, dnodes, unodes, dlinks, _ = net.validate()
+        problems = net.validate()
 
         # WRITE OUTPUT
+        feedback.pushInfo('='*40)
 
         # WRITE NODE PROBLEMS
         ncnt = 0
         for f in nodelay.getFeatures():
             ncnt += 1
-            problems = ''
+            msg = ''
 
             # ORPHAN NODE
-            if f['id'] in onodes:
-                problems = 'Orphan'
+            if f['id'] in problems['orphan nodes']:
+                msg = 'Orphan.'
 
-            # DUPLICATE NODE ID
-            if f['id'] in dnodes:
-                if problems:
-                    problems += '. '
-                problems += 'Duplicate ID'
+            # DUPLICATED NODE ID
+            if f['id'] in problems['duplicate nodes']:
+                msg += ' ' if msg else ''
+                msg += 'Duplicated.'
 
             # ADD FEATURE
             attrib = f.attributes()
-            attrib.extend([problems])
+            attrib.extend([msg])
             f.setAttributes(attrib)
             node_sink.addFeature(f)
 
             # SHOW PROGRESS
             if ncnt % 100 == 0:
-                feedback.setProgress(75+25*ncnt/nodelay.featureCount())
+                feedback.setProgress(50+25*ncnt/nodelay.featureCount())
 
         # WRITE LINK PROBLEMS
         lcnt = 0
-        loopcnt = 0
         for f in linklay.getFeatures():
             lcnt += 1
-            problems = ''
+            msg = ''
 
             # NO DEFINED START OR END
-            if f['start'] in unodes:
-                problems = 'Undefined start node ID'
-            if f['end'] in unodes:
-                if problems:
-                    problems += '. '
-                problems += 'Undefined end node ID'
+            if f['start'] in problems['undefined nodes']:
+                msg = 'Undefined start-node.'
+            if f['end'] in problems['undefined nodes']:
+                msg += ' ' if msg else ''
+                msg += 'Undefined end-node.'
 
             # DUPLICATED ID
-            if f['id'] in dlinks:
-                if problems:
-                    problems += '. '
-                problems += 'Duplicate link ID'
+            if f['id'] in problems['duplicate links']:
+                msg += ' ' if msg else ''
+                msg += 'Duplicate link.'
 
-            # START NODE ID = END NODE ID
-            if f['start'] == f['end']:
-                loopcnt += 1
-                if problems:
-                    problems += '. '
-                problems += 'Start and end node IDs are the same'
+            # LOOP. START NODE ID = END NODE ID
+            if f['id'] in problems['loops']:
+                msg += ' ' if msg else ''
+                msg += 'Loop.'
 
             # ADD FEATURE
             attrib = f.attributes()
-            attrib.extend([problems])
+            attrib.extend([msg])
             f.setAttributes(attrib)
             link_sink.addFeature(f)
 
@@ -275,20 +269,15 @@ class ValidateAlgorithm(QgsProcessingAlgorithm):
         # SHOW INFO
         msg = 'Analyzed: {} nodes and {} links'.format(ncnt, lcnt)
         feedback.pushInfo(msg)
-        msg = 'Orphan nodes: {}'.format(len(onodes))
-        feedback.pushInfo(msg)
-        msg = 'Duplicated nodes: {}'.format(len(dnodes))
-        feedback.pushInfo(msg)
-        msg = 'Undefined start or end links: {}'.format(len(unodes))
-        feedback.pushInfo(msg)
-        msg = 'Equal start and end links: {}'.format(loopcnt)
-        feedback.pushInfo(msg)
-        msg = 'Duplicated links: {}'.format(len(dlinks))
-        feedback.pushInfo(msg)
-        if onodes and dnodes and unodes and loopcnt and dlinks:
-            msg = 'Problems detected! Check the network'
+        pcnt = 0
+        for k, v in problems.items():
+            pcnt += len(v)
+            feedback.pushInfo("{} : {}".format(k, len(v)))
+
+        if pcnt:
+            msg = '{} problems detected! Check the network.'.format(pcnt)
         else:
-            msg = "Network is valid"
+            msg = "Network is valid."
         feedback.pushInfo(msg)
         feedback.pushInfo('='*40)
 

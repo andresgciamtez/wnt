@@ -91,28 +91,35 @@ class EpanetFromNetworkAlgorithm(QgsProcessingAlgorithm):
         """
         Returns a localised short helper string for the algorithm.
         """
-        msg = 'Generate an epanet inp file from a network defined '
-        msg += 'by a node layer, a link layer and a epanet model template.\n'
-        msg += 'The final epanet model contain the templated data adding:\n'
-        msg += '- JUNCTIONS/RESERVOIRS/TANK\n'
-        msg += '* id\n'
-        msg += '* elevation\n'
-        msg += '- PIPES/PUMPS\n'
-        msg += '* id\n'
-        msg += '* start\n'
-        msg += '* end\n'
-        msg += 'Note: pipe diameter and roughness are ignored '
-        msg += '(add them by means of scenarios).\n'
-        msg += '- VALVES\n'
-        msg += '* id\n'
-        msg += '* start\n'
-        msg += '* end\n'
-        msg += '* type\n'
-        msg += 'Coordinates and vertex are exported.\n'
-        msg += 'Suggestions:\n'
-        msg += '- You can complete a model stored in the template '
-        msg += 'adding the nodes and links to it.'
-        return self.tr(msg)
+        return self.tr('''Generate an epanet inp file from a network and a
+        epanet model template.
+        The final epanet model contain the templated data adding:
+        - JUNCTIONS/RESERVOIRS/TANK
+        * id * elevation
+        - PIPES/PUMPS
+        * id * start * end
+        - VALVES
+        * id * start * end * type
+        Note:
+        - Coordinates and vertex are exported.
+        - pipe diameter and roughness are ignored (add like scenarios).
+        
+        Tip: It is possible extend the template model adding a network.
+        ===
+        Genera un modelo epanet a partir de una red y una plantilla (.inp).
+        El modelo final de epanet contendrá los datos de plantilla , añadiendo:
+        - JUNCTIONS/RESERVOIRS/TANK
+        * id * elevation
+        - PIPES/PUMPS
+        * id * start * end
+        - VALVES
+        * id * start * end * type
+        Notas:
+        - Se exportan las coordenadas y el vértice).
+        - Se ignora diámetros y rugosidades (añádalos mediante escenarios).
+
+        Consejo: Puede ampliar un el modelo de la plantilla agregando la red.
+        ''')
 
     def initAlgorithm(self, config=None):
         """

@@ -90,10 +90,14 @@ class ScnFromPipePropertiesAlgorithm(QgsProcessingAlgorithm):
         """
         Returns a localised short helper string for the algorithm.
         """
-        msg = 'Generate an epanet diameter and roughness scenario file.\n'
-        msg += 'Suggestion: import escenario in epanet from '
-        msg += 'menu: File/Import/Scenario'
-        return self.tr(msg)
+        return self.tr('''Generate a diameter and roughness epanet scenario.
+        
+        Tip: Import scenario in epanet from menu: File/Import/Scenario
+        ===
+        Genera un escenario de diámetro y rugosidad de tuberías para epanet.
+
+        Consejo: Importe el escenario en epanet desde: File/Importar/Scenario.
+        ''')
 
     def initAlgorithm(self, config=None):
         """

@@ -30,24 +30,20 @@ __copyright__ = '(C) 2019 by Andrés García Martínez'
 
 __revision__ = '$Format:%H$'
 
-from qgis.PyQt.QtCore import QCoreApplication
+import sys
+import configparser
+from PyQt5.QtCore import QCoreApplication
 from qgis.core import (QgsProcessing,
                        QgsProcessingAlgorithm,
-                       QgsProcessingParameterFeatureSource,
-                       QgsProcessingParameterFileDestination
-                      )
-from . import tools
+                       QgsProcessingParameterFile)
 
-class GraphFromNetworkAlgorithm(QgsProcessingAlgorithm):
+class ConfigToolkitAlgorithm(QgsProcessingAlgorithm):
     """
-    Set the node elevation from a DEM in raster format.
+    Set epanet lib path in tookit.ini file.
     """
 
     # DEFINE CONSTANTS
-
-    NODE_INPUT = 'NODE_INPUT'
-    LINK_INPUT = 'LINK_INPUT'
-    OUTPUT = 'OUTPUT'
+    INPUT = 'INPUT'
 
     def tr(self, string):
         """
@@ -59,77 +55,65 @@ class GraphFromNetworkAlgorithm(QgsProcessingAlgorithm):
         """
         Create a instance and return a new copy of algorithm.
         """
-        return GraphFromNetworkAlgorithm()
+        return ConfigToolkitAlgorithm()
 
     def name(self):
         """
         Returns the unique algorithm name, used for identifying the algorithm.
         """
-        return 'graph_from_network'
+        return 'config_toolkit'
 
     def displayName(self):
         """
-        Returns the translated algorithm name.
+        Returns the translated algorithm name, which should be used for any
+        user-visible display of the algorithm name.
         """
-        return self.tr('Graph from network')
+        return self.tr('Configure epanet lib')
 
     def group(self):
         """
-        Returns the name of the group this algorithm belongs to.
+         Returns the name of the group this algorithm belongs to.
         """
-        return self.tr('Graph')
+        return self.tr('Import')
 
     def groupId(self):
         """
         Returns the unique ID of the group this algorithm belongs to.
         """
-        return 'graph'
+        return 'import'
 
     def shortHelpString(self):
         """
-        Returns a localised short help string for the algorithm.
+        Returns a localised short helper string for the algorithm.
         """
-        return self.tr('''Generate a graph from the network.
-
-        Format: Trivial Chart Format, TGF
+        return self.tr('''Set the epanet lib path.
         
-        Suggestion: yEd support TFG format.
+        Note: The path is store in the toolkit.ini file.
+        
+        Epanet lib can be download from: 
+        https://www.epa.gov/water-research/epanet#tab-2 (only win 32)
+        or
+        https://github.com/andresgciamtez/entoolkit/tree/master/entoolkit/epanet
         ===
-        Generar un grafo de la red.
+        Define la ruta de acceso a la biblioteca de epanet.
 
-        Formato: Formato de gráfico trivial, TGF.
+        Nota: La ruta de acceso se almacena en el archivo toolkit.ini.
         
-        Sugerencia: yEd admite el formato TFG. 
+        La biblioteca de epanet puede ser descargada desde:
+        https://www.epa.gov/water-research/epanet#tab-2 (solo win 32)
+        o
+        https://github.com/andresgciamtez/entoolkit/tree/master/entoolkit/epanet
         ''')
 
     def initAlgorithm(self, config=None):
         """
         Define the inputs and outputs of the algorithm.
         """
-
-        # ADD THE INPUT SOURCES
-        self.addParameter(
-            QgsProcessingParameterFeatureSource(
-                self.NODE_INPUT,
-                self.tr('Input node vector layer'),
-                types=[QgsProcessing.TypeVectorPoint]
-                )
-            )
-        self.addParameter(
-            QgsProcessingParameterFeatureSource(
-                self.LINK_INPUT,
-                self.tr('Input link vector layer'),
-                types=[QgsProcessing.TypeVectorLine]
-                )
-            )
-
-        #ADD THE OUTPUT SINK
         # ADD A FILE DESTINATION
         self.addParameter(
-            QgsProcessingParameterFileDestination(
-                self.OUTPUT,
-                self.tr('Trivial Graph Format file'),
-                fileFilter='*.tgf'
+            QgsProcessingParameterFile(
+                self.INPUT,
+                self.tr('Epanet lib')
                 )
             )
 
@@ -138,27 +122,19 @@ class GraphFromNetworkAlgorithm(QgsProcessingAlgorithm):
         RUN PROCESS
         """
 
-        # INPUT
-        nodes = self.parameterAsSource(parameters, self.NODE_INPUT, context)
-        links = self.parameterAsSource(parameters, self.LINK_INPUT, context)
-
         # OUTPUT
-        graphfile = self.parameterAsFileOutput(parameters, self.OUTPUT, context)
-
-        # GENERATE NETWORK
-        n = tools.Network()
-        for f in nodes.getFeatures():
-            n.nodes.append(tools.Node(f['id']))
-        for f in links.getFeatures():
-            n.links.append(tools.Link(f['id'], f['start'], f['end']))
-
-        # GENERATE GRAPH
-        n.to_tgf(graphfile)
+        libf = self.parameterAsFile(parameters, self.INPUT, context)
+        inif = sys.path[0] + '/toolkit.ini'
+        feedback.pushInfo(inif)
+        config = configparser.ConfigParser()
+        config.read(inif)
+        config['EPANET']['lib'] = libf
+        with open(inif, 'w') as configfile:
+            config.write(configfile)
 
         # SHOW INFO
         feedback.pushInfo('='*40)
-        msg = 'Graph generated. Nodes: {}. Edges: {}.'
-        msg = msg.format(nodes.featureCount(), links.featureCount())
+        msg = 'Epanet toolkit library: {}, saved. Restart QGIS.'.format(libf)
         feedback.pushInfo(msg)
         feedback.pushInfo('='*40)
 
@@ -167,4 +143,4 @@ class GraphFromNetworkAlgorithm(QgsProcessingAlgorithm):
             return {}
 
         # OUTPUT
-        return {self.OUTPUT: graphfile}
+        return {}

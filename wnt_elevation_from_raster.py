@@ -91,7 +91,10 @@ class ElevationFromRasterAlgorithm(QgsProcessingAlgorithm):
         """
         Returns a localised short help string for the algorithm.
         """
-        return self.tr('Set node elevation from DEM in raster format.')
+        return self.tr('''Set network node elevation from DEM in raster format.
+        ===
+        Añade elevación a los nodos de la red desde un DEM en formato raster.
+        ''')
 
     def initAlgorithm(self, config=None):
         """

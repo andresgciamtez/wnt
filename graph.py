@@ -93,22 +93,6 @@ class Graph():
             self.calculate_degrees()
         return self._degrees
 
-#    def prune(self, labels):
-#        """Delete edges and update degrees"""
-#        if not self._updated:
-#            msg = 'Node degrees are not updated!'
-#            raise ValueError(msg)
-#        for label in labels[:]:
-#            if label in self.edges.keys():
-#                nodelabels = self.edges[label]
-#                for node in nodelabels:
-#                    if self._degrees[node] > 0:
-#                        self._degrees[node] -= 1
-#                del self.edges[label]
-#            else:
-#                msg = 'Edge: {} not exist!'.format(label)
-#                raise NameError(msg)
-
     def classify(self):
         '''Return subgraphs enumerating trees and meshes'''
 
@@ -159,15 +143,26 @@ class Graph():
                     trees[cnt] = sub
                 else:
                     meshes[cnt] = sub
-        
+
         # RECLASSIFY
         classified = {}
         for graphtype in ['BRANCHED', 'MESHED']:
             if graphtype == 'BRANCHED':
                 g = trees
             else:
-                g = meshes 
+                g = meshes
             for key, value in g.items():
-                for label in value: 
+                for label in value:
                     classified[label] = (graphtype, key)
         return classified
+
+# TEST
+
+# DEGREE
+g = Graph()
+for e in [(1, 1, 2), (2, 2, 3), (3, 3, 1), (4, 1, 4)]:
+    g.add_edge(e[0], e[1], e[2])
+c = g.classify()
+for i in range(1, 4):
+    assert c[i][0] == 'MESHED' and c[i][1] == 1
+assert c[4][0] == 'BRANCHED' and c[4][1] == 1

@@ -91,8 +91,23 @@ class ClassifyAlgorithm(QgsProcessingAlgorithm):
         """
         Returns a localised short helper string for the algorithm.
         """
-        msg = "Classify the network into branched and meshed areas"
-        return self.tr(msg)
+        return self.tr('''Classify the network into branched and meshed areas.
+
+        Two fields are added to the line layer:
+        - 'graph_type': 'BRANCHED' for branched areas and 'MESHED' for meshes 
+        areas.
+        - 'sub': lists the subzones.
+        
+        Use this process to sectorize networks.
+        ===
+        Clasifica la red en zonas ramificadas y malladas.
+        Se añaden dos campos a la capa de líneas:
+        -  'graph_type': 'BRANCHED' para zonas ramificadas y 'MESHED' para las 
+        malladas.
+        - 'sub': enumera las subzonas.
+        
+        Use este proceso para sectorizar redes.
+        ''')
 
     def initAlgorithm(self, config=None):
         """
@@ -123,11 +138,6 @@ class ClassifyAlgorithm(QgsProcessingAlgorithm):
         # INPUT
         links = self.parameterAsSource(parameters, self.LINK_INPUT, context)
 
-        # SEND INFORMATION TO THE USER
-        feedback.pushInfo('='*40)
-        crs = links.sourceCrs()
-        feedback.pushInfo('CRS is {}'.format(crs.authid()))
-
         # OUTPUT
         newfields = links.fields()
         newfields.append(QgsField("graph_type", QVariant.String))
@@ -138,7 +148,7 @@ class ClassifyAlgorithm(QgsProcessingAlgorithm):
             context,
             newfields,
             QgsWkbTypes.LineString,
-            crs
+            crs=links.sourceCrs()
             )
 
         # CREATE NETWORK
@@ -175,6 +185,7 @@ class ClassifyAlgorithm(QgsProcessingAlgorithm):
 
 
         # SHOW INFO
+        feedback.pushInfo('='*40)
         msg = 'Processed: {} links'.format(nofl)
         feedback.pushInfo(msg)
         feedback.pushInfo('='*40)

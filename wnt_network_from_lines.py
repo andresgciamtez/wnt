@@ -102,28 +102,51 @@ class NetworkFromLinesAlgorithm(QgsProcessingAlgorithm):
         """
         Returns a localised short help string for the algorithm.
         """
-        msg = 'Build a epanet network from a line layer.\n'
-        msg += 'Network defined by a node and a link layer.\n'
-        msg += '- Node layer contain the fields,\n'
-        msg += '* id: node identifier according to input parameters\n'
-        msg += '* type: void (must be specified among JUNCTION/RESERVOIR/TANK)\n'
-        msg += '* elevation: void\n'
-        msg += '- Link layer contain the fields,\n'
-        msg += '* id: link identifier according to input parameters\n'
-        msg += '* start: node identifier'
-        msg += '* end: node identifier\n'
-        msg += '* type: PIPE (can be changed to '
-        msg += 'CVPIPE, PUMP, PRV, PSV, PBV, FCV, TCV, GPV)\n'
-        msg += '* length: line XY length, it is calculated from line layer\n'
-        msg += 'Note:\n'
-        msg += 'The line input layer fields are preserved.\n'
-        msg += 'Consider to use it for obtaining pipe diameter and roughness.\n'
-        msg += 'Limitations:\n'
-        msg += '- MultiGeometry is not supported\n'
-        msg += '- Z coordinate is ignored\n'
-        msg += '- Suggestion:\n'
-        msg += '- Audit the network with Validate'
-        return self.tr(msg)
+        return self.tr('''Generate an epanet network from lines.
+        The generated network consists of two layers: nodes and links.
+        Line ends not separated more than tolerance are merged into a node.
+        - The node layer will contain the fields:
+        * id * type [1] * elevation ('type' not set)
+        - The line layer will contain the fields:
+        * id * start * end * type [2] * length ('Type' is set to PIPE, and the 
+        length is calculated from the geometry of the input layer.)
+        
+        Limitations:
+        - MultiGeometry is not supported
+        - The Z coordinate is ignored
+        
+        Notes:
+          [1] JUNCTION / RESERVOIR / TANK
+          [2] PIPE / CVPIPE / PUMP / PRV / PSV / PBV / FCV / TCV / GPV
+        
+        Tips:
+        - Verify the network with *Validate*.
+        - The fields of the input layer are preserved. Consider using them to 
+        get the diameter and roughness of the pipe.
+        ===
+        Genera una red epanet a partir de líneas.
+        La red generada consiste en dos capas: una de nodos y otra de líneas.
+        Los extremos de línea no distanciados más de la tolerancia se fusionan 
+        en un nodo. 
+        - La capa de nodos contendrá los campos:
+        * id * type[1] * elevation (‘type’ en blanco)
+        - La capa de línea contendrá los campos:
+        * id * start *end * type[2] * length (‘type’ se establece a PIPE, y la 
+        longitud se calcula a partir de la capa de entrada.)
+        
+        Limitaciones:
+        - MultiGeometry no es compatible
+        - La coordenada Z se ignora
+        
+        Notas:
+         [1] JUNCTION / RESERVOIR / TANK
+         [2] PIPE/ CVPIPE/PUMP/PRV/PSV/PBV/FCV/TCV/GPV
+        
+        Consejos:
+        -  Verifique la red con *Validate*.
+        - Los campos de la capa de entrada se conservan. Considere usarlos para
+        obtener el diámetro y la rugosidad de la tubería.
+        ''')
 
     def initAlgorithm(self, config=None):
         """
@@ -221,10 +244,14 @@ class NetworkFromLinesAlgorithm(QgsProcessingAlgorithm):
         lp = self.parameterAsString(parameters, self.LINK_PREFIX, context)
         li = self.parameterAsInt(parameters, self.LINK_INIT, context)
         ld = self.parameterAsInt(parameters, self.LINK_DELTA, context)
-
+        
         # SEND INFORMATION TO THE USER
         feedback.pushInfo('='*40)
-        feedback.pushInfo('CRS is {}'.format(linelayer.sourceCrs().authid()))
+        crsid = linelayer.sourceCrs().authid()
+        if crsid:
+            feedback.pushInfo('CRS is {}.'.format(crsid))
+        else:
+            feedback.pushInfo('WARNING: CRS is not set!')
 
         if linelayer.wkbType() == QgsWkbTypes.MultiLineString:
             feedback.reportError('ERROR: Source geometry is MultiLineString!')
@@ -301,18 +328,14 @@ class NetworkFromLinesAlgorithm(QgsProcessingAlgorithm):
             # SHOW PROGRESS
             if lcnt % 100 == 0:
                 feedback.setProgress(50+50*lcnt/len(links))
-
-        msg = 'Generated network'.format(ncnt, lcnt)
-        feedback.pushInfo(msg)
-        msg = 'Containing: {} nodes and {} links'.format(ncnt, lcnt)
-        feedback.pushInfo(msg)
+        feedback.pushInfo('Generated network.')
+        feedback.pushInfo('Nodes: {}.'.format(ncnt))
+        feedback.pushInfo('Links: {}.'.format(lcnt))
         feedback.pushInfo('='*40)
 
         # PROCCES CANCELED
-
         if feedback.isCanceled():
             return {}
 
         # OUTPUT
-
         return {self.NODE_OUTPUT: node_id, self.LINK_OUTPUT: link_id}

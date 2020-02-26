@@ -35,7 +35,6 @@ from os.path import exists as fexits
 import csv
 from . import htxt
 
-
 def dist_2_p(point1, point2):
     """Return the distance, 2D, between 2 points, (x1,y1) and (x2,y2)."""
 
@@ -778,57 +777,6 @@ class Network:
 
         tgffile.close()
 
-    def validate(self):
-        """Return the problems detected in the network.
-
-        Analyse the network graph and retrieve the tuple:
-            (onodes, dnodes, dlinks, unodes, llinks)
-        where:
-            onodes: set, the orphan nodes in the network
-            dnodes: set, the duplicated nodes in network
-            unodes: set, the undefined nodes in the network
-            dlinks: set, the duplicated links in network
-            llinks: set, internal loop start node id = end node id
-        """
-
-        # ORPHAN NODES SEARCH
-        onodes = set()
-        for node in self.nodes:
-            onodes.add(node.nodeid)
-
-        for link in self.links:
-            onodes.discard(link.start)
-            onodes.discard(link.end)
-
-        # DUPLICATE NODE ID SEARCH
-        dnodes = set()
-        for i in range(len(self.nodes)-1):
-            for j in range(i+1, len(self.nodes)):
-                if self.nodes[i].nodeid == self.nodes[j].nodeid:
-                    dnodes.add(self.nodes[j].nodeid)
-
-        # UNDEFINED START AND END NODES
-        unodes = set()
-        llinks = set()
-        for link in self.links:
-            if not isinstance(self.get_nodeindex(link.start), int):
-                unodes.add(link.start)
-            if not isinstance(self.get_nodeindex(link.end), int):
-                unodes.add(link.end)
-
-            # START NODE ID = END NODE ID
-            if link.start == link.end:
-                llinks.add(link.linkid)
-
-        # DUPLICATED LINK ID SEARCH
-        dlinks = set()
-        for i in range(len(self.links)-1):
-            for j in range(i+1, len(self.links)):
-                if self.links[i].linkid == self.links[j].linkid:
-                    dlinks.add(self.links[j].linkid)
-
-        return onodes, dnodes, unodes, dlinks, llinks
-
     def degree(self):
         """Return a dictionary, where: key: node id and value: node degree.
         """
@@ -838,6 +786,86 @@ class Network:
         for node in self.nodes:
             degrees[node.nodeid] = 0
         for link in self.links:
-            degrees[link.start] += 1
-            degrees[link.end] += 1
+            if link.start in degrees:
+                degrees[link.start] += 1
+            if link.end in degrees:
+                degrees[link.end] += 1
         return degrees
+
+    def validate(self):
+        """Return the problems detected in the network.
+
+        Analyse the network graph and retrieve a dictionary:
+        where key, value are:
+            'orphan nodes': set, orphan node IDs
+            'duplicate nodes': set, duplicated node  IDs
+            'undefined node links': set, undefined node link  IDs
+            'duplicate links': set duplicate link IDs
+            'loops': set, loopped link IDs
+        """
+
+        problems = {}
+
+        # ORPHAN NODES
+        np = problems['orphan nodes'] = set()
+        for node in self.nodes:
+            np.add(node.nodeid)
+        for link in self.links:
+            np.discard(link.start)
+            np.discard(link.end)
+
+        # DUPLICATE NODE ID
+        np = problems['duplicate nodes'] = set()
+        for i in range(len(self.nodes)-1):
+            for j in range(i+1, len(self.nodes)):
+                if self.nodes[i].nodeid == self.nodes[j].nodeid:
+                    np.add(self.nodes[j].nodeid)
+
+        # UNDEFINED LINK START OR END NODES
+        np = problems['undefined nodes'] = set()
+        lp = problems['loops'] = set()
+        for link in self.links:
+            if not isinstance(self.get_nodeindex(link.start), int):
+                np.add(link.start)
+            if not isinstance(self.get_nodeindex(link.end), int):
+                np.add(link.end)
+
+            # START NODE ID = END NODE ID. LOOP
+            if link.start == link.end:
+                lp.add(link.linkid)
+
+        # DUPLICATE LINK ID
+        lp = problems['duplicate links'] = set()
+        for i in range(len(self.links)-1):
+            for j in range(i+1, len(self.links)):
+                if self.links[i].linkid == self.links[j].linkid:
+                    lp.add(self.links[j].linkid)
+
+        return problems
+
+# TEST
+
+# DEGREE
+net = Network()
+for n in [1, 2, 3, 4]:
+    net.nodes.append(Node(n))
+for l in [(1, 1, 2), (2, 2, 3), (3, 2, 4)]:
+    net.links.append(Link(l[0], l[1], l[2]))
+d = net.degree()
+assert d[1] == 1
+assert d[2] == 3
+assert d[3] == 1
+assert d[4] == 1
+
+# VALIDATE
+net = Network()
+for n in [1, 2, 3, 4, 4]:
+    net.nodes.append(Node(n))
+for l in [(1, 1, 2), (2, 2, 3), (3, 3, 1), (4, 5, 6), (4, 5, 5)]:
+    net.links.append(Link(l[0], l[1], l[2]))
+p = net.validate()
+assert p['orphan nodes'] == {4}
+assert p['duplicate nodes'] == {4}
+assert p['undefined nodes'] == {5, 6}
+assert p['loops'] == {4}
+assert p['duplicate links'] == {4}

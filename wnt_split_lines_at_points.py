@@ -94,9 +94,14 @@ class SplitLinesAtPointsAlgorithm(QgsProcessingAlgorithm):
         """
         Returns a localised short help string for the algorithm.
         """
-        msg = "Split lines at point positions. \n"
-        msg += "Use for add 'T', 'X' and n-junction."
-        return self.tr(msg)
+        return self.tr('''Split lines at point positions.
+        
+        Tip: Use to add unions.
+        ===
+        Parte líneas en los puntos especificados.
+        
+        Sugerencia: Usar para añadir uniones.
+        ''')
 
     def initAlgorithm(self, config=None):
         """
