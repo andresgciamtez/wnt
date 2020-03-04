@@ -33,14 +33,14 @@ A set of processes for modelling water networks. Starting from scratch or expand
 Un conjunto de procesos para el modelado de redes de agua. Partiendo desde cero o ampliando una red existente, permite importar y exportar modelos, escenarios y otros archivos con la finalidad de analizar u optimizar una red.
 
 ## Recetas
-# Modelar
+### Modelar
 - Genera un red, topología y geometría, desde líneas cad o shp: http://y2u.be/Mjtwar1H1jA
 ### Exportar
 - Genera un modelo epanet (o amplía uno existente) desde la red (nodos y líneas) y una plantilla: http://y2u.be/L7Kp5l67kOc
 - Genera un escenario de demandas para epanet: http://y2u.be/FOxZgZUgjq4
 - Gnera un escenario con las propiedades de las tuberías (díametro y rugosidad) para epanet: http://y2u.be/wvbyWapAu2I
 - Genera un archivo de datos para ppno (pressurized pipe network optimizer): http://y2u.be/S9445JLldRE
-# Importar
+### Importar
 - Configura el acceso a la biblioteca de epanet
 - Importar un red de epanet (nodos y líneas): http://y2u.be/fxhAPB4ZIyg
 - Importa los resultados del cálculo
