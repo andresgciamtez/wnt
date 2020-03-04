@@ -38,7 +38,7 @@ from qgis.core import (QgsField,
                        QgsProcessingParameterFeatureSink,
                        QgsWkbTypes
                        )
-from . import tools
+from . import utils_core as tools
 
 class NodeDegreesAlgorithm(QgsProcessingAlgorithm):
     """
@@ -161,7 +161,7 @@ class NodeDegreesAlgorithm(QgsProcessingAlgorithm):
             )
 
         # DEFINE NETWORK
-        net = tools.Network()
+        net = tools.WntNetwork()
 
         # LOAD LAYERS
         nofn = nodelay.featureCount()
@@ -171,7 +171,7 @@ class NodeDegreesAlgorithm(QgsProcessingAlgorithm):
         cnt = 0
         for f in nodelay.getFeatures():
             cnt += 1
-            net.nodes.append(tools.Node(f['id']))
+            net.add_node(tools.WntNode(f['id']))
 
             # SHOW PROGRESS
             if cnt % 100 == 0:
@@ -181,7 +181,7 @@ class NodeDegreesAlgorithm(QgsProcessingAlgorithm):
         cnt = 0
         for f in linklay.getFeatures():
             cnt += 1
-            net.links.append(tools.Link(f['id'], f['start'], f['end']))
+            net.add_link(tools.WntLink(f['id'], f['start'], f['end']))
 
             # SHOW POROGRESS
             if cnt % 100 == 0:

@@ -41,9 +41,10 @@ from qgis.core import (QgsFeature,
                        QgsProcessingParameterDistance,
                        QgsProcessingParameterString,
                        QgsProcessingParameterFeatureSink,
-                       QgsProcessingParameterFeatureSource
+                       QgsProcessingParameterFeatureSource,
+                       QgsPointXY
                       )
-from . import tools
+from . import utils_core as tools
 
 class NetworkFromLinesAlgorithm(QgsProcessingAlgorithm):
     """
@@ -53,12 +54,12 @@ class NetworkFromLinesAlgorithm(QgsProcessingAlgorithm):
     # DEFINE CONSTANTS
     INPUT = 'INPUT'
     TOLERANCE = 'TOLERANCE'
-    NODE_PREFIX = 'NODE_PREFIX'
-    NODE_INIT = 'NODE_INIT'
-    NODE_DELTA = 'NODE_DELTA'
-    LINK_PREFIX = 'LINK_PREFIX'
-    LINK_INIT = 'LINK_INIT'
-    LINK_DELTA = 'LINK_DELTA'
+    NODE_MASK = 'NODE_MASK'
+    NODE_INI = 'NODE_INI'
+    NODE_INC = 'NODE_INC'
+    LINK_MASK = 'LINK_MASK'
+    LINK_INI = 'LINK_INI'
+    LINK_INC = 'LINK_INC'
     NODE_OUTPUT = 'NODE_OUTPUT'
     LINK_OUTPUT = 'LINK_OUTPUT'
 
@@ -105,47 +106,48 @@ class NetworkFromLinesAlgorithm(QgsProcessingAlgorithm):
         return self.tr('''Generate an epanet network from lines.
         The generated network consists of two layers: nodes and links.
         Line ends not separated more than tolerance are merged into a node.
-        - The node layer will contain the fields:
-        * id * type [1] * elevation ('type' not set)
-        - The line layer will contain the fields:
-        * id * start * end * type [2] * length ('Type' is set to PIPE, and the 
-        length is calculated from the geometry of the input layer.)
+        The node layer contains the fields: *id *type *elevation
+        The line layer contains the fields: *id *start *end *type *length
         
         Limitations:
         - MultiGeometry is not supported
         - The Z coordinate is ignored
         
         Notes:
-          [1] JUNCTION / RESERVOIR / TANK
-          [2] PIPE / CVPIPE / PUMP / PRV / PSV / PBV / FCV / TCV / GPV
+        - Looped (start = end) generates an error
+        - *type and *elevation in nodes are not set
+        - *type' in nodes is set to 'PIPE'
+        - Epanet node types: JUNCTION/RESERVOIR/TANK
+        - Epanet link types: PIPE/CVPIPE/PUMP/PRV/PSV/PBV/FCV/TCV/GPV
         
         Tips:
-        - Verify the network with *Validate*.
+        - Verify the network with *Validate*
         - The fields of the input layer are preserved. Consider using them to 
-        get the diameter and roughness of the pipe.
+        get the diameter and roughness of the pipe
+        
         ===
         Genera una red epanet a partir de líneas.
         La red generada consiste en dos capas: una de nodos y otra de líneas.
         Los extremos de línea no distanciados más de la tolerancia se fusionan 
         en un nodo. 
-        - La capa de nodos contendrá los campos:
-        * id * type[1] * elevation (‘type’ en blanco)
-        - La capa de línea contendrá los campos:
-        * id * start *end * type[2] * length (‘type’ se establece a PIPE, y la 
-        longitud se calcula a partir de la capa de entrada.)
+        La capa de nodos contendrá los campos: *id *type *elevation
+        La capa de línea contendrá los campos: *id *start *end *type *length
         
         Limitaciones:
-        - MultiGeometry no es compatible
+        - No se acepta MultiGeometry
         - La coordenada Z se ignora
         
         Notas:
-         [1] JUNCTION / RESERVOIR / TANK
-         [2] PIPE/ CVPIPE/PUMP/PRV/PSV/PBV/FCV/TCV/GPV
+        - Líneas en bucle (start = end) generan un error 
+        - *type y *elevation en la capa de nodos deben asignarse a posteriori
+        - *type en la capa de líneas se fija en 'PIPE'
+        - Epanet node types: JUNCTION/RESERVOIR/TANK
+        - Epanet link types: PIPE/CVPIPE/PUMP/PRV/PSV/PBV/FCV/TCV/GPV
         
         Consejos:
-        -  Verifique la red con *Validate*.
+        -  Verifique la red con *Validate*
         - Los campos de la capa de entrada se conservan. Considere usarlos para
-        obtener el diámetro y la rugosidad de la tubería.
+        obtener el diámetro y la rugosidad de la tubería
         ''')
 
     def initAlgorithm(self, config=None):
@@ -172,22 +174,22 @@ class NetworkFromLinesAlgorithm(QgsProcessingAlgorithm):
             )
         self.addParameter(
             QgsProcessingParameterString(
-                self.NODE_PREFIX,
-                self.tr('Node prefix'),
-                defaultValue='N-'
+                self.NODE_MASK,
+                self.tr('Node mask (P-$$-S generates P-01-S)'),
+                defaultValue='$'
                 )
             )
         self.addParameter(
             QgsProcessingParameterNumber(
-                self.NODE_INIT,
+                self.NODE_INI,
                 self.tr('Number of the first node'),
                 type=QgsProcessingParameterNumber.Integer,
-                defaultValue=1000
+                defaultValue=1
                 )
             )
         self.addParameter(
             QgsProcessingParameterNumber(
-                self.NODE_DELTA,
+                self.NODE_INC,
                 self.tr('Node increment'),
                 type=QgsProcessingParameterNumber.Integer,
                 defaultValue=1
@@ -195,22 +197,22 @@ class NetworkFromLinesAlgorithm(QgsProcessingAlgorithm):
             )
         self.addParameter(
             QgsProcessingParameterString(
-                self.LINK_PREFIX,
-                self.tr('Link prefix'),
-                defaultValue='L-'
+                self.LINK_MASK,
+                self.tr('Link mask (P-$$-S generates P-01-S)'),
+                defaultValue='$'
                 )
             )
         self.addParameter(
             QgsProcessingParameterNumber(
-                self.LINK_INIT,
+                self.LINK_INI,
                 self.tr('Number of first link'),
                 type=QgsProcessingParameterNumber.Integer,
-                defaultValue=1000
+                defaultValue=1
                 )
             )
         self.addParameter(
             QgsProcessingParameterNumber(
-                self.LINK_DELTA,
+                self.LINK_INC,
                 self.tr('Link increment'),
                 type=QgsProcessingParameterNumber.Integer,
                 defaultValue=1
@@ -238,13 +240,13 @@ class NetworkFromLinesAlgorithm(QgsProcessingAlgorithm):
         # INPUT
         linelayer = self.parameterAsSource(parameters, self.INPUT, context)
         tol = self.parameterAsDouble(parameters, self.TOLERANCE, context)
-        np = self.parameterAsString(parameters, self.NODE_PREFIX, context)
-        ni = self.parameterAsInt(parameters, self.NODE_INIT, context)
-        nd = self.parameterAsInt(parameters, self.NODE_DELTA, context)
-        lp = self.parameterAsString(parameters, self.LINK_PREFIX, context)
-        li = self.parameterAsInt(parameters, self.LINK_INIT, context)
-        ld = self.parameterAsInt(parameters, self.LINK_DELTA, context)
-        
+        nmask = self.parameterAsString(parameters, self.NODE_MASK, context)
+        nini = self.parameterAsInt(parameters, self.NODE_INI, context)
+        ninc = self.parameterAsInt(parameters, self.NODE_INC, context)
+        lmask = self.parameterAsString(parameters, self.LINK_MASK, context)
+        lini = self.parameterAsInt(parameters, self.LINK_INI, context)
+        linc = self.parameterAsInt(parameters, self.LINK_INC, context)
+
         # SEND INFORMATION TO THE USER
         feedback.pushInfo('='*40)
         crsid = linelayer.sourceCrs().authid()
@@ -257,15 +259,29 @@ class NetworkFromLinesAlgorithm(QgsProcessingAlgorithm):
             feedback.reportError('ERROR: Source geometry is MultiLineString!')
 
         # READ LINESTRINGS AS WKT
+        lines = []
+        for feature in linelayer.getFeatures():
+            line = []
+            for point in feature.geometry().asPolyline():
+                line.append((point.x(), point.y()))
+            lines.append(line)
+        for line in lines:
+            if tools.dist2p(line[0], line[-1]) < tol:
+                feedback.reportError('ERROR: Looped LineString!')
+                return {}
 
-        lines = [line.geometry().asWkt() for line in linelayer.getFeatures()]
+        # SHOW INFO
+        feedback.pushInfo('Read: {} LineStrings.'.format(len(lines)))
 
-        # BUILD NETWORK FROM LINES
+        # CONFIG
+        def n_format(index):
+            return tools.format_id(nini + index*ninc, nmask)
 
-        newnetwork = tools.Network()
-        newnetwork.from_lines(lines, tol, np, ni, nd, lp, li, ld)
-        nodes = newnetwork.nodes
-        links = newnetwork.links
+        def l_format(index):
+            return tools.format_id(lini + index*linc, lmask)
+
+        # CALCULATE NETWORK
+        nodes, links = tools.net_from_linestrings(lines, tol)
 
         # GENERATE NODE LAYER
         newfields = QgsFields()
@@ -284,9 +300,10 @@ class NetworkFromLinesAlgorithm(QgsProcessingAlgorithm):
         # ADD FEATURES
         ncnt = 0
         f = QgsFeature()
-        for node in nodes:
-            f.setGeometry(QgsGeometry.fromWkt(node.to_wkt()))
-            f.setAttributes([node.nodeid, '', ''])
+        for x, y in nodes[:]:
+            nodeid = n_format(ncnt)
+            f.setGeometry(QgsGeometry.fromPointXY(QgsPointXY(x, y)))
+            f.setAttributes([nodeid, '', 0.0])
             node_sink.addFeature(f)
             ncnt += 1
 
@@ -316,21 +333,26 @@ class NetworkFromLinesAlgorithm(QgsProcessingAlgorithm):
         g = QgsFeature()
         for f in linelayer.getFeatures():
             link = links[lcnt]
-
-            # UPDATE GEOMETRY (NODE -> AVERAGE POINT COOORDINATES)
-            attr = [link.linkid, link.start, link.end, 'PIPE', link.length]
+            linkid = l_format(lcnt)
+            start = n_format(link[0])
+            end = n_format(link[1])
+            poly = []
+            for x, y in links[lcnt][2][:]:
+                poly.append(QgsPointXY(x, y))
+            length = tools.length2d(poly)
+            attr = [linkid, start, end, 'PIPE', length]
             attr.extend(f.attributes())
+            g.setGeometry(QgsGeometry.fromPolylineXY(poly))
             g.setAttributes(attr)
-            g.setGeometry(QgsGeometry.fromWkt(link.to_wkt()))
             link_sink.addFeature(g)
             lcnt += 1
 
             # SHOW PROGRESS
             if lcnt % 100 == 0:
                 feedback.setProgress(50+50*lcnt/len(links))
-        feedback.pushInfo('Generated network.')
-        feedback.pushInfo('Nodes: {}.'.format(ncnt))
-        feedback.pushInfo('Links: {}.'.format(lcnt))
+        feedback.pushInfo('Network was generated successfully.')
+        feedback.pushInfo('Node number: {}.'.format(ncnt))
+        feedback.pushInfo('Link number: {}.'.format(lcnt))
         feedback.pushInfo('='*40)
 
         # PROCCES CANCELED

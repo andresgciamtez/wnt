@@ -181,7 +181,9 @@ class ElevationFromRasterAlgorithm(QgsProcessingAlgorithm):
             # SHOW PROGRESS
             if (pcnt+ncnt) % 100 == 0:
                 feedback.setProgress(100*(pcnt+ncnt)/tot)
-        msg = 'Proccesed nodes: {}. skipped: {}.'.format(pcnt, ncnt)
+        msg = 'Proccesed nodes: {}.'.format(pcnt)
+        feedback.pushInfo(msg)
+        msg = 'Skipped nodes: {}.'.format(ncnt)
         feedback.pushInfo(msg)
         feedback.pushInfo('='*40)
 

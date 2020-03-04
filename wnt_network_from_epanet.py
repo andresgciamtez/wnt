@@ -41,7 +41,7 @@ from qgis.core import (QgsProcessingAlgorithm,
                        QgsGeometry,
                        QgsWkbTypes
                       )
-from . import tools
+from . import utils_core as tools
 
 class NetworkFromEpanetAlgorithm(QgsProcessingAlgorithm):
     """
@@ -97,23 +97,17 @@ class NetworkFromEpanetAlgorithm(QgsProcessingAlgorithm):
         """
         return self.tr('''Import an epanet inp file generating a network.
         The epanet data imported is:
-        - Nodes
-        * id * type (JUNCTIONS/RESERVOIRS/TANK) * elevation
-        - Links
-        * id * start * end
-        * type (PIPE/CVPIPE/PUMP/PRV/PSV/PBV/FCV/TCV/GPV
-        * length (if type is PIPE or CVPIPE, otherwise void)
-        * diameter * roughness
+        Nodes: *id *type (JUNCTIONS/RESERVOIRS/TANK) *elevation
+        Links: *id *start *end *type (PIPE/CVPIPE/PUMP/PRV/PSV/PBV/FCV/TCV/GPV
+        *length (if type is PIPE or CVPIPE) *diameter *roughness
+        
         ===
+        
         Importa un archivo epanet inp y genera una red.
         Los datos importados de epanet son:
-        - Nodos
-         * ID * tipo (UNIONES / RESERVAS / TANQUE) * elevación
-         - Líneas
-         * ID * start * end
-         * tipo (PIPE/CVPIPE/PUMP/PRV/PSV/PBV/FCV/TCV/GPV)
-         * longitud (si el tipo es PIPE o CVPIPE, de lo contrario será nulo)
-         * diámetro * rugosidad
+        Nodes: *id *type (JUNCTIONS/RESERVOIRS/TANK) *elevation
+        Links: *id *start *end *type (PIPE/CVPIPE/PUMP/PRV/PSV/PBV/FCV/TCV/GPV
+        *length (if type is PIPE or CVPIPE) *diameter *roughness
         ''')
 
     def initAlgorithm(self, config=None):
@@ -162,10 +156,10 @@ class NetworkFromEpanetAlgorithm(QgsProcessingAlgorithm):
         feedback.pushInfo('CRS is {}'.format(crs.authid()))
 
         # READ NETWORK
-        network = tools.Network()
+        network = tools.WntNetwork()
         network.from_epanet(epanetf)
-        nodes = network.nodes
-        links = network.links
+        nodes = network.nodes()
+        links = network.links()
 
         # GENERATE NODES LAYER
         newfields = QgsFields()
@@ -189,7 +183,7 @@ class NetworkFromEpanetAlgorithm(QgsProcessingAlgorithm):
             ncnt += 1
             f = QgsFeature()
             f.setGeometry(QgsGeometry.fromWkt(node.to_wkt()))
-            f.setAttributes([node.nodeid, node.get_type(), node.elevation])
+            f.setAttributes([node.name(), node.get_type(), node.get_elevation()])
 
             # ADD NODE
             node_sink.addFeature(f)
@@ -197,7 +191,6 @@ class NetworkFromEpanetAlgorithm(QgsProcessingAlgorithm):
             # SHOW PROGRESS
             if ncnt % 100 == 0:
                 feedback.setProgress(50*ncnt/ntot) # Update the progress bar
-
 
         # GENERATE LINKS LAYER
         newfields = QgsFields()
@@ -225,22 +218,21 @@ class NetworkFromEpanetAlgorithm(QgsProcessingAlgorithm):
             f = QgsFeature()
             f.setGeometry(QgsGeometry.fromWkt(link.to_wkt()))
             if link.get_type() in ['PIPE', 'CVPIPE']:
-                f.setAttributes(
-                    [link.linkid,
-                     link.start,
-                     link.end,
-                     link.get_type(),
-                     link.length,
-                     link.diameter,
-                     link.roughness]
-                    )
+                f.setAttributes([link.name(),
+                                link.start(),
+                                link.end(),
+                                link.get_type(),
+                                link.epanet['length'],
+                                link.epanet['diameter'],
+                                link.epanet['roughness']]
+                                )
             else:
                 f.setAttributes(
-                    [link.linkid,
-                     link.start,
-                     link.end,
+                    [link.name(),
+                     link.start(),
+                     link.end(),
                      link.get_type(),
-                     link.length,
+                     None,
                      None,
                      None]
                     )
@@ -253,7 +245,11 @@ class NetworkFromEpanetAlgorithm(QgsProcessingAlgorithm):
                 feedback.setProgress(50+50*lcnt/ltot) # Update the progress bar
 
         # SHOW INFO
-        msg = 'Added: {} nodes and {} links.'.format(ncnt, lcnt)
+        msg = 'Epanet model Loaded successfully.'
+        feedback.pushInfo(msg)
+        msg = 'Added: {} nodes.'.format(ncnt)
+        feedback.pushInfo(msg)
+        msg = 'Added: {} links.'.format(lcnt)
         feedback.pushInfo(msg)
         feedback.pushInfo('='*40)
 

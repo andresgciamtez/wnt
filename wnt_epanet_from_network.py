@@ -36,7 +36,7 @@ from qgis.core import (QgsProcessing,
                        QgsProcessingParameterFeatureSource,
                        QgsProcessingParameterFile,
                        QgsProcessingParameterFileDestination)
-from . import tools
+from . import utils_core as tools
 
 class EpanetFromNetworkAlgorithm(QgsProcessingAlgorithm):
     """
@@ -93,32 +93,26 @@ class EpanetFromNetworkAlgorithm(QgsProcessingAlgorithm):
         """
         return self.tr('''Generate an epanet inp file from a network and a
         epanet model template.
-        The final epanet model contain the templated data adding:
-        - JUNCTIONS/RESERVOIRS/TANK
-        * id * elevation
-        - PIPES/PUMPS
-        * id * start * end
-        - VALVES
-        * id * start * end * type
+        The final epanet model contain the templated data adding,
+        - in JUNCTIONS/RESERVOIRS/TANK: *id *elevation
+        - in PIPES/PUMPS: *id *start *end
+        - in VALVES; *id *start *end *type
         Note:
         - Coordinates and vertex are exported.
-        - pipe diameter and roughness are ignored (add like scenarios).
+        - pipe diameter and roughness are ignored (add it like scenarios).
         
-        Tip: It is possible extend the template model adding a network.
+        Tip: It is possible extend the template model adding a the network.
         ===
         Genera un modelo epanet a partir de una red y una plantilla (.inp).
         El modelo final de epanet contendrá los datos de plantilla , añadiendo:
-        - JUNCTIONS/RESERVOIRS/TANK
-        * id * elevation
-        - PIPES/PUMPS
-        * id * start * end
-        - VALVES
-        * id * start * end * type
+        - a JUNCTIONS/RESERVOIRS/TANK: *id *elevation
+        - a PIPES/PUMPS: *id *start *end
+        - a VALVES: *id *start *end *type
         Notas:
-        - Se exportan las coordenadas y el vértice).
+        - Se exportan la totalidad de la geometría.
         - Se ignora diámetros y rugosidades (añádalos mediante escenarios).
 
-        Consejo: Puede ampliar un el modelo de la plantilla agregando la red.
+        Consejo: Puede ampliar el modelo de la plantilla con la nueva red.
         ''')
 
     def initAlgorithm(self, config=None):
@@ -187,17 +181,17 @@ class EpanetFromNetworkAlgorithm(QgsProcessingAlgorithm):
             )
 
         # BUILD NETWORK
-        newnet = tools.Network()
+        newnet = tools.WntNetwork()
 
         # NODES
         ncnt = 0
         for f in nodes.getFeatures():
             ncnt += 1
-            newnode = tools.Node(f['id'])
+            newnode = tools.WntNode(f['id'])
             newnode.from_wkt(f.geometry().asWkt())
             newnode.set_type(f['type'])
-            newnode.elevation = f['elevation']
-            newnet.nodes.append(newnode)
+            newnode.set_elevation(f['elevation'])
+            newnet.add_node(newnode)
 
             # SHOW PROGRESS
             if ncnt % 100 == 0:
@@ -207,11 +201,11 @@ class EpanetFromNetworkAlgorithm(QgsProcessingAlgorithm):
         lcnt = 0
         for f in links.getFeatures():
             lcnt += 1
-            newlink = tools.Link(f['id'], f['start'], f['end'])
+            newlink = tools.WntLink(f['id'], f['start'], f['end'])
             newlink.from_wkt(f.geometry().asWkt())
-            newlink.length = f['length']
+            newlink.epanet['length'] = f['length']
             newlink.set_type(f['type'])
-            newnet.links.append(newlink)
+            newnet.add_link(newlink)
 
             # SHOW POROGRESS
             if lcnt % 100 == 0:

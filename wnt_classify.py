@@ -38,7 +38,7 @@ from qgis.core import (QgsField,
                        QgsProcessingParameterFeatureSink,
                        QgsWkbTypes
                        )
-from . import graph as gr
+from . import utils_graph as gr
 
 class ClassifyAlgorithm(QgsProcessingAlgorithm):
     """

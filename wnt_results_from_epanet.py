@@ -162,21 +162,21 @@ class ResultsFromEpanetAlgorithm(QgsProcessingAlgorithm):
         """
         return self.tr('''Import results from an epanet simulation.
         Imported data:
-        - Nodes: * time * demand * head * pressure
-        - Links: * time * flow * velocity * headloss * status * setting
-        * energy
+        Nodes: *time *demand *head *pressure
+        Links: *time *flow *velocity *headloss *status *setting *energy
         
-        Tip: It is necessary configure the access to epanet. 
-        Import/Configure epanet toolkit libary
+        Note: It is necessary to configure the access to epanet lib. 
+        Use Import/Configure epanet toolkit libary*
+        
         ===
+        
         Importa los resultados de una simulación en epanet.
         Datos importados:
-        - Nodos: * time * demand * head * pressure
-        - Líneas: * time * flow * velocity * headloss * status * setting
-        * energy
+        Nodos: *time *demand *head *pressure
+        Líneas: *time *flow *velocity *headloss *status *setting *energy
         
         Nota: Es necesario configurar el acceso a epanet de forma previa.
-        Import/Configure epanet toolkit libary
+        Use Import/Configure epanet toolkit libary
         ''')
 
     def initAlgorithm(self, config=None):
@@ -295,9 +295,13 @@ class ResultsFromEpanetAlgorithm(QgsProcessingAlgorithm):
 
         # SHOW NODES AND LINKS PROCESSED
         feedback.pushInfo('='*40)
+        msg = 'Results loaded successfully.'
+        feedback.pushInfo(msg)
         msg = 'Number of hydraulic time steps: {}'.format(stepcount)
         feedback.pushInfo(msg)
-        msg = 'Read results: {} nodes and {} link'.format(nodecount, linkcount)
+        msg = 'Node number: {}'.format(nodecount)
+        feedback.pushInfo(msg)
+        msg = 'Link number: {}'.format( linkcount)
         feedback.pushInfo(msg)
         feedback.pushInfo('='*40)
 

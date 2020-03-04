@@ -89,20 +89,22 @@ class ConfigToolkitAlgorithm(QgsProcessingAlgorithm):
         return self.tr('''Set the epanet lib path.
         
         Note: The path is store in the toolkit.ini file.
-        
+
         Epanet lib can be download from: 
-        https://www.epa.gov/water-research/epanet#tab-2 (only win 32)
+        https://www.epa.gov/water-research/epanet#tab-2 (only win 32),
         or
         https://github.com/andresgciamtez/entoolkit/tree/master/entoolkit/epanet
+
         ===
+        
         Define la ruta de acceso a la biblioteca de epanet.
 
         Nota: La ruta de acceso se almacena en el archivo toolkit.ini.
-        
+
         La biblioteca de epanet puede ser descargada desde:
-        https://www.epa.gov/water-research/epanet#tab-2 (solo win 32)
+        - https://www.epa.gov/water-research/epanet#tab-2 (only win 32), 
         o
-        https://github.com/andresgciamtez/entoolkit/tree/master/entoolkit/epanet
+        - https://github.com/andresgciamtez/entoolkit/tree/master/entoolkit/epanet
         ''')
 
     def initAlgorithm(self, config=None):

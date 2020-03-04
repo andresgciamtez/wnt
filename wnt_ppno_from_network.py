@@ -37,7 +37,7 @@ from qgis.core import (QgsProcessing,
                        QgsProcessingParameterField,
                        QgsProcessingParameterFile,
                        QgsProcessingParameterFileDestination)
-from . import htxt
+from . import utils_parser as parser
 
 class PpnoFromNetworkAlgorithm(QgsProcessingAlgorithm):
     """
@@ -203,7 +203,7 @@ class PpnoFromNetworkAlgorithm(QgsProcessingAlgorithm):
             return {}
 
         # TEMPLATE
-        ppnof = htxt.HeaderTxt()
+        ppnof = parser.HeadedText()
         ppnof.read(template)
 
         # TITLE SECTION

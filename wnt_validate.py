@@ -39,7 +39,7 @@ from qgis.core import (QgsField,
                        QgsProcessingParameterFeatureSource
 
                        )
-from . import tools
+from . import utils_core as tools
 
 class ValidateAlgorithm(QgsProcessingAlgorithm):
     """
@@ -100,8 +100,10 @@ class ValidateAlgorithm(QgsProcessingAlgorithm):
         - Duplicate lines
         - Loops (lines with the same start and end node)
         
-        The problems detected are stored in the field: ‘problems’ 
+        The problems detected are stored in the field: *problems 
+        
         ===
+        
         Analiza el grafo de red, verificando:
         - Nodos huérfanos
         - Nodos duplicados
@@ -109,7 +111,7 @@ class ValidateAlgorithm(QgsProcessingAlgorithm):
         - Líneas duplicadas
         - Bucles (líneas con igual nodo de inicio y final)
         
-        Los problemas detectados se almacenan en el campo: ‘problems’.
+        Los problemas detectados se almacenan en el campo: *problems.
         ''')
 
     def initAlgorithm(self, config=None):
@@ -178,14 +180,13 @@ class ValidateAlgorithm(QgsProcessingAlgorithm):
             )
 
         # DEFINE NETWORK
-        net = tools.Network()
+        net = tools.WntNetwork()
 
         # LOAD NODES
         ncnt = 0
         for f in nodelay.getFeatures():
             ncnt += 1
-            node = tools.Node(f['id'])
-            net.nodes.append(node)
+            net.add_node(tools.WntNode(f['id']))
 
             # SHOW PROGRESS
             if ncnt % 100 == 0:
@@ -195,8 +196,7 @@ class ValidateAlgorithm(QgsProcessingAlgorithm):
         lcnt = 0
         for f in linklay.getFeatures():
             lcnt += 1
-            link = tools.Link(f['id'], f['start'], f['end'])
-            net.links.append(link)
+            net.add_link(tools.WntLink(f['id'], f['start'], f['end']))
 
             # SHOW POROGRESS
             if lcnt % 100 == 0:
@@ -239,12 +239,9 @@ class ValidateAlgorithm(QgsProcessingAlgorithm):
             lcnt += 1
             msg = ''
 
-            # NO DEFINED START OR END
-            if f['start'] in problems['undefined nodes']:
-                msg = 'Undefined start-node.'
-            if f['end'] in problems['undefined nodes']:
-                msg += ' ' if msg else ''
-                msg += 'Undefined end-node.'
+            # UNDEFINED START OR END
+            if f['id'] in problems['undefined node links']:
+                msg = 'Undefined node links.'
 
             # DUPLICATED ID
             if f['id'] in problems['duplicate links']:
