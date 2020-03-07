@@ -40,7 +40,8 @@ from qgis.core import (QgsGeometry,
                        QgsProcessingParameterFeatureSource,
                        QgsProcessingParameterFeatureSink
                        )
-from . import tools
+from . import utils_core as tools
+from . import utils_split as split
 
 class SplitLinesAtPointsAlgorithm(QgsProcessingAlgorithm):
     """
@@ -94,9 +95,16 @@ class SplitLinesAtPointsAlgorithm(QgsProcessingAlgorithm):
         """
         Returns a localised short help string for the algorithm.
         """
-        msg = "Split lines at point positions. \n"
-        msg += "Use for add 'T', 'X' and n-junction."
-        return self.tr(msg)
+        return self.tr('''Split lines at point positions.
+        
+        Tip: Use to add unions.
+        
+        ===
+        
+        Parte líneas en los puntos especificados.
+        
+        Sugerencia: Usar para añadir uniones.
+        ''')
 
     def initAlgorithm(self, config=None):
         """
@@ -173,13 +181,16 @@ class SplitLinesAtPointsAlgorithm(QgsProcessingAlgorithm):
             x, y = f.geometry().asPoint().x(), f.geometry().asPoint().y()
             mindist = 1e24
             for point in points:
-                mindist = min(mindist, tools.dist_2_p((x, y), point))
+                mindist = min(mindist, tools.dist2p((x, y), point))
             if mindist > tolerance:
                 points.append((x, y))
 
         # SHOW PROGRESS
-        msg = 'Final splitting points: {}. Discarted overlapped points: {}.'
-        msg = msg.format(len(points), pntlayer.featureCount() - len(points))
+        msg = 'Final splitting points: {}.'
+        msg = msg.format(len(points))
+        feedback.pushInfo(msg)
+        msg = 'Overlapped points: {}.'
+        msg = msg.format(pntlayer.featureCount() - len(points))
         feedback.pushInfo(msg)
 
         # LOAD AND SPLIT LINES
@@ -208,7 +219,7 @@ class SplitLinesAtPointsAlgorithm(QgsProcessingAlgorithm):
                     fpoints.append(point)
            # SPLIT
             if fpoints:
-                splitted = tools.split_linestring_m(line, fpoints, tolerance)
+                splitted = split.split_linestring_m(line, fpoints, tolerance)
                 if splitted:
 
                     # ADD NEW LINESTRINGS
@@ -229,7 +240,7 @@ class SplitLinesAtPointsAlgorithm(QgsProcessingAlgorithm):
             # SHOW PROGRESS
             feedback.setProgress(100*cnt/tot) # Update the progress bar
 
-        msg = 'Final line number: {}. From: {}.'
+        msg = 'Final line number: {} (over: {}).'
         feedback.pushInfo(msg.format(cnt, tot))
         feedback.pushInfo('='*40)
 

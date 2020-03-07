@@ -36,7 +36,7 @@ from qgis.core import (QgsProcessing,
                        QgsProcessingParameterFeatureSource,
                        QgsProcessingParameterFile,
                        QgsProcessingParameterFileDestination)
-from . import tools
+from . import utils_core as tools
 
 class EpanetFromNetworkAlgorithm(QgsProcessingAlgorithm):
     """
@@ -91,23 +91,29 @@ class EpanetFromNetworkAlgorithm(QgsProcessingAlgorithm):
         """
         Returns a localised short helper string for the algorithm.
         """
-        msg = 'Generate an epanet inp file from a network defined '
-        msg += 'by a node layer, a link layer and a epanet model template.\n'
-        msg += 'The final epanet model contain the templated data adding:\n'
-        msg += '- JUNCTIONS/RESERVOIRS/TANK\n'
-        msg += '* id\n'
-        msg += '* elevation\n'
-        msg += '- PIPES\n'
-        msg += '* id\n'
-        msg += '* start\n'
-        msg += '* end\n'
-        msg += 'Note: diameter and roughness are ignored '
-        msg += '(add them by means of scenarios).\n'
-        msg += 'Coordinates and vertex are exported.\n'
-        msg += 'Suggestions:\n'
-        msg += '- You can complete a model stored in the template '
-        msg += 'adding the nodes and links to it.'
-        return self.tr(msg)
+        return self.tr('''Generate an epanet inp file from a network and a
+        epanet model template.
+        The final epanet model contain the templated data adding,
+        - in JUNCTIONS/RESERVOIRS/TANK: *id *elevation
+        - in PIPES/PUMPS: *id *start *end
+        - in VALVES; *id *start *end *type
+        Note:
+        - Coordinates and vertex are exported.
+        - pipe diameter and roughness are ignored (add it like scenarios).
+        
+        Tip: It is possible extend the template model adding a the network.
+        ===
+        Genera un modelo epanet a partir de una red y una plantilla (.inp).
+        El modelo final de epanet contendrá los datos de plantilla , añadiendo:
+        - a JUNCTIONS/RESERVOIRS/TANK: *id *elevation
+        - a PIPES/PUMPS: *id *start *end
+        - a VALVES: *id *start *end *type
+        Notas:
+        - Se exportan la totalidad de la geometría.
+        - Se ignora diámetros y rugosidades (añádalos mediante escenarios).
+
+        Consejo: Puede ampliar el modelo de la plantilla con la nueva red.
+        ''')
 
     def initAlgorithm(self, config=None):
         """
@@ -175,19 +181,17 @@ class EpanetFromNetworkAlgorithm(QgsProcessingAlgorithm):
             )
 
         # BUILD NETWORK
-        newnet = tools.Network()
+        newnet = tools.WntNetwork()
 
         # NODES
         ncnt = 0
         for f in nodes.getFeatures():
             ncnt += 1
-            newnode = tools.Node(f['id'])
+            newnode = tools.WntNode(f['id'])
             newnode.from_wkt(f.geometry().asWkt())
-            msg = 'Bad node type'
-            assert f['type'] in ['JUNCTION', 'RESERVOIR', 'TANK'], msg
             newnode.set_type(f['type'])
-            newnode.elevation = f['elevation']
-            newnet.nodes.append(newnode)
+            newnode.set_elevation(f['elevation'])
+            newnet.add_node(newnode)
 
             # SHOW PROGRESS
             if ncnt % 100 == 0:
@@ -197,14 +201,11 @@ class EpanetFromNetworkAlgorithm(QgsProcessingAlgorithm):
         lcnt = 0
         for f in links.getFeatures():
             lcnt += 1
-            newlink = tools.Link(f['id'], f['start'], f['end'])
+            newlink = tools.WntLink(f['id'], f['start'], f['end'])
             newlink.from_wkt(f.geometry().asWkt())
-            newlink.length = f['length']
-            msg = 'Bad link type'
-            assert f['type'] in ['PIPE', 'PUMP', 'PRV', 'PSV', 'PBV', 'FCV', \
-                                'TCV', 'GPV'], msg
+            newlink.epanet['length'] = f['length']
             newlink.set_type(f['type'])
-            newnet.links.append(newlink)
+            newnet.add_link(newlink)
 
             # SHOW POROGRESS
             if lcnt % 100 == 0:

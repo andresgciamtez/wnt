@@ -32,13 +32,12 @@ __revision__ = '$Format:%H$'
 
 from PyQt5.QtCore import QCoreApplication
 from qgis.core import (QgsProcessing,
-                       QgsProcessingParameterEnum,
                        QgsProcessingAlgorithm,
                        QgsProcessingParameterFeatureSource,
                        QgsProcessingParameterField,
                        QgsProcessingParameterFile,
                        QgsProcessingParameterFileDestination)
-from . import htxt
+from . import utils_parser as parser
 
 class PpnoFromNetworkAlgorithm(QgsProcessingAlgorithm):
     """
@@ -51,10 +50,8 @@ class PpnoFromNetworkAlgorithm(QgsProcessingAlgorithm):
     LINK_INPUT = 'LINK_INPUT'
     SERIES_FIELD = 'SERIES_FIELD'
     EPANET = 'EPANET'
-    ALGORITHM = 'ALGORITHM'
     TEMPLATE = 'TEMPLATE'
     OUTPUT = 'OUTPUT'
-    ALGORITHMS = ['GD', 'DE', 'DA', 'NSGA2']
 
     def tr(self, string):
         """
@@ -97,17 +94,22 @@ class PpnoFromNetworkAlgorithm(QgsProcessingAlgorithm):
         """
         Returns a localised short helper string for the algorithm.
         """
-        msg = 'Generate a ppno ext file from a network defined by '
-        msg += 'a node layer and a link layer. \n'
-        msg += 'In the node layer must be defined the pressure required. \n'
-        msg += 'In the link layer must be defined the pipe series. \n'
-        msg += 'Select the optimization algorithm, among: '
-        msg += 'GD, DE, DA or NSGA-II \n'
-        msg += 'The template must contain the pipe series. \n'
-        msg += '-'*40
-        msg += '\n Pressurized Pipe Network Optimizer \n'
-        msg += 'https://github.com/andresgciamtez/ppno'
-        return self.tr(msg)
+        return self.tr('''Generate a ppno .ext file to size a network.
+        The required pressure must be defined in the layer of nodes.
+        The series of pipes must be defined in the link layer.
+        The .inp file must contain the epanet model to optimize.
+        The ppno template (.ext) must contain the series of pipes.
+        ====
+        Genera un archivo ppno .ext para dimensionar una red.
+        En la capa de nodos debe definirse la presión requerida.
+        En la capa de links debe definirse la serie de diametros de tuberías.
+        El archivo .inp debe contener el modelo de epanet para optimizar.
+        La plantilla ppno (.ext) debe contener la serie de tuberías.
+
+        --------
+        Pressurized Pipe Network Optimizer \n'
+        https://github.com/andresgciamtez/ppno'
+        ''')
 
     def initAlgorithm(self, config=None):
         """
@@ -163,14 +165,6 @@ class PpnoFromNetworkAlgorithm(QgsProcessingAlgorithm):
                 extension='ext'
                 )
             )
-        self.addParameter(
-            QgsProcessingParameterEnum(
-                self.ALGORITHM,
-                self.tr('Algoritm'),
-                options=self.ALGORITHMS,
-                defaultValue=0
-                )
-            )
 
         # ADD A FILE DESTINATION FOR RESULTS
         self.addParameter(
@@ -194,7 +188,6 @@ class PpnoFromNetworkAlgorithm(QgsProcessingAlgorithm):
         sfield = sfield[0]
         epanet = self.parameterAsFields(parameters, self.EPANET, context)
         template = self.parameterAsFile(parameters, self.TEMPLATE, context)
-        algorithm = self.parameterAsEnum(parameters, self.ALGORITHM, context)
 
         # OUTPUT
         extfile = self.parameterAsFileOutput(
@@ -210,7 +203,7 @@ class PpnoFromNetworkAlgorithm(QgsProcessingAlgorithm):
             return {}
 
         # TEMPLATE
-        ppnof = htxt.HeaderTxt()
+        ppnof = parser.HeadedText()
         ppnof.read(template)
 
         # TITLE SECTION
@@ -219,10 +212,6 @@ class PpnoFromNetworkAlgorithm(QgsProcessingAlgorithm):
 
         # INP SECTION
         ppnof.sections['INP'] = epanet
-
-        # OPTIONS SECTION
-        line = 'Algorithm ' + self.ALGORITHMS[algorithm]
-        ppnof.sections['OPTIONS'].append(line)
 
         # PRESSURES SECTION
         ncnt = 0

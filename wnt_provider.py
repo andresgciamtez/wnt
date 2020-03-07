@@ -31,15 +31,17 @@ __copyright__ = '(C) 2019 by Andrés García Martínez'
 __revision__ = '$Format:%H$'
 
 from qgis.core import QgsProcessingProvider
+from .wnt_classify import ClassifyAlgorithm
+from .wnt_config_toolkit import ConfigToolkitAlgorithm
 from .wnt_elevation_from_raster import ElevationFromRasterAlgorithm
 from .wnt_epanet_from_network import EpanetFromNetworkAlgorithm
 from .wnt_graph_from_network import GraphFromNetworkAlgorithm
-from .wnt_classify import ClassifyAlgorithm
 from .wnt_merge_networks import MergeNetworksAlgorithm
 from .wnt_network_from_epanet import NetworkFromEpanetAlgorithm
 from .wnt_network_from_lines import NetworkFromLinesAlgorithm
 from .wnt_node_degrees import NodeDegreesAlgorithm
 from .wnt_ppno_from_network import PpnoFromNetworkAlgorithm
+from .wnt_results_from_epanet import ResultsFromEpanetAlgorithm
 from .wnt_scn_from_demands import ScnFromDemandsAlgorithm
 from .wnt_scn_from_pipe_properties import ScnFromPipePropertiesAlgorithm
 from .wnt_split_lines_at_points import SplitLinesAtPointsAlgorithm
@@ -64,15 +66,17 @@ class WaterNetworkToolsProvider(QgsProcessingProvider):
         """
         Loads all algorithms belonging to this provider.
         """
+        self.addAlgorithm(ClassifyAlgorithm())
+        self.addAlgorithm(ConfigToolkitAlgorithm())
         self.addAlgorithm(ElevationFromRasterAlgorithm())
         self.addAlgorithm(EpanetFromNetworkAlgorithm())
         self.addAlgorithm(GraphFromNetworkAlgorithm())
-        self.addAlgorithm(ClassifyAlgorithm())
         self.addAlgorithm(MergeNetworksAlgorithm())
         self.addAlgorithm(NetworkFromEpanetAlgorithm())
         self.addAlgorithm(NetworkFromLinesAlgorithm())
         self.addAlgorithm(NodeDegreesAlgorithm())
         self.addAlgorithm(PpnoFromNetworkAlgorithm())
+        self.addAlgorithm(ResultsFromEpanetAlgorithm())
         self.addAlgorithm(ScnFromDemandsAlgorithm())
         self.addAlgorithm(ScnFromPipePropertiesAlgorithm())
         self.addAlgorithm(SplitLinesAtPointsAlgorithm())

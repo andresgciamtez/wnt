@@ -87,13 +87,18 @@ class ScnFromDemandsAlgorithm(QgsProcessingAlgorithm):
         """
         Returns a localised short helper string for the algorithm.
         """
-        msg = 'Generate an epanet demand scenario file. \n'
-        msg += 'Each demand category must be defined '
-        msg += 'as a field in the node layer. \n'
-        msg += 'Note: patterns must be declared in epanet with the same name.\n'
-        msg += 'Suggestion: import escenario in epanet from '
-        msg += 'menu: File/Import/Scenario'
-        return self.tr(msg)
+        return self.tr('''Generate an epanet demand scenario file.
+        Each demand category must be defined as a field in the node layer.
+        Note: Patterns must be declared in epanet with the same name.
+        
+        Tip: Import escenario in epanet from menu: File/Import/Scenario
+        ===
+        Generar un escenario de demandas.
+        Cada demanda debe especificarse en un campo de la capa de nodos.
+        Nota: Los patters deben declararse en epanet con el nombre del campo.
+
+        Consejo: Importe en epanet desde el menú: File/Import/Scenario.
+        ''')
 
     def initAlgorithm(self, config=None):
         """

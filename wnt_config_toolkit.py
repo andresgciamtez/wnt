@@ -30,24 +30,20 @@ __copyright__ = '(C) 2019 by Andrés García Martínez'
 
 __revision__ = '$Format:%H$'
 
+import sys
+import configparser
 from PyQt5.QtCore import QCoreApplication
 from qgis.core import (QgsProcessing,
                        QgsProcessingAlgorithm,
-                       QgsProcessingParameterFeatureSource,
-                       QgsProcessingParameterField,
-                       QgsProcessingParameterFileDestination)
+                       QgsProcessingParameterFile)
 
-class ScnFromPipePropertiesAlgorithm(QgsProcessingAlgorithm):
+class ConfigToolkitAlgorithm(QgsProcessingAlgorithm):
     """
-    Build an epanet scenary file from pipe diameter and roughness.
+    Set epanet lib path in tookit.ini file.
     """
 
     # DEFINE CONSTANTS
-
-    LINK_INPUT = 'LINK_INPUT'
-    DIA_FIELD = 'DIA_FIELD'
-    ROU_FIELD = 'ROU_FIELD'
-    OUTPUT = 'OUTPUT'
+    INPUT = 'INPUT'
 
     def tr(self, string):
         """
@@ -59,82 +55,67 @@ class ScnFromPipePropertiesAlgorithm(QgsProcessingAlgorithm):
         """
         Create a instance and return a new copy of algorithm.
         """
-        return ScnFromPipePropertiesAlgorithm()
+        return ConfigToolkitAlgorithm()
 
     def name(self):
         """
         Returns the unique algorithm name, used for identifying the algorithm.
         """
-        return 'scn_from_pipe_properties'
+        return 'config_toolkit'
 
     def displayName(self):
         """
         Returns the translated algorithm name, which should be used for any
         user-visible display of the algorithm name.
         """
-        return self.tr('Scenario from pipe properties')
+        return self.tr('Configure epanet lib')
 
     def group(self):
         """
          Returns the name of the group this algorithm belongs to.
         """
-        return self.tr('Export')
+        return self.tr('Import')
 
     def groupId(self):
         """
         Returns the unique ID of the group this algorithm belongs to.
         """
-        return 'export'
+        return 'import'
 
     def shortHelpString(self):
         """
         Returns a localised short helper string for the algorithm.
         """
-        return self.tr('''Generate a diameter and roughness epanet scenario.
+        return self.tr('''Set the epanet lib path.
         
-        Tip: Import scenario in epanet from menu: File/Import/Scenario
-        ===
-        Genera un escenario de diámetro y rugosidad de tuberías para epanet.
+        Note: The path is store in the toolkit.ini file.
 
-        Consejo: Importe el escenario en epanet desde: File/Importar/Scenario.
+        Epanet lib can be download from: 
+        https://www.epa.gov/water-research/epanet#tab-2 (only win 32),
+        or
+        https://github.com/andresgciamtez/entoolkit/tree/master/entoolkit/epanet
+
+        ===
+        
+        Define la ruta de acceso a la biblioteca de epanet.
+
+        Nota: La ruta de acceso se almacena en el archivo toolkit.ini.
+
+        La biblioteca de epanet puede ser descargada desde:
+        - https://www.epa.gov/water-research/epanet#tab-2 (only win 32), 
+        o
+        - https://github.com/andresgciamtez/entoolkit/tree/master/entoolkit/epanet
         ''')
 
     def initAlgorithm(self, config=None):
         """
         Define the inputs and outputs of the algorithm.
         """
-
-        # ADD THE INPUT
-        self.addParameter(
-            QgsProcessingParameterFeatureSource(
-                self.LINK_INPUT,
-                self.tr('Input link layer'),
-                [QgsProcessing.TypeVectorLine]
-                )
-            )
-        self.addParameter(
-            QgsProcessingParameterField(
-                self.DIA_FIELD,
-                self.tr('Diameter field'),
-                'diameter',
-                self.LINK_INPUT
-                )
-            )
-        self.addParameter(
-            QgsProcessingParameterField(
-                self.ROU_FIELD,
-                self.tr('Roughness field'),
-                'roughness',
-                self.LINK_INPUT
-                )
-            )
-
         # ADD A FILE DESTINATION
         self.addParameter(
-            QgsProcessingParameterFileDestination(
-                self.OUTPUT,
-                self.tr('Epanet scenario file'),
-                fileFilter='*.scn'
+            QgsProcessingParameterFile(
+                self.INPUT,
+                self.tr('Epanet lib')
                 )
             )
 
@@ -143,39 +124,19 @@ class ScnFromPipePropertiesAlgorithm(QgsProcessingAlgorithm):
         RUN PROCESS
         """
 
-        # INPUT
-        links = self.parameterAsSource(parameters, self.LINK_INPUT, context)
-        dfield = self.parameterAsString(parameters, self.DIA_FIELD, context)
-        rfield = self.parameterAsString(parameters, self.ROU_FIELD, context)
-
         # OUTPUT
-        scnfile = self.parameterAsFileOutput(parameters, self.OUTPUT, context)
-
-        # WRITE FILE
-        cnt = 0
-        file = open(scnfile, 'w')
-        file.write('; File generated automatically by Water Network Tools \n')
-        file.write('[DIAMETERS] \n')
-        file.write(';Pipe    Diameter \n')
-
-
-        for feature in links.getFeatures():
-            if feature['type'] in ['PIPE', 'CVPIPE']:
-                cnt += 1
-                file.write('{}    {} \n'.format(feature['id'], feature[dfield]))
-
-        file.write(' \n')
-        file.write('[ROUGHNESS] \n')
-        file.write(';Pipe    Roughness \n')
-
-        for feature in links.getFeatures():
-            if feature['type'] in ['PIPE', 'CVPIPE']:
-                file.write('{}    {} \n'.format(feature['id'], feature[rfield]))
-        file.close()
+        libf = self.parameterAsFile(parameters, self.INPUT, context)
+        inif = sys.path[0] + '/toolkit.ini'
+        feedback.pushInfo(inif)
+        config = configparser.ConfigParser()
+        config.read(inif)
+        config['EPANET']['lib'] = libf
+        with open(inif, 'w') as configfile:
+            config.write(configfile)
 
         # SHOW INFO
         feedback.pushInfo('='*40)
-        msg = 'Pipe diameter and roughness added: {}.'.format(cnt)
+        msg = 'Epanet toolkit library: {}, saved. Restart QGIS.'.format(libf)
         feedback.pushInfo(msg)
         feedback.pushInfo('='*40)
 
@@ -184,4 +145,4 @@ class ScnFromPipePropertiesAlgorithm(QgsProcessingAlgorithm):
             return {}
 
         # OUTPUT
-        return {self.OUTPUT: scnfile}
+        return {}

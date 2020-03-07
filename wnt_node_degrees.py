@@ -31,15 +31,14 @@ __copyright__ = '(C) 2019 by Andrés García Martínez'
 __revision__ = '$Format:%H$'
 
 from PyQt5.QtCore import QCoreApplication, QVariant
-from qgis.core import (QgsFeature,
-                       QgsField,
+from qgis.core import (QgsField,
                        QgsProcessing,
                        QgsProcessingAlgorithm,
                        QgsProcessingParameterFeatureSource,
                        QgsProcessingParameterFeatureSink,
                        QgsWkbTypes
                        )
-from . import tools
+from . import utils_core as tools
 
 class NodeDegreesAlgorithm(QgsProcessingAlgorithm):
     """
@@ -92,15 +91,24 @@ class NodeDegreesAlgorithm(QgsProcessingAlgorithm):
         """
         Returns a localised short helper string for the algorithm.
         """
-        msg = 'Calculate the node degrees of a network and generate a node '
-        msg += 'layer with a field containing degrees.\n'
-        msg += 'Note: the degree is the number of links (edges) connected '
-        msg += 'to a node.\n'
-        msg += 'Special cases:\n'
-        msg += '- Orphan nodes have degree 0\n'
-        msg += '- Leaf nodes have degree 1\n'
-        msg += '- Continuity nodes have degree 2\n'
-        return self.tr(msg)
+        return self.tr('''Calculate the graph-network node degrees.
+        The degree is the number of links (edges) connected to a node.
+        Cases:
+        - Orphan nodes have degree 0
+        - Leaf nodes have degree 1
+        - Continuity nodes have degree 2
+        
+        Degrees are stored in the 'degree' field.
+        ===
+        Calcula el grado de los nodos del gráfico de red.
+        (El grado es el número de líneas conectados al nodo.)
+        Casos particulares:
+        - Los nodos huérfanos tienen grado 0
+        - Los nodos hoja tienen grado 1
+        - Los nodos de continuidad tienen grado 2
+
+        Los grados se almacenan en el campo 'degree'.
+        ''')
 
     def initAlgorithm(self, config=None):
         """
@@ -139,18 +147,6 @@ class NodeDegreesAlgorithm(QgsProcessingAlgorithm):
         nodelay = self.parameterAsSource(parameters, self.NODE_INPUT, context)
         linklay = self.parameterAsSource(parameters, self.LINK_INPUT, context)
 
-        # CHECK CRS
-        crs = nodelay.sourceCrs()
-        if crs == linklay.sourceCrs():
-
-            # SEND INFORMATION TO THE USER
-            feedback.pushInfo('='*40)
-            feedback.pushInfo('CRS is {}'.format(crs.authid()))
-        else:
-            msg = 'ERROR: Layers have different CRS!'
-            feedback.reportError(msg)
-            return {}
-
         # OUTPUT
         newfields = nodelay.fields()
         if 'degree' not in nodelay.fields().names():
@@ -161,11 +157,11 @@ class NodeDegreesAlgorithm(QgsProcessingAlgorithm):
             context,
             newfields,
             QgsWkbTypes.Point,
-            crs
+            nodelay.sourceCrs()
             )
 
         # DEFINE NETWORK
-        net = tools.Network()
+        net = tools.WntNetwork()
 
         # LOAD LAYERS
         nofn = nodelay.featureCount()
@@ -175,7 +171,7 @@ class NodeDegreesAlgorithm(QgsProcessingAlgorithm):
         cnt = 0
         for f in nodelay.getFeatures():
             cnt += 1
-            net.nodes.append(tools.Node(f['id']))
+            net.add_node(tools.WntNode(f['id']))
 
             # SHOW PROGRESS
             if cnt % 100 == 0:
@@ -185,7 +181,7 @@ class NodeDegreesAlgorithm(QgsProcessingAlgorithm):
         cnt = 0
         for f in linklay.getFeatures():
             cnt += 1
-            net.links.append(tools.Link(f['id'], f['start'], f['end']))
+            net.add_link(tools.WntLink(f['id'], f['start'], f['end']))
 
             # SHOW POROGRESS
             if cnt % 100 == 0:
@@ -208,11 +204,12 @@ class NodeDegreesAlgorithm(QgsProcessingAlgorithm):
                 feedback.setProgress(67+33*cnt/nofn)
 
         # SHOW INFO
+        feedback.pushInfo('='*40)
         msg = 'Processed: {} nodes and {} links'.format(nofn, nofl)
         feedback.pushInfo(msg)
         msg = 'Write: {} node degrees'.format(nofn)
         feedback.pushInfo(msg)
-        msg = 'Min degree: {} Max degree: {}'
+        msg = 'Degree min: {}. Degree max: {}'
         msg = msg.format(min(degrees.values()), max(degrees.values()))
         feedback.pushInfo(msg)
         feedback.pushInfo('='*40)

@@ -36,7 +36,7 @@ from qgis.core import (QgsProcessing,
                        QgsProcessingParameterFeatureSource,
                        QgsProcessingParameterFileDestination
                       )
-from . import tools
+from . import utils_core as tools
 
 class GraphFromNetworkAlgorithm(QgsProcessingAlgorithm):
     """
@@ -44,7 +44,6 @@ class GraphFromNetworkAlgorithm(QgsProcessingAlgorithm):
     """
 
     # DEFINE CONSTANTS
-
     NODE_INPUT = 'NODE_INPUT'
     LINK_INPUT = 'LINK_INPUT'
     OUTPUT = 'OUTPUT'
@@ -89,11 +88,18 @@ class GraphFromNetworkAlgorithm(QgsProcessingAlgorithm):
         """
         Returns a localised short help string for the algorithm.
         """
-        msg = 'Generate a graph from the network.\n'
-        msg += 'Format: Trivial Graph Format\n'
-        msg += 'Suggestion: disconnected zones can be easily detected looking '
-        msg += ' the graph of the network, also it is useful for sectorizing.'
-        return self.tr(msg)
+        return self.tr('''Generate a graph from the network.
+
+        Format: Trivial Chart Format, TGF
+        
+        Suggestion: yEd support TFG format.
+        ===
+        Generar un grafo de la red.
+
+        Formato: Formato de gráfico trivial, TGF.
+        
+        Sugerencia: yEd admite el formato TFG. 
+        ''')
 
     def initAlgorithm(self, config=None):
         """
@@ -139,14 +145,14 @@ class GraphFromNetworkAlgorithm(QgsProcessingAlgorithm):
         graphfile = self.parameterAsFileOutput(parameters, self.OUTPUT, context)
 
         # GENERATE NETWORK
-        n = tools.Network()
+        net = tools.WntNetwork()
         for f in nodes.getFeatures():
-            n.nodes.append(tools.Node(f['id']))
+            net.add_node(tools.WntNode(f['id']))
         for f in links.getFeatures():
-            n.links.append(tools.Link(f['id'], f['start'], f['end']))
+            net.add_link(tools.WntLink(f['id'], f['start'], f['end']))
 
         # GENERATE GRAPH
-        n.to_tgf(graphfile)
+        net.to_tgf(graphfile)
 
         # SHOW INFO
         feedback.pushInfo('='*40)
