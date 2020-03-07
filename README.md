@@ -28,7 +28,7 @@ A set of processes for modelling water networks. Starting from scratch or expand
 2019 Andrés García Martínez (ppnoptimizer@gmail.com)
 
 ===
-![ES Flag](/es.png)
+
 # Water Network Tools (WNT)
 Un conjunto de procesos para el modelado de redes de agua. Partiendo desde cero o ampliando una red existente, permite importar y exportar modelos, escenarios y otros archivos con la finalidad de analizar u optimizar una red.
 
