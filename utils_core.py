@@ -598,17 +598,17 @@ class WntNetwork:
                 sections['JUNCTIONS'].append(tuple_to_line(tmp))
 
             if nodetype == 'RESERVOIR':
-                if node.get_elevation:
+                if node.get_elevation():
                     tmp = (node.name(), node.get_elevation())
                 else:
                     tmp = (node.name(), 0.0)
                 sections['RESERVOIRS'].append(tuple_to_line(tmp))
 
             if nodetype == 'TANK':
-                if node.elevation:
-                    tmp = (node.name, node.get_elevation(), 0.0, 0.0, 0.0, 0.0, 0.0)
+                if node.get_elevation():
+                    tmp = (node.name(), node.get_elevation(), 0.0, 0.0, 0.0, 0.0, 0.0)
                 else:
-                    tmp = (node.name, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+                    tmp = (node.name(), 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
                 sections['TANKS'].append(tuple_to_line(tmp))
 
             x, y = node.get_geometry()
