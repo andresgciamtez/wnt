@@ -5,13 +5,11 @@
  WaterNetworkTools
                                  A QGIS plugin
  Water Network Modelling Utilities
-
                               -------------------
         begin                : 2019-07-19
         copyright            : (C) 2019 by Andrés García Martínez
         email                : ppnoptimizer@gmail.com
  ***************************************************************************/
-
 /***************************************************************************
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -32,6 +30,8 @@ __revision__ = '$Format:%H$'
 
 import ctypes
 import sys
+import os
+from configparser import ConfigParser
 from PyQt5.QtCore import QCoreApplication, QVariant
 from qgis.core import (QgsFeature,
                        QgsField,
@@ -39,7 +39,7 @@ from qgis.core import (QgsFeature,
                        QgsProcessingAlgorithm,
                        QgsProcessingParameterFeatureSink,
                        QgsProcessingParameterFile)
-from configparser import ConfigParser
+
 
 class ENToolkit:
     EN_DEMAND = 9
@@ -62,7 +62,10 @@ class ENToolkit:
             inif = sys.path[0] + '/toolkit.ini'
             config.read(inif)
             file = config['EPANET']['lib']
-            ENToolkit._lib = ctypes.windll.LoadLibrary(file)
+            if os.name in ['nt', 'dos']:
+                ENToolkit._lib = ctypes.windll.LoadLibrary(file)
+            else:
+                ENToolkit._lib = ctypes.cdll.LoadLibrary(file)
         except:
             raise FileNotFoundError('Error loading library. Check toolkit.ini.')
 
@@ -297,11 +300,11 @@ class ResultsFromEpanetAlgorithm(QgsProcessingAlgorithm):
         feedback.pushInfo('='*40)
         msg = 'Results loaded successfully.'
         feedback.pushInfo(msg)
-        msg = 'Number of hydraulic time steps: {}'.format(stepcount)
+        msg = 'Hydraulic time steps #: {}'.format(stepcount)
         feedback.pushInfo(msg)
-        msg = 'Node number: {}'.format(nodecount)
+        msg = 'Node #: {}'.format(nodecount)
         feedback.pushInfo(msg)
-        msg = 'Link number: {}'.format( linkcount)
+        msg = 'Link #: {}'.format( linkcount)
         feedback.pushInfo(msg)
         feedback.pushInfo('='*40)
 

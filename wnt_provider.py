@@ -31,11 +31,14 @@ __copyright__ = '(C) 2019 by Andrés García Martínez'
 __revision__ = '$Format:%H$'
 
 from qgis.core import QgsProcessingProvider
+from .wnt_assign_demand import AssignDemandAlgorithm
 from .wnt_classify import ClassifyAlgorithm
 from .wnt_config_toolkit import ConfigToolkitAlgorithm
 from .wnt_elevation_from_raster import ElevationFromRasterAlgorithm
+from .wnt_elevation_from_tin import ElevationFromTINAlgorithm
 from .wnt_epanet_from_network import EpanetFromNetworkAlgorithm
 from .wnt_graph_from_network import GraphFromNetworkAlgorithm
+from .wnt_hydrant_pairs import HydrantPairsAlgorithm
 from .wnt_merge_networks import MergeNetworksAlgorithm
 from .wnt_network_from_epanet import NetworkFromEpanetAlgorithm
 from .wnt_network_from_lines import NetworkFromLinesAlgorithm
@@ -46,6 +49,7 @@ from .wnt_scn_from_demands import ScnFromDemandsAlgorithm
 from .wnt_scn_from_pipe_properties import ScnFromPipePropertiesAlgorithm
 from .wnt_split_lines_at_points import SplitLinesAtPointsAlgorithm
 from .wnt_validate import ValidateAlgorithm
+from .wnt_update_assignment import UpdateAssignmentAlgorithm
 
 class WaterNetworkToolsProvider(QgsProcessingProvider):
     """Main class"""
@@ -66,11 +70,14 @@ class WaterNetworkToolsProvider(QgsProcessingProvider):
         """
         Loads all algorithms belonging to this provider.
         """
+        self.addAlgorithm(AssignDemandAlgorithm())
         self.addAlgorithm(ClassifyAlgorithm())
         self.addAlgorithm(ConfigToolkitAlgorithm())
         self.addAlgorithm(ElevationFromRasterAlgorithm())
+        self.addAlgorithm(ElevationFromTINAlgorithm())
         self.addAlgorithm(EpanetFromNetworkAlgorithm())
         self.addAlgorithm(GraphFromNetworkAlgorithm())
+        self.addAlgorithm(HydrantPairsAlgorithm())
         self.addAlgorithm(MergeNetworksAlgorithm())
         self.addAlgorithm(NetworkFromEpanetAlgorithm())
         self.addAlgorithm(NetworkFromLinesAlgorithm())
@@ -81,6 +88,7 @@ class WaterNetworkToolsProvider(QgsProcessingProvider):
         self.addAlgorithm(ScnFromPipePropertiesAlgorithm())
         self.addAlgorithm(SplitLinesAtPointsAlgorithm())
         self.addAlgorithm(ValidateAlgorithm())
+        self.addAlgorithm(UpdateAssignmentAlgorithm())
 
     def id(self):
         """

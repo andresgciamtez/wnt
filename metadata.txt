@@ -2,7 +2,7 @@
 name=Water Network Tools
 qgisMinimumVersion=3.0
 description=Water Network Modelling Utilities
-version=1.0.0
+version=1.1.0
 author=Andrés García Martínez
 email=ppnoptimizer@gmail.com
 tracker=https://github.com/andresgciamtez/wnt/issues
@@ -17,4 +17,10 @@ deprecated=False
 server=False
 about=<p>A set of processes for modeling water networks. Starting from scratch or expanding an existing network, it is possible to import and export models, scenarios and other files for network analysis and optimization.</p><p>Get Started: <a href="http://yt.vu/p/PLzE4DxrnNT-Fg0Ztku6jbIG8QEEOHqYEH">Youtube tutorial</a>. Autor: Andrés García Martínez <a href="https://bit.ly/2m8otrB">LinkedIn</a></p>
 changelog=
+    1.1.0 Add: Assign demand process
+		  Add: Update assignment process
+		  Add: Hydrant pairs process
+		  Add: Elevation from TIN (LandXML) process
+		  Fix: results_from_epanet in not win os
+    1.0.1 Fix: some bugs
     1.0.0 First non-experimental release

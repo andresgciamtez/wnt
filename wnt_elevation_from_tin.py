@@ -34,21 +34,24 @@ from qgis.PyQt.QtCore import QCoreApplication
 from qgis.core import (QgsProcessing,
                        QgsProcessingAlgorithm,
                        QgsFeatureSink,
-                       QgsProcessingParameterRasterLayer,
+                       QgsProcessingParameterFile,
                        QgsProcessingParameterFeatureSource,
                        QgsProcessingParameterFeatureSink,
-                       QgsProcessingParameterField
+                       QgsProcessingParameterField,
+                       QgsProcessingParameterString
                       )
+from . utils_tin import TIN
 
-class ElevationFromRasterAlgorithm(QgsProcessingAlgorithm):
+class ElevationFromTINAlgorithm(QgsProcessingAlgorithm):
     """
-    Set the node elevation from a DEM in raster format.
+    Set the node elevation from a TIN in LandXML format.
     """
 
     # DEFINE CONSTANTS
     NODE_INPUT = 'NODE_INPUT'
-    DEM_INPUT = 'DEM_INPUT'
     ELEV_FIELD = 'ELEV_FIELD'
+    TIN_INPUT = 'TIN_INPUT'
+    SURFACE_NAME = 'SURFACE_NAME'
     OUTPUT = 'OUTPUT'
 
     def tr(self, string):
@@ -61,19 +64,19 @@ class ElevationFromRasterAlgorithm(QgsProcessingAlgorithm):
         """
         Create a instance and return a new copy of algorithm.
         """
-        return ElevationFromRasterAlgorithm()
+        return ElevationFromTINAlgorithm()
 
     def name(self):
         """
         Returns the unique algorithm name, used for identifying the algorithm.
         """
-        return 'elevation_from_raster'
+        return 'elevation_from_tin'
 
     def displayName(self):
         """
         Returns the translated algorithm name.
         """
-        return self.tr('Node elevation from DEM')
+        return self.tr('Node elevation from TIN (LandXML)')
 
     def group(self):
         """
@@ -91,9 +94,13 @@ class ElevationFromRasterAlgorithm(QgsProcessingAlgorithm):
         """
         Returns a localised short help string for the algorithm.
         """
-        return self.tr('''Set network node elevation from DEM in raster format.
+        return self.tr('''Set network node elevation from a TIN surface (LandXML).
+                       
+        http://www.landxml.org/
         ===
-        Añade elevación a los nodos de la red desde un DEM en formato raster.
+        Añade elevación a los nodos de la red desde una superfice TIN (LandXML).
+        
+        http://www.landxml.org/
         ''')
 
     def initAlgorithm(self, config=None):
@@ -112,14 +119,25 @@ class ElevationFromRasterAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterField(
                 self.ELEV_FIELD,
-                self.tr('Elevation field.'),
+                self.tr('Elevation field'),
+                'elevation',
                 self.NODE_INPUT
                 )
             )
         self.addParameter(
-            QgsProcessingParameterRasterLayer(
-                self.DEM_INPUT,
-                self.tr('DEM raster layer input')
+            QgsProcessingParameterFile(
+                self.TIN_INPUT,
+                self.tr('landXML file'),
+                extension='xml'
+                )
+            )
+        self.addParameter(
+            QgsProcessingParameterString(
+                self.SURFACE_NAME,
+                self.tr('Surface name (if empty, first found)'),
+                defaultValue='',
+                multiLine=False,
+                optional=True
                 )
             )
 
@@ -127,7 +145,7 @@ class ElevationFromRasterAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterFeatureSink(
                 self.OUTPUT,
-                self.tr('Nodes with elevation layer'),
+                self.tr('Nodes with elevation layer')
                 )
             )
 
@@ -138,20 +156,14 @@ class ElevationFromRasterAlgorithm(QgsProcessingAlgorithm):
 
         # INPUT
         nodelayer = self.parameterAsSource(parameters, self.NODE_INPUT, context)
-        demlayer = self.parameterAsRasterLayer(parameters, self.DEM_INPUT, context)
         efield = self.parameterAsString(parameters, self.ELEV_FIELD, context)
+        tinlayer = self.parameterAsFile(parameters, self.TIN_INPUT, context)
+        sname = self.parameterAsString(parameters, self.SURFACE_NAME, context)
 
-        # CHECK CRS
+        # SEND INFORMATION TO THE USER
         crs = nodelayer.sourceCrs()
-        if crs == demlayer.crs():
-
-            # SEND INFORMATION TO THE USER
-            feedback.pushInfo('='*40)
-            feedback.pushInfo('CRS is {}'.format(crs.authid()))
-        else:
-            msg = 'ERROR: Layers have different CRS!'
-            feedback.reportError(msg)
-            return {}
+        feedback.pushInfo('='*40)
+        feedback.pushInfo('CRS is {}'.format(crs.authid()))
 
         # OUTPUT
         (sink, dest_id) = self.parameterAsSink(
@@ -163,25 +175,32 @@ class ElevationFromRasterAlgorithm(QgsProcessingAlgorithm):
             nodelayer.sourceCrs()
             )
 
-        # MAIN LOOP READ/WRITE POINTS
-        pcnt = 0
-        scnt = 0
+        # READ NODES
+        points = []
+        cnt = 0
 
-        for feat in nodelayer.getFeatures():
-            val, res = demlayer.dataProvider().sample(feat.geometry().asPoint(), 1)
-            if res:
-                pcnt += 1
-                feat[efield] = val
-                sink.addFeature(feat, QgsFeatureSink.FastInsert)
-            else:
-                scnt += 1
+        for f in  nodelayer.getFeatures():
+            point = f.geometry().asPoint().x(), f.geometry().asPoint().y()
+            points.append(point)
+        surface = TIN()
+        surface.from_landxml(tinlayer, sname)
+        elevations = surface.elevations(points)
 
-            # SHOW PROGRESS
-            if (pcnt+scnt) % 100 == 0:
-                feedback.setProgress(100*(pcnt+scnt)/nodelayer.featureCount())
-        msg = 'Proccesed nodes: {}.'.format(pcnt)
+        # SHOW PROGRESS
+        msg = 'Total nodes: {}.'.format(len(points))
         feedback.pushInfo(msg)
-        msg = 'Skipped nodes: {}.'.format(scnt)
+        feedback.setProgress(50)
+
+        # WRITE NODES
+        for f, z in zip(nodelayer.getFeatures(), elevations):
+            f[efield] = z
+            sink.addFeature(f) # , QgsFeatureSink.FastInsert)
+            if not z:
+                cnt += 1
+
+        # SHOW PROGRESS
+        feedback.setProgress(100)
+        msg = 'Skipped nodes: {}.'.format(cnt)
         feedback.pushInfo(msg)
         feedback.pushInfo('='*40)
 
