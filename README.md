@@ -39,7 +39,7 @@ Andrés García Martínez (ppnoptimizer@gmail.com)
 Un conjunto de procesos para el modelado de redes de agua. Partiendo desde cero o ampliando una red existente, permite importar y exportar modelos, escenarios y otros archivos con la finalidad de analizar u optimizar una red.
 
 ## Recetas
-### Assign
+### Asignar
 - Asignar demanda
 - Actualizar demanda
 ### Modelar
