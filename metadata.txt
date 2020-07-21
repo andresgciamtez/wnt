@@ -21,6 +21,6 @@ changelog=
 		  Add: Update assignment process
 		  Add: Hydrant pairs process
 		  Add: Elevation from TIN (LandXML) process
-		  Fix: results_from_epanet in not win os
+		  Fix: Results from epanet process in non-windows OS
     1.0.1 Fix: some bugs
     1.0.0 First non-experimental release
