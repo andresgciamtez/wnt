@@ -19,6 +19,7 @@ A set of processes for modelling water networks. Starting from scratch or expand
 ### Import
 - Configure epanet lib
 - Import an epanet file (nodes and link): http://y2u.be/fxhAPB4ZIyg
+- Import network from LandXML
 - Import results from epanet
 ### Modify
 - Add elevation to nodes from a DEM: http://y2u.be/IfDK1yyEPIE
@@ -54,6 +55,7 @@ Un conjunto de procesos para el modelado de redes de agua. Partiendo desde cero 
 ### Importar
 - Configura el acceso a la biblioteca de epanet
 - Importar un red de epanet (nodos y líneas): http://y2u.be/fxhAPB4ZIyg
+- Importar red desde LandXML
 - Importa los resultados del cálculo
 ### Modificar
 - Añadir elevación a nodos desde un modelo digital de elevaciones: http://y2u.be/IfDK1yyEPIE

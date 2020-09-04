@@ -179,8 +179,9 @@ class AssignDemandAlgorithm(QgsProcessingAlgorithm):
 
         # OUTPUT LAYERS
         fields = QgsFields()
-        for name in ['source', 'target', sfield]:
-            fields.append(QgsField(name, QVariant.String))
+        fields.append(QgsField('source', QVariant.String))
+        fields.append(QgsField('target', QVariant.String))
+        fields.append(QgsField('value', QVariant.Double))
         (assignment_sink, assignment_id) = self.parameterAsSink(
             parameters,
             self.ASSIGN_OUTPUT,
@@ -192,7 +193,7 @@ class AssignDemandAlgorithm(QgsProcessingAlgorithm):
 
         fields = tlayer.fields()
         if sfield not in fields:
-            fields.append(QgsField(sfield, QVariant.String))
+            fields.append(QgsField(sfield, QVariant.Double))
         (node_sink, node_id) = self.parameterAsSink(
             parameters,
             self.NODE_OUTPUT,
@@ -205,7 +206,7 @@ class AssignDemandAlgorithm(QgsProcessingAlgorithm):
         # ASSIGN, ACCUMULATE AND WRITE ASSIGNMENT LAYER
         values = {}
         for tfeature in tlayer.getFeatures():
-            values[tfeature["id"]] = 0
+            values[tfeature["id"]] = 0.0
 
         cnt = 0
         for sfeature in slayer.getFeatures():
@@ -222,8 +223,9 @@ class AssignDemandAlgorithm(QgsProcessingAlgorithm):
             cpoint = QgsPoint(cfeature.geometry().asPoint())
             f.setGeometry(QgsLineString([spoint, cpoint]))
             f.setAttributes([sfeature["id"], cfeature["id"], sfeature[sfield]])
+            if sfeature[sfield]:
+                values[cfeature["id"]] += sfeature[sfield]          
             assignment_sink.addFeature(f)
-            values[cfeature["id"]] += sfeature[sfield]
             cnt += 1
 
             # SHOW PROGRESS

@@ -41,76 +41,7 @@ from qgis.core import (QgsFeature,
                        QgsProcessingParameterFile)
 
 
-class ENToolkit:
-    EN_DEMAND = 9
-    EN_HEAD = 10
-    EN_PRESSURE = 11
-    EN_FLOW = 8
-    EN_VELOCITY = 9
-    EN_HEADLOSS = 10
-    EN_STATUS = 11
-    EN_SETTING = 12
-    EN_ENERGY = 13
-    EN_NODECOUNT = 0
-    EN_LINKCOUNT = 2
-    MAX_LABEL_LEN = 15
-    _lib = None
 
-    def __init__(self):
-        try:
-            config = ConfigParser()
-            inif = sys.path[0] + '/toolkit.ini'
-            config.read(inif)
-            file = config['EPANET']['lib']
-            if os.name in ['nt', 'dos']:
-                ENToolkit._lib = ctypes.windll.LoadLibrary(file)
-            else:
-                ENToolkit._lib = ctypes.cdll.LoadLibrary(file)
-        except:
-            raise FileNotFoundError('Error loading library. Check toolkit.ini.')
-
-    def ENopen(self, inpfn, rptfn='', binfn=''):
-        return ENToolkit._lib.ENopen(ctypes.c_char_p(inpfn.encode()),
-                                     ctypes.c_char_p(rptfn.encode()),
-                                     ctypes.c_char_p(binfn.encode())
-                                     )
-
-    def ENopenH(self):
-        return ENToolkit._lib.ENopenH()
-
-    def ENinitH(self, flag=None):
-        return ENToolkit._lib.ENinitH(flag)
-
-    def ENrunH(self):
-        t = ctypes.c_long()
-        return ENToolkit._lib.ENrunH(ctypes.byref(t)), t.value
-
-    def ENgetcount(self, countcode):
-        j = ctypes.c_int()
-        return ENToolkit._lib.ENgetcount(countcode, ctypes.byref(j)), j.value
-
-    def ENgetnodeid(self, index):
-        label = ctypes.create_string_buffer(ENToolkit.MAX_LABEL_LEN)
-        return ENToolkit._lib.ENgetnodeid(index, ctypes.byref(label)), label.value
-
-    def ENgetnodevalue(self, index, paramcode):
-        j = ctypes.c_float()
-        return ENToolkit._lib.ENgetnodevalue(index, paramcode, ctypes.byref(j)), j.value
-
-    def ENgetlinkid(self, index):
-        label = ctypes.create_string_buffer(ENToolkit.MAX_LABEL_LEN)
-        return ENToolkit._lib.ENgetlinkid(index, ctypes.byref(label)), label.value
-
-    def ENgetlinkvalue(self, index, paramcode):
-        j = ctypes.c_float()
-        return ENToolkit._lib.ENgetlinkvalue(index, paramcode, ctypes.byref(j)), j.value
-
-    def ENnextH(self):
-        deltat = ctypes.c_long()
-        return ENToolkit._lib.ENnextH(ctypes.byref(deltat)), deltat.value
-
-    def ENclose(self):
-        return ENToolkit._lib.ENclose()
 
 
 class ResultsFromEpanetAlgorithm(QgsProcessingAlgorithm):

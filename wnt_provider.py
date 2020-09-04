@@ -41,6 +41,7 @@ from .wnt_graph_from_network import GraphFromNetworkAlgorithm
 from .wnt_hydrant_pairs import HydrantPairsAlgorithm
 from .wnt_merge_networks import MergeNetworksAlgorithm
 from .wnt_network_from_epanet import NetworkFromEpanetAlgorithm
+from .wnt_network_from_landxml import NetworkFromLandXMLAlgorithm
 from .wnt_network_from_lines import NetworkFromLinesAlgorithm
 from .wnt_node_degrees import NodeDegreesAlgorithm
 from .wnt_ppno_from_network import PpnoFromNetworkAlgorithm
@@ -80,6 +81,7 @@ class WaterNetworkToolsProvider(QgsProcessingProvider):
         self.addAlgorithm(HydrantPairsAlgorithm())
         self.addAlgorithm(MergeNetworksAlgorithm())
         self.addAlgorithm(NetworkFromEpanetAlgorithm())
+        self.addAlgorithm(NetworkFromLandXMLAlgorithm())
         self.addAlgorithm(NetworkFromLinesAlgorithm())
         self.addAlgorithm(NodeDegreesAlgorithm())
         self.addAlgorithm(PpnoFromNetworkAlgorithm())
