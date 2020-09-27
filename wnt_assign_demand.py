@@ -97,12 +97,11 @@ class AssignDemandAlgorithm(QgsProcessingAlgorithm):
         Returns a localised short help string for the algorithm.
         """
         return self.tr('''Generate demand assignments.
-        The result is a layer containing connecting lines between sources and 
-        target layers, and a updated node layer. The assignment criterion is 
+        The result is a layer containing connecting lines between sources and target layers, and an updated node layer. The assignment criterion is 
         the minimum distance.
-        Both source and target layer have has a id field.
-        
-        Tip: The assignment can be edited using *update* process.         
+        Both source and target layer have to have an id field.
+
+        Tip: The assignment can be edit using the *update* process.         
         ===
         Genera asignaciones de demanda.
         El resultado consiste en una capa de líneas que conectad las fuentes y
