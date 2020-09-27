@@ -5,13 +5,11 @@
  WaterNetworkTools
                                  A QGIS plugin
  Water Network Modelling Utilities
-
                               -------------------
         begin                : 2019-07-19
         copyright            : (C) 2019 by Andrés García Martínez
         email                : ppnoptimizer@gmail.com
  ***************************************************************************/
-
 /***************************************************************************
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -140,9 +138,12 @@ class NetworkFromLandXMLAlgorithm(QgsProcessingAlgorithm):
 
         # READ NETWORK
         landxmlfn = self.parameterAsFile(parameters, self.INPUT, context)
-        net = landxml.network_from_xml(landxmlfn)
-        networks = net['networks']
-        crs = QgsCoordinateReferenceSystem('EPSG:' + net['epsg'])
+        imp_net = landxml.network_from_xml(landxmlfn)
+        networks = imp_net['networks']
+        if 'epsg_code' in imp_net:
+            crs = QgsCoordinateReferenceSystem('EPSG:' + imp_net['epsg_code'])
+        else:
+            crs = QgsCoordinateReferenceSystem('WKT:' + imp_net['wkt_crs'])
 
         # SHOW INFO
         feedback.pushInfo('='*40)
@@ -153,7 +154,9 @@ class NetworkFromLandXMLAlgorithm(QgsProcessingAlgorithm):
         newfields.append(QgsField("network", QVariant.String))
         newfields.append(QgsField("network_type", QVariant.String))
         newfields.append(QgsField("id", QVariant.String))
-        newfields.append(QgsField("elev", QVariant.Double))
+        newfields.append(QgsField("elev_sump", QVariant.Double))
+        newfields.append(QgsField("elev_rim", QVariant.Double))
+        newfields.append(QgsField("depth", QVariant.Double))
         (node_sink, node_id) = self.parameterAsSink(
             parameters,
             self.NODE_OUTPUT,
@@ -169,10 +172,16 @@ class NetworkFromLandXMLAlgorithm(QgsProcessingAlgorithm):
         newfields.append(QgsField("id", QVariant.String))
         newfields.append(QgsField("start", QVariant.String))
         newfields.append(QgsField("end", QVariant.String))
+        newfields.append(QgsField("start_elv", QVariant.Double))
+        newfields.append(QgsField("start_offset", QVariant.Double))
+        newfields.append(QgsField("start_depth", QVariant.Double))
+        newfields.append(QgsField("end_elv", QVariant.Double))
+        newfields.append(QgsField("end_offset", QVariant.Double))
+        newfields.append(QgsField("end_depth", QVariant.Double))
         newfields.append(QgsField("length", QVariant.Double))
-        newfields.append(QgsField("diameter", QVariant.Double))
-        newfields.append(QgsField("material", QVariant.String))
         newfields.append(QgsField("slope", QVariant.Double))
+        newfields.append(QgsField("sect_type", QVariant.String))
+        newfields.append(QgsField("section", QVariant.String))
         (link_sink, link_id) = self.parameterAsSink(
             parameters,
             self.LINK_OUTPUT,
@@ -196,7 +205,9 @@ class NetworkFromLandXMLAlgorithm(QgsProcessingAlgorithm):
                 f.setAttributes([netname,
                                  net_type,
                                  nodename,
-                                 node['elev']
+                                 node['elev_sump'],
+                                 node['elev_rim'],
+                                 node['depth']
                                  ])
                 node_sink.addFeature(f)
 
@@ -216,10 +227,16 @@ class NetworkFromLandXMLAlgorithm(QgsProcessingAlgorithm):
                                  linkname,
                                  link['start'],
                                  link['end'],
+                                 link['start_elev'],
+                                 link['start_offset'],
+                                 link['start_depth'],
+                                 link['end_elev'],
+                                 link['end_offset'],
+                                 link['end_depth'],
                                  link['length'],
-                                 link['diameter'],
-                                 link['material'],
                                  link['slope'],
+                                 link['sect_type'],
+                                 link['section']
                                  ])
                 link_sink.addFeature(g)
 

@@ -163,9 +163,9 @@ class WntNode:
     NODE_TYPES = ['JUNCTION', 'RESERVOIR', 'TANK']
 
     def __init__(self, name):
-        ERR_MSG = 'Name too long. MAX LEN = {}.'.format(WntNode.MAX_NAME_LEN)
-        if len(name) > WntNode.MAX_NAME_LEN:
-            raise Exception(ERR_MSG)
+        # ERR_MSG = 'Name too long. MAX LEN = {}.'.format(WntNode.MAX_NAME_LEN)
+        # if len(name) > WntNode.MAX_NAME_LEN:
+        #     raise Exception(ERR_MSG)
         self._name = name
         self._x = None
         self._y = None
@@ -246,9 +246,9 @@ class WntLink:
                   'TCV', 'GPV']
 
     def __init__(self, name, start, end):
-        ERR_MSG = 'Name too long. MAX LEN = {}.'.format(WntNode.MAX_NAME_LEN)
-        if max([len(str(n)) for n in [name, start, end]]) > WntNode.MAX_NAME_LEN:
-            raise Exception(ERR_MSG)
+        # ERR_MSG = 'Name too long. MAX LEN = {}.'.format(WntNode.MAX_NAME_LEN)
+        # if max([len(str(n)) for n in [name, start, end]]) > WntNode.MAX_NAME_LEN:
+        #     raise Exception(ERR_MSG)
         self._name = name
         self._start = start
         self._end = end

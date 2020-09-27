@@ -32,63 +32,87 @@ def network_from_xml(xmlfn):
 
     tree = ET.parse(xmlfn)
     root = tree.getroot()
-    cs = root.find(xmlname('CoordinateSystem'))
-    epsg = cs.attrib['epsgCode']
+    crs = root.find(xmlname('CoordinateSystem'))
+    epsg_code = None
+    wkt_crs = None
+    if 'epsgCode' in crs.attrib:
+        epsg_code = crs.attrib['epsgCode']
+    else:
+        wkt_crs = crs.attrib['ogcWktCode']
     networks = {}
 
     # READ NETWORK
     for pipenetwork in root.iter(xmlname('PipeNetwork')):
         net_type = pipenetwork.attrib['pipeNetType']
+        if net_type == 'storm':
 
-        #READ STRUCTS
-        nodes = {}
-        pipe_elevations = {}
-        for struct in pipenetwork.iter(xmlname('Struct')):
-            name = struct.attrib['name']
-            if 'elevSump' in struct.attrib:
-                elev = float(struct.attrib['elevSump'])
-            else:
-                elev = 0
-            for child in list(struct):
-                if child.tag == xmlname('Center'):
-                    y, x = map(float, child.text.split())
-                if child.tag == xmlname('Invert'):
-                    refpipe = child.attrib['refPipe']
-                    pelevation = float(child.attrib['elev'])
-                    poffset = pelevation - elev
-                    zdata = {'elev': pelevation, 'offset': poffset}
-                    if refpipe not in pipe_elevations:
-                        pipe_elevations[refpipe] = {}
-                    pipe_elevations[refpipe] = {name: zdata}
-            nodes[name] = {'x': x,
-                           'y': y,
-                           'elev': elev
-                           }
+            #READ STRUCTS
+            nodes = {}
+            inverts = {}
+            for struct in pipenetwork.iter(xmlname('Struct')):
+                name = struct.attrib['name']
+                desc = struct.attrib['desc']
+                if desc != "Dummy Null Structure for LandXML purposes":
+                    node = {}
+                    sump = round(float(struct.attrib['elevSump']), 3)
+                    node['elev_sump'] = sump
+                    rim = round(float(struct.attrib['elevRim']), 3)
+                    node['elev_rim'] = rim
+                    node['depth'] = round(rim - sump, 3)
 
-        # READ PIPES
-        links = {}
-        for pipe in pipenetwork.iter(xmlname('Pipe')):
-            name = pipe.attrib['name']
-            start = pipe.attrib['refStart']
-            end = pipe.attrib['refEnd']
-            length = pipe.attrib['length']
-            slope = pipe.attrib['slope']
-            for child in list(pipe):
-                if child.tag == xmlname('CircPipe'):
-                    diameter = child.attrib['diameter']
-                    material = child.attrib['material']
+                    # CONNECTED PIPES
+                    for child in list(struct):
+                        if child.tag == xmlname('Center'):
+                            y, x = map(float, child.text.split())
+                            node['x'] = x
+                            node['y'] = y
+                        if child.tag == xmlname('Invert'):
+                            pipe = child.attrib['refPipe']
+                            invert = {}
+                            elev = round(float(child.attrib['elev']), 3)
+                            invert['elev'] = elev
+                            offset = round(elev - node['elev_sump'], 3)
+                            invert['offset'] = offset
+                            depth = round(node['elev_rim'] - elev, 3)
+                            invert['depth'] = depth
+                            inverts[(pipe, name)] = invert
+                    nodes[name] = node
 
-            links[name] = {'start': start,
-                           'end': end,
-                           'length': length,
-                           'slope': slope,
-                           'diameter': diameter,
-                           'material': material
-                           }
+            # READ PIPES
+            links = {}
+            for pipe in pipenetwork.iter(xmlname('Pipe')):
+                name = pipe.attrib['name']
+                start = pipe.attrib['refStart']
+                end = pipe.attrib['refEnd']
+                pipe_data = {'start': start,
+                             'end': end,
+                             'start_elev': inverts[(name, start)]['elev'],
+                             'start_offset': inverts[(name, start)]['offset'],
+                             'start_depth': inverts[(name, start)]['depth'],
+                             'end_elev': inverts[(name, end)]['elev'],
+                             'end_offset': inverts[(name, end)]['offset'],
+                             'end_depth': inverts[(name, end)]['depth'],
+                             'length': round(float(pipe.attrib['length']), 3),
+                             'slope': round(float(pipe.attrib['slope']), 4)
+                             }
+                for child in list(pipe):
+                    if child.tag == xmlname('CircPipe'):
+                        pipe_data['sect_type'] = 'CircPipe'
+                        pipe_data['section'] = child.attrib['diameter']
+                    if child.tag == xmlname('RectPipe'):
+                        pipe_data['sect_type'] = 'RectPipe'
+                        sect = child.attrib['width'] + 'X'
+                        pipe_data['section'] = sect + child.attrib['height']
+                links[name] = pipe_data
+        else:
+            MSG = 'Pressurized networks not implemented yet!'
+            raise NotImplementedError(MSG)
 
-        # RETURN NETWORKS
+    # RETURN NETWORKS
         networks[pipenetwork.attrib['name']] = {'nodes': nodes,
                                                 'links': links,
                                                 'net_type': net_type
                                                 }
-    return {'networks': networks, 'epsg': epsg}
+    if epsg_code:
+        return {'networks': networks, 'epsg_code': epsg_code}
+    return {'networks': networks, 'wkt_crs': wkt_crs}
