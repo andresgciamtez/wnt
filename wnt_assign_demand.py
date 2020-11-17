@@ -51,7 +51,7 @@ class AssignDemandAlgorithm(QgsProcessingAlgorithm):
 
     # DEFINE CONSTANTS
     SOURCE_INPUT = 'SOURCE_LAYER_INPUT'
-    SOURCE_FIELD = 'SOURCE_FIELD'
+    SOURCE_FIELDS = 'SOURCE_FIELDS'
     TARGET_INPUT = 'TARGET_LAYER_INPUT'
     ASSIGN_OUTPUT = 'ASSIGNMENT_LAYER_OUTPUT'
     NODE_OUTPUT = 'NODE_LAYER_OUTPUT'
@@ -97,7 +97,8 @@ class AssignDemandAlgorithm(QgsProcessingAlgorithm):
         Returns a localised short help string for the algorithm.
         """
         return self.tr('''Generate demand assignments.
-        The result is a layer containing connecting lines between sources and target layers, and an updated node layer. The assignment criterion is 
+        The result is a layer containing connecting lines between sources and 
+        target layers, and an updated node layer. The assignment criterion is 
         the minimum distance.
         Both source and target layer have to have an id field.
 
@@ -127,10 +128,11 @@ class AssignDemandAlgorithm(QgsProcessingAlgorithm):
             )
         self.addParameter(
             QgsProcessingParameterField(
-                self.SOURCE_FIELD,
-                self.tr('Source demand field'),
-                'value',
-                self.SOURCE_INPUT
+                self.SOURCE_FIELDS,
+                self.tr('Source demand fields'),
+                None,
+                self.SOURCE_INPUT,
+                allowMultiple=True
                 )
             )
         self.addParameter(
@@ -151,7 +153,7 @@ class AssignDemandAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterFeatureSink(
                 self.NODE_OUTPUT,
-                self.tr('Target node layer')
+                self.tr('Target with demands layer')
             )
         )
 
@@ -161,7 +163,7 @@ class AssignDemandAlgorithm(QgsProcessingAlgorithm):
         """
         # INPUT
         slayer = self.parameterAsSource(parameters, self.SOURCE_INPUT, context)
-        sfield = self.parameterAsString(parameters, self.SOURCE_FIELD, context)
+        sfields = self.parameterAsFields(parameters, self.SOURCE_FIELDS, context)
         tlayer = self.parameterAsSource(parameters, self.TARGET_INPUT, context)
 
         # CHECK CRS
@@ -180,7 +182,8 @@ class AssignDemandAlgorithm(QgsProcessingAlgorithm):
         fields = QgsFields()
         fields.append(QgsField('source', QVariant.String))
         fields.append(QgsField('target', QVariant.String))
-        fields.append(QgsField('value', QVariant.Double))
+        for field in sfields:
+            fields.append(QgsField(field, QVariant.Double))
         (assignment_sink, assignment_id) = self.parameterAsSink(
             parameters,
             self.ASSIGN_OUTPUT,
@@ -191,8 +194,8 @@ class AssignDemandAlgorithm(QgsProcessingAlgorithm):
             )
 
         fields = tlayer.fields()
-        if sfield not in fields:
-            fields.append(QgsField(sfield, QVariant.Double))
+        for field in sfields:
+            fields.append(QgsField(field, QVariant.Double))
         (node_sink, node_id) = self.parameterAsSink(
             parameters,
             self.NODE_OUTPUT,
@@ -205,8 +208,8 @@ class AssignDemandAlgorithm(QgsProcessingAlgorithm):
         # ASSIGN, ACCUMULATE AND WRITE ASSIGNMENT LAYER
         values = {}
         for tfeature in tlayer.getFeatures():
-            values[tfeature["id"]] = 0.0
-
+            for field in sfields:
+                values[(tfeature["id"], field)] = 0.0
         cnt = 0
         for sfeature in slayer.getFeatures():
             sxy = sfeature.geometry().asPoint()
@@ -221,9 +224,11 @@ class AssignDemandAlgorithm(QgsProcessingAlgorithm):
             spoint = QgsPoint(sxy)
             cpoint = QgsPoint(cfeature.geometry().asPoint())
             f.setGeometry(QgsLineString([spoint, cpoint]))
-            f.setAttributes([sfeature["id"], cfeature["id"], sfeature[sfield]])
-            if sfeature[sfield]:
-                values[cfeature["id"]] += sfeature[sfield]          
+            attr = [sfeature["id"], cfeature["id"]]
+            for field in sfields:
+                attr.append(sfeature[field])
+                values[(cfeature["id"], field)] += sfeature[field]
+            f.setAttributes(attr)
             assignment_sink.addFeature(f)
             cnt += 1
 
@@ -235,7 +240,8 @@ class AssignDemandAlgorithm(QgsProcessingAlgorithm):
         for tfeature in tlayer.getFeatures():
             f = QgsFeature()
             attr = tfeature.attributes()
-            attr.append(values[tfeature["id"]])
+            for field in sfields:
+                attr.append(values[(tfeature["id"], field)])
             f = tfeature
             f.setAttributes(attr)
             node_sink.addFeature(f)

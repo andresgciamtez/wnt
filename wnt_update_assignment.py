@@ -29,19 +29,15 @@ __copyright__ = '(C) 2019 by Andrés García Martínez'
 
 __revision__ = '$Format:%H$'
 
-from qgis.PyQt.QtCore import QCoreApplication, QVariant
-from qgis.core import (QgsFeature,
-                       QgsField,
-                       QgsFields,
-                       QgsPoint,
-                       QgsLineString,
-                       QgsProcessing,
+from qgis.PyQt.QtCore import QCoreApplication
+from qgis.core import (QgsProcessing,
                        QgsProcessingAlgorithm,
                        QgsProcessingParameterFeatureSink,
                        QgsProcessingParameterFeatureSource,
-                       QgsProcessingParameterField,
                        QgsWkbTypes
                       )
+
+POS_TOLERANCE = 1e-4
 
 class UpdateAssignmentAlgorithm(QgsProcessingAlgorithm):
     """
@@ -50,11 +46,10 @@ class UpdateAssignmentAlgorithm(QgsProcessingAlgorithm):
 
     # DEFINE CONSTANTS
     SOURCE_INPUT = 'SOURCE_LAYER_INPUT'
-    SOURCE_FIELD = 'SOURCE_LAYER_FIELD'
     TARGET_INPUT = 'TARGET_LAYER_INPUT'
     ASSIGN_INPUT = 'ASSIGNMENT_LAYER_INPUT'
-    ASSIGN_OUTPUT = 'ASSIGNMENT_LAYER_OUTPUT'
     TARGET_OUTPUT = 'TARGET_LAYER_OUTPUT'
+    ASSIGN_OUTPUT = 'ASSIGNMENT_LAYER_OUTPUT'
 
     def tr(self, string):
         """
@@ -97,13 +92,14 @@ class UpdateAssignmentAlgorithm(QgsProcessingAlgorithm):
         Returns a localised short help string for the algorithm.
         """
         return self.tr('''Update assignments.
-        Recomputing demand value in a node layer, from an assignment layer.
-        The start and end points in the assignment are updated.
+        Recomputing demand value in a node layer, from an edited assignment 
+        layer.
+        Only the end point (target) in the assignment can be desplaced.
         ===
         Actualiza la asignación (de demanda).
         Recalcula los valores de la demanda en una capa de nodos a partir de 
-        una capa de assignaciones.
-        La posición de los extremos de las asignaciones son actualizadas.
+        una capa de assignaciones editada.
+        Solo el extremo final (target) de la asignación puede ser desplazado.
         ''')
 
     def initAlgorithm(self, config=None):
@@ -120,41 +116,34 @@ class UpdateAssignmentAlgorithm(QgsProcessingAlgorithm):
                 )
             )
         self.addParameter(
-            QgsProcessingParameterField(
-                self.SOURCE_FIELD,
-                self.tr('Source field'),
-                'value',
-                self.SOURCE_INPUT
-                )
-            )
-        self.addParameter(
             QgsProcessingParameterFeatureSource(
                 self.TARGET_INPUT,
-                self.tr('Target layert'),
+                self.tr('Target layer'),
                 types=[QgsProcessing.TypeVectorPoint]
                 )
             )
         self.addParameter(
             QgsProcessingParameterFeatureSource(
                 self.ASSIGN_INPUT,
-                self.tr('Assignment layert'),
+                self.tr('Edited assignment layer'),
                 types=[QgsProcessing.TypeVectorLine]
                 )
             )
 
-        # ADD PAIRS FEATURE SINK
-        self.addParameter(
-            QgsProcessingParameterFeatureSink(
-                self.ASSIGN_OUTPUT,
-                self.tr('Updated assignment layer')
-            )
-        )
+        # ADD FEATURE SINKS
         self.addParameter(
             QgsProcessingParameterFeatureSink(
                 self.TARGET_OUTPUT,
                 self.tr('Updated target layer')
+                )
             )
-        )
+        self.addParameter(
+            QgsProcessingParameterFeatureSink(
+                self.ASSIGN_OUTPUT,
+                self.tr('Updated assignment layer')
+                )
+            )
+
 
     def processAlgorithm(self, parameters, context, feedback):
         """
@@ -162,7 +151,6 @@ class UpdateAssignmentAlgorithm(QgsProcessingAlgorithm):
         """
         # INPUT
         slayer = self.parameterAsSource(parameters, self.SOURCE_INPUT, context)
-        sfield = self.parameterAsString(parameters, self.SOURCE_FIELD, context)
         tlayer = self.parameterAsSource(parameters, self.TARGET_INPUT, context)
         alayer = self.parameterAsSource(parameters, self.ASSIGN_INPUT, context)
 
@@ -178,95 +166,93 @@ class UpdateAssignmentAlgorithm(QgsProcessingAlgorithm):
             feedback.reportError(msg)
             return {}
 
-        # OUTPUT
-        afields = QgsFields()
-        for field in ['source', 'target', sfield]:
-            afields.append(QgsField(field, QVariant.String))
+        # OUTPUT LAYERS
         (assign_sink, assign_id) = self.parameterAsSink(
             parameters,
             self.ASSIGN_OUTPUT,
             context,
-            afields,
+            alayer.fields(),
             QgsWkbTypes.LineString,
             crs
             )
-        tfields = tlayer.fields()
-        if sfield not in tfields:
-            tfields.append(QgsField(sfield, QVariant.String))
         (target_sink, target_id) = self.parameterAsSink(
             parameters,
             self.TARGET_OUTPUT,
             context,
-            tfields,
+            tlayer.fields(),
             QgsWkbTypes.Point,
             crs
             )
 
-        # READ DATA
-        sources = {}
-        targets = {}
-
-        for f in alayer.getFeatures():
-            if not f["source"] in sources:
-                sources[f["source"]] = None
-            else:
-                msg = 'Duplicated source {} assignation.'.format(f["source"])
-                feedback.reportError(msg)
-            if not f["target"] in targets:
-                targets[f["target"]] = None
-
-      # SHOW PROGRESS
-        feedback.setProgress(20)
-
-        # STORE [POINT, DEMAND]
+        # CHECK SOURCE POSITION AND READ SOURCE VALUES
+        field_names = alayer.fields().names()
+        field_names.remove("source")
+        field_names.remove("target")
+        src_pos = {}
+        src_fds = {}
+        assignments = []
         for f in slayer.getFeatures():
-            if f["id"] in sources:
-                sources[f["id"]] = [QgsPoint(f.geometry().asPoint()), f[sfield]]
-
-        # SHOW PROGRESS
-        feedback.setProgress(40)
-
-        # STORE [POINT, DEMAND=0]
-        for f in tlayer.getFeatures():
-            if f["id"] in targets:
-                targets[f["id"]] = [QgsPoint(f.geometry().asPoint()), 0]
-
-        # SHOW PROGRESS
-        feedback.setProgress(60)
-
-        # WRITE UPDATED ASSIGNEMENT
+            src_pos[f["id"]] = f.geometry().asPoint()
+            for name in field_names:
+                src_fds[(f["id"], name)] = f[name]
         for f in alayer.getFeatures():
-
-            # ACCUMULATE DEMAND
-            targets[f["target"]][1] += sources[f["source"]][1]
-
-            # WRITE ASSIGNEMENT
-            g = QgsFeature()
-            spoint = sources[f["source"]][0]
-            tpoint = targets[f["target"]][0]
-            g.setGeometry(QgsLineString([spoint, tpoint]))
-            attrib = [f["source"], f["target"], sources[f["source"]][1]]
-            g.setAttributes(attrib)
-            assign_sink.addFeature(g)
+            start_point = f.geometry().asPolyline()[0]
+            if start_point.distance(src_pos[f["source"]]) > POS_TOLERANCE:
+                msg = f'Source point misplaced: {f["source"]}'
+                feedback.reportError(msg)
+                return {}
+            for name in field_names:
+                f[name] = src_fds[(f["source"], name)]
+            assignments.append(f)
 
         # SHOW PROGRESS
-        feedback.setProgress(80)
+        feedback.pushInfo('All sources are situated correctly.')
+        feedback.setProgress(50)
 
-        # WRITE UPDATED TARGET
+        # UPDATE TARGET IDS AND RECOMPUTE
+        tar_pos = {}
+        values = {}
+        cnt = 0
         for f in tlayer.getFeatures():
-            g = QgsFeature()
-            attr = f.attributes()
-            attr.append(targets[f["id"]][1])
-            g.setAttributes(attr)
-            target_sink.addFeature(g)
+            tar_pos[f["id"]] = f.geometry().asPoint()
+            for name in field_names:
+                values[(f["id"], name)] = 0
+        for f in assignments:
+            end_point = f.geometry().asPolyline()[-1]
+            if end_point.distance(tar_pos[f["target"]]) > POS_TOLERANCE:
+                for id_, point in tar_pos.items():
+                    if end_point.distance(point) <= POS_TOLERANCE:
+                        msg = f'Updated position of target from: {f["target"]}'
+                        msg += f' to: {id_}'
+                        f["target"] = id_
+                        cnt += 1
+                        feedback.pushInfo(msg)
+                        break
+                else:
+                    msg = f'Misassignment. Source: {f["source"]}'
+                    msg += f' target: {f["target"]}'
+                    feedback.reportError(msg)
+                    return {}
+            for name in field_names:
+                values[(f["target"], name)] += f[name]
+        feedback.pushInfo(f'Updated {cnt} targets.')
+        # WRITE ASSIGNEMENT LAYER
+        for f in assignments:
+            assign_sink.addFeature(f)
+
+        # WRITE TARGET LAYER
+        for f in tlayer.getFeatures():
+            for name in field_names:
+                f[name] = values[f['id'], name]
+            target_sink.addFeature(f)
 
         # SHOW PROGRESS
         feedback.setProgress(100)
 
         # SHOW PROGRESS
-        feedback.pushInfo('Source #: {}.'.format(slayer.featureCount()))
-        feedback.pushInfo('Target #: {}.'.format(tlayer.featureCount()))
-        feedback.pushInfo('Assignment #: {}.'.format(alayer.featureCount()))
+        feedback.pushInfo(f'Source #: {slayer.featureCount()}.')
+        feedback.pushInfo(f'Target #: {tlayer.featureCount()}.')
+        feedback.pushInfo(f'Assignment #: {alayer.featureCount()}.')
         feedback.pushInfo('='*40)
 
         # PROCCES CANCELED
