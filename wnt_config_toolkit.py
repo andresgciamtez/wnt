@@ -125,19 +125,19 @@ class ConfigToolkitAlgorithm(QgsProcessingAlgorithm):
         """
 
         # OUTPUT
-        libf = self.parameterAsFile(parameters, self.INPUT, context)
-        inif = sys.path[0] + '/toolkit.ini'
-        feedback.pushInfo(inif)
+        lib_file = self.parameterAsFile(parameters, self.INPUT, context)
+        init_file = sys.path[0] + '/toolkit.ini'
+        feedback.pushInfo(init_file)
         config = configparser.ConfigParser()
-        config.read(inif)
-        config['EPANET']['lib'] = libf
-        with open(inif, 'w') as configfile:
+        config.read(init_file)
+        config['EPANET']['lib'] = lib_file
+        with open(init_file, 'w') as configfile:
             config.write(configfile)
 
         # SHOW INFO
         feedback.pushInfo('='*40)
-        msg = 'Epanet toolkit library: {}, saved. Restart QGIS.'.format(libf)
-        feedback.pushInfo(msg)
+        msg = 'Epanet toolkit library: {}'.format(lib_file)
+        feedback.pushInfo(f'Epanet toolkit library: {lib_file}')
         feedback.pushInfo('='*40)
 
         # PROCCES CANCELED

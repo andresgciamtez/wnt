@@ -28,10 +28,12 @@ __copyright__ = '(C) 2019 by Andrés García Martínez'
 
 __revision__ = '$Format:%H$'
 
+import configparser
 import ctypes
 import sys
 import os
 from configparser import ConfigParser
+from time import gmtime, strftime
 from PyQt5.QtCore import QCoreApplication, QVariant
 from qgis.core import (QgsFeature,
                        QgsField,
@@ -41,8 +43,20 @@ from qgis.core import (QgsFeature,
                        QgsProcessingParameterFile)
 
 
-
-
+# EPANET TOOLKIT CONSTANTS
+EN_NODECOUNT = 0
+EN_LINKCOUNT = 2
+EN_DEMAND = 9
+EN_HEAD = 10
+EN_PRESSURE = 11
+EN_FLOW = 8
+EN_VELOCITY = 9
+EN_HEADLOSS = 10
+EN_STATUS = 11
+EN_SETTING = 12
+EN_ENERGY = 13
+MAX_LABEL_LEN = 16
+NOSAVE = 0
 
 class ResultsFromEpanetAlgorithm(QgsProcessingAlgorithm):
     """
@@ -147,12 +161,12 @@ class ResultsFromEpanetAlgorithm(QgsProcessingAlgorithm):
         """
 
         # INPUT
-        epanetf = self.parameterAsFile(parameters, self.INPUT, context)
+        epanet_file = self.parameterAsFile(parameters, self.INPUT, context)
 
         # DEFINE NODE LAYER
         newfields = QgsFields()
-        newfields.append(QgsField("id", QVariant.Char))
         newfields.append(QgsField("time", QVariant.Time))
+        newfields.append(QgsField("id", QVariant.Char, len=MAX_LABEL_LEN))
         newfields.append(QgsField("demand", QVariant.Double))
         newfields.append(QgsField("head", QVariant.Double))
         newfields.append(QgsField("pressure", QVariant.Double))
@@ -167,12 +181,12 @@ class ResultsFromEpanetAlgorithm(QgsProcessingAlgorithm):
 
         # DEFINE LINK LAYER
         newfields = QgsFields()
-        newfields.append(QgsField("id", QVariant.Char))
         newfields.append(QgsField("time", QVariant.Time))
+        newfields.append(QgsField("id", QVariant.Char, len=MAX_LABEL_LEN))
         newfields.append(QgsField("flow", QVariant.Double))
         newfields.append(QgsField("velocity", QVariant.Double))
         newfields.append(QgsField("headloss", QVariant.Double))
-        newfields.append(QgsField("status", QVariant.String))
+        newfields.append(QgsField("status", QVariant.Char, len=6))
         newfields.append(QgsField("setting", QVariant.Double))
         newfields.append(QgsField("energy", QVariant.Double))
         (link_sink, links_id) = self.parameterAsSink(
@@ -182,60 +196,146 @@ class ResultsFromEpanetAlgorithm(QgsProcessingAlgorithm):
             newfields
             )
 
-        # OPEN TOOLKIT
-        sim = ENToolkit()
-        sim.ENopen(epanetf, epanetf[:-4]+'.rpt')
+        # SEND INFORMATION TO THE USER
+        feedback.pushInfo('='*40)
+
+        # LOAD EPANET LIB SELECTING OS AND PLATFORM
+        try:
+            config = configparser.ConfigParser()
+            ini_file = sys.path[0] + '/toolkit.ini'
+            config.read(ini_file)
+            lib_file = config['EPANET']['lib']
+            feedback.pushInfo(f'Epanet library file: {lib_file}')
+            if os.name in ['nt', 'dos']:
+                feedback.pushInfo(f'OS: {os.name}')
+                epanet_lib = ctypes.windll.LoadLibrary(lib_file)
+            else:
+                feedback.pushInfo('Non-windows OS.')
+                epanet_lib = ctypes.cdll.LoadLibrary(lib_file)
+        except:
+            feedback.reportError('ERROR: Configure epanet library!')
+            return {}
+
+        # OPEN EPANET MODEL
+        feedback.pushInfo(f'Processing: {epanet_file}')
+        report_file = epanet_file[:-4] + '.rpt'
+        err = epanet_lib.ENopen(ctypes.c_char_p(epanet_file.encode()),
+                                ctypes.c_char_p(report_file.encode())
+                                )
+        if err:
+            feedback.reportError('Epanet Toolkit error: {err}!')
+            return {}
 
         # GET AND WRITE RESULTS
-        stepcount = 0
-        err, nodecount = sim.ENgetcount(sim.EN_NODECOUNT)
-        err, linkcount = sim.ENgetcount(sim.EN_LINKCOUNT)
-        sim.ENopenH()
-        sim.ENinitH(0)
+        step_count = 0
+        count = ctypes.c_int()
+        err = epanet_lib.ENgetcount(EN_NODECOUNT, ctypes.byref(count))
+        if err:
+            feedback.reportError('Epanet Toolkit error: {err}!')
+            return {}
+        node_count = count.value
+        err = epanet_lib.ENgetcount(EN_LINKCOUNT, ctypes.byref(count))
+        if err:
+            feedback.reportError('Epanet Toolkit error: {err}!')
+            return {}
+        link_count = count.value
+        err = epanet_lib.ENopenH()
+        if err:
+            feedback.reportError('Epanet Toolkit error: {err}!')
+            return {}
+        err = epanet_lib.ENinitH(ctypes.c_int(NOSAVE))
+        if err:
+            feedback.reportError('Epanet Toolkit error: {err}!')
+            return {}
         while True:
+
             # RUN A TIME SETP
-            stepcount += 1
-            err, time = sim.ENrunH()
-            for nodeix in range(1, nodecount + 1):
-                nodeid = str(sim.ENgetnodeid(nodeix)[1], encoding='utf-8')
-                err, demand = sim.ENgetnodevalue(nodeix, sim.EN_DEMAND)
-                err, head = sim.ENgetnodevalue(nodeix, sim.EN_HEAD)
-                err, pressure = sim.ENgetnodevalue(nodeix, sim.EN_PRESSURE)
+            step_count += 1
+            current_time = ctypes.c_long()
+            err = epanet_lib.ENrunH(ctypes.byref(current_time))
+            time = strftime('%H:%M:%S', gmtime(current_time.value))
+            id_ = ctypes.create_string_buffer(MAX_LABEL_LEN)
+            variable = ctypes.c_float()
+
+            # NODE RESULT
+            for index in range(1, node_count + 1):
+                err = epanet_lib.ENgetnodeid(index, ctypes.byref(id_))
+                if err:
+                    feedback.reportError('Epanet Toolkit error: {err}!')
+                    return {}
+                node_result = [time, str(id_, encoding='utf-8')]
+                for parameter in [EN_DEMAND, EN_HEAD, EN_PRESSURE]:
+                    err = epanet_lib.ENgetnodevalue(index,
+                                                    parameter,
+                                                    ctypes.byref(variable)
+                                                    )
+                    if err:
+                        feedback.reportError('Epanet Toolkit error: {err}!')
+                        return {}
+                    node_result.append(variable.value)
                 f = QgsFeature()
-                f.setAttributes([nodeid, time, demand, head, pressure])
+                f.setAttributes(node_result)
                 node_sink.addFeature(f)
-            for linkix in range(1, linkcount + 1):
-                linkid = str(sim.ENgetlinkid(linkix)[1], encoding='utf-8')
-                err, flow = sim.ENgetlinkvalue(linkix, sim.EN_FLOW)
-                err, velocity = sim.ENgetlinkvalue(linkix, sim.EN_VELOCITY)
-                err, headloss = sim.ENgetlinkvalue(linkix, sim.EN_HEADLOSS)
-                if sim.ENgetlinkvalue(linkix, sim.EN_STATUS)[1]:
-                    status = 'OPEN'
+
+            # LINK RESULT
+            for index in range(1, link_count + 1):
+                err = epanet_lib.ENgetlinkid(index, ctypes.byref(id_))
+                if err:
+                    feedback.reportError('Epanet Toolkit error: {err}!')
+                    return {}
+                link_result = [time, str(id_, encoding='utf-8')]
+                for parameter in [EN_FLOW, EN_VELOCITY, EN_HEADLOSS]:
+                    err = epanet_lib.ENgetlinkvalue(index,
+                                                    parameter,
+                                                    ctypes.byref(variable)
+                                                    )
+                    link_result.append(variable.value)
+                err = epanet_lib.ENgetlinkvalue(index,
+                                                EN_SETTING,
+                                                ctypes.byref(variable)
+                                                )
+                if err:
+                    feedback.reportError('Epanet Toolkit error: {err}!')
+                    return {}
+                if variable.value:
+                    link_result.append('OPEN')
                 else:
-                    status = 'CLOSED'
-                setting = err, sim.ENgetlinkvalue(nodeix+1, sim.EN_SETTING)
-                energy = err, sim.ENgetlinkvalue(nodeix+1, sim.EN_ENERGY)
+                    link_result.append('CLOSED')
+                for parameter in [EN_SETTING, EN_ENERGY]:
+                    err = epanet_lib.ENgetlinkvalue(index,
+                                                    parameter,
+                                                    ctypes.byref(variable)
+                                                    )
+                    if err:
+                        feedback.reportError('Epanet Toolkit error: {err}!')
+                        return {}
+                    link_result.append(variable.value)
                 f = QgsFeature()
-                f.setAttributes([linkid, time, flow, velocity, headloss, \
-                                 status, setting, energy])
+                f.setAttributes(link_result)
                 link_sink.addFeature(f)
 
             # END OF SIMULATON
-            if sim.ENnextH()[1] == 0:
+            next_time = ctypes.c_long()
+            err = epanet_lib.ENnextH(ctypes.byref(next_time))
+            if err:
+                feedback.reportError('Epanet Toolkit error: {err}!')
+                return {}
+            if next_time.value == 0:
                 break
 
         # CLOSE MODEL
-        sim.ENclose()
-
+        err = epanet_lib.ENclose()
+        if err:
+            feedback.reportError('Epanet Toolkit error: {err}!')
+            return {}
         # SHOW NODES AND LINKS PROCESSED
-        feedback.pushInfo('='*40)
         msg = 'Results loaded successfully.'
         feedback.pushInfo(msg)
-        msg = 'Hydraulic time steps #: {}'.format(stepcount)
+        msg = 'Hydraulic time steps #: {}'.format(step_count)
         feedback.pushInfo(msg)
-        msg = 'Node #: {}'.format(nodecount)
+        msg = 'Node #: {}'.format(node_count)
         feedback.pushInfo(msg)
-        msg = 'Link #: {}'.format( linkcount)
+        msg = 'Link #: {}'.format( link_count)
         feedback.pushInfo(msg)
         feedback.pushInfo('='*40)
 
