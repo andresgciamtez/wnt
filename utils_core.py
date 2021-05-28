@@ -639,7 +639,7 @@ class WntNetwork:
                 sections['PUMPS'].append(tuple_to_line(tmp))
 
             elif linktype in ['PRV', 'PSV', 'PBV', 'FCV', 'TCV', 'GPV']:
-                tmp = (link.linkid(), link.start(), link.end(), 0.0, linktype)
+                tmp = (link.name(), link.start(), link.end(), 0.0, linktype)
                 tmp = tmp + (0.0, 0.0)
                 sections['VALVES'].append(tuple_to_line(tmp))
 
