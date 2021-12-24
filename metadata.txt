@@ -2,7 +2,7 @@
 name=Water Network Tools
 qgisMinimumVersion=3.0
 description=Water Network Modelling Utilities
-version=1.3.2
+version=1.3.4
 author=Andrés García Martínez
 email=ppnoptimizer@gmail.com
 tracker=https://github.com/andresgciamtez/wnt/issues
@@ -15,8 +15,10 @@ tags=water, hydraulics , water network analysis, epanet, WDS modelling
 experimental=False
 deprecated=False
 server=False
-about=<p>A set of processes for modeling water networks. Starting from scratch or expanding an existing network, it is possible to import and export models, scenarios and other files for network analysis and optimization.</p><p>Get Started: <a href="http://yt.vu/p/PLzE4DxrnNT-Fg0Ztku6jbIG8QEEOHqYEH">Youtube tutorial</a>. Autor: Andrés García Martínez <a href="https://bit.ly/2m8otrB">LinkedIn</a></p>
+about=<p>A set of processes for modeling water networks. Starting from scratch or expanding an existing network, it is possible to import and export models, scenarios and other files for network analysis and optimization.</p><p>Get Started: <a href="https://www.youtube.com/playlist?list=PLzE4DxrnNT-Fg0Ztku6jbIG8QEEOHqYEH">Youtube tutorial</a>. Autor: Andrés García Martínez <a href="https://bit.ly/2m8otrB">LinkedIn</a></p>
 changelog=
+	1.3.4 Fix: Tutorial link
+    1.3.3 Fix: Elevation field selector of Elevation from DEM 
 	1.3.2 Fix: Export valve to epanet model
 	1.3.1 Fix: Import results from epanet
 	1.3.0 Modify: Assign demand processes
