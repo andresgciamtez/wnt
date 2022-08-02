@@ -34,6 +34,7 @@ from qgis.core import QgsProcessingProvider
 from .wnt_assign_demand import AssignDemandAlgorithm
 from .wnt_classify import ClassifyAlgorithm
 from .wnt_config_toolkit import ConfigToolkitAlgorithm
+from .wnt_connect_by_distance import ConnectByDistanceAlgorithm
 from .wnt_elevation_from_raster import ElevationFromRasterAlgorithm
 from .wnt_elevation_from_tin import ElevationFromTINAlgorithm
 from .wnt_epanet_from_network import EpanetFromNetworkAlgorithm
@@ -74,6 +75,7 @@ class WaterNetworkToolsProvider(QgsProcessingProvider):
         self.addAlgorithm(AssignDemandAlgorithm())
         self.addAlgorithm(ClassifyAlgorithm())
         self.addAlgorithm(ConfigToolkitAlgorithm())
+        self.addAlgorithm(ConnectByDistanceAlgorithm())
         self.addAlgorithm(ElevationFromRasterAlgorithm())
         self.addAlgorithm(ElevationFromTINAlgorithm())
         self.addAlgorithm(EpanetFromNetworkAlgorithm())

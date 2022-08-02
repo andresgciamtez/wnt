@@ -79,13 +79,13 @@ class UpdateAssignmentAlgorithm(QgsProcessingAlgorithm):
         """
         Returns the name of the group this algorithm belongs to.
         """
-        return self.tr('Assign')
+        return self.tr('Demand')
 
     def groupId(self):
         """
         Returns the unique ID of the group this algorithm belongs to.
         """
-        return 'assign'
+        return 'demand'
 
     def shortHelpString(self):
         """
