@@ -41,6 +41,7 @@ from qgis.core import (QgsFeature,
                        QgsWkbTypes
                       )
 
+
 class ConnectByDistanceAlgorithm(QgsProcessingAlgorithm):
     """
     Connect entities by distance.
@@ -195,24 +196,23 @@ class ConnectByDistanceAlgorithm(QgsProcessingAlgorithm):
         # COMPUTE AND WRITE LINK LAYER
         f = QgsFeature()
         cnt = 0
-        for s_feature in s_ly.getFeatures():
-            connections = []
-            for t_feature in t_ly.getFeatures():
-                geo = s_feature.geometry().shortestLine(t_feature.geometry())
-                distance = geo.length()
+        for source in s_ly.getFeatures():
+            possible_connections = []
+            for target in t_ly.getFeatures():
+                geometry = source.geometry().shortestLine(target.geometry())
+                distance = geometry.length()
                 if distance <= max_dst:
-                    source_id = s_feature["id"]
-                    target_id = t_feature["id"]
-                    connection = (geo, source_id, target_id, distance)
-                    if len(connections) < max_con:
-                        connections.append(connection)
-                    else:
-                        connections.sort(key = lambda x: x[-1])
-                        if distance < connections[-1][0]:
-                            connections[-1] = connection
+                    connection = [geometry]
+                    connection.append(source["id"])
+                    connection.append(target["id"])
+                    connection.append(distance)
+                    possible_connections.append(connection)
+            possible_connections.sort(key=lambda d: d[-1])
+            connections = possible_connections[:max_con]
             for connection in connections:
+                connection.append(len(connections))
                 f.setGeometry(connection[0])
-                f.setAttributes(connection[1:] + tuple(len(connections)))
+                f.setAttributes(connection[1:])
                 connection_sink.addFeature(f)
                 cnt += 1
 
