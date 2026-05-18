@@ -1,0 +1,22 @@
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Local tooling and IDE state
+.pylint.d/
+.vscode/
+
+# Plugin Builder / local deployment artifacts
+dist/*
+!dist/.gitkeep
+zip_build/
+
+# Local QGIS/plugin auxiliary folders
+help/
+scripts/*
+!scripts/package_plugin.ps1
+
+# Local EPANET toolkit configuration
+toolkit.ini

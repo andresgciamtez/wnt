@@ -1,16 +1,10 @@
-#!/usr/bin/env python
-# coding=utf-8
-"""This script uploads a plugin package to the plugin repository.
-        Authors: A. Pasotti, V. Picavet
-        git sha              : $TemplateVCSFormat
-"""
+﻿#!/usr/bin/env python
+"""Upload a plugin package to the QGIS plugin repository."""
 
 import sys
 import getpass
 import xmlrpc.client
 from optparse import OptionParser
-
-standard_library.install_aliases()
 
 # Configuration
 PROTOCOL = 'https'
@@ -109,3 +103,5 @@ if __name__ == "__main__":
         # interactive mode
         options.password = getpass.getpass()
     main(options, args)
+
+
