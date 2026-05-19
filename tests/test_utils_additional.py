@@ -424,6 +424,117 @@ def test_tin_triangle_and_landxml_loading(tmp_path):
         TIN().from_landxml(xml, "Missing")
 
 
+def test_tin_reload_replaces_previous_surface(tmp_path):
+    xml = tmp_path / "surfaces.xml"
+    xml.write_text(
+        textwrap.dedent(
+            """
+            <LandXML xmlns="http://www.landxml.org/schema/LandXML-1.2">
+              <Surfaces>
+                <Surface name="Ground">
+                  <Definition surfType="TIN">
+                    <Pnts>
+                      <P id="1">0 0 1</P>
+                      <P id="2">0 1 2</P>
+                      <P id="3">1 0 3</P>
+                    </Pnts>
+                    <Faces><F>1 2 3</F></Faces>
+                  </Definition>
+                </Surface>
+                <Surface name="Roof">
+                  <Definition surfType="TIN">
+                    <Pnts>
+                      <P id="1">0 0 10</P>
+                      <P id="2">0 1 20</P>
+                      <P id="3">1 0 30</P>
+                    </Pnts>
+                    <Faces><F>1 2 3</F></Faces>
+                  </Definition>
+                </Surface>
+              </Surfaces>
+            </LandXML>
+            """
+        ).strip(),
+        encoding="utf-8",
+    )
+
+    tin = TIN()
+    tin.from_landxml(xml, "Ground")
+    assert tin.elevations([(0.25, 0.25)]) == [pytest.approx(1.75)]
+
+    tin.from_landxml(xml, "Roof")
+    assert tin.elevations([(0.25, 0.25)]) == [pytest.approx(17.5)]
+
+
+def test_tin_rejects_degenerate_faces(tmp_path):
+    xml = tmp_path / "surface.xml"
+    xml.write_text(
+        textwrap.dedent(
+            """
+            <LandXML xmlns="http://www.landxml.org/schema/LandXML-1.2">
+              <Surfaces>
+                <Surface name="FlatLine">
+                  <Definition surfType="TIN">
+                    <Pnts>
+                      <P id="1">0 0 1</P>
+                      <P id="2">1 1 2</P>
+                      <P id="3">2 2 3</P>
+                    </Pnts>
+                    <Faces><F>1 2 3</F></Faces>
+                  </Definition>
+                </Surface>
+              </Surfaces>
+            </LandXML>
+            """
+        ).strip(),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="non-zero XY area"):
+        TIN().from_landxml(xml, "FlatLine")
+
+
+def test_tin_spatial_index_limits_candidate_triangles(tmp_path):
+    xml = tmp_path / "surface.xml"
+    xml.write_text(
+        textwrap.dedent(
+            """
+            <LandXML xmlns="http://www.landxml.org/schema/LandXML-1.2">
+              <Surfaces>
+                <Surface name="Ground">
+                  <Definition surfType="TIN">
+                    <Pnts>
+                      <P id="1">100 100 0</P>
+                      <P id="2">100 101 0</P>
+                      <P id="3">101 100 0</P>
+                      <P id="4">0 0 10</P>
+                      <P id="5">0 1 20</P>
+                      <P id="6">1 0 30</P>
+                    </Pnts>
+                    <Faces>
+                      <F>1 2 3</F>
+                      <F>4 5 6</F>
+                    </Faces>
+                  </Definition>
+                </Surface>
+              </Surfaces>
+            </LandXML>
+            """
+        ).strip(),
+        encoding="utf-8",
+    )
+
+    tin = TIN()
+    tin.from_landxml(xml, "Ground")
+
+    def fail_if_checked(point):
+        raise AssertionError(f"Far triangle should not be checked for {point}")
+
+    tin._triangles[0].is_inside = fail_if_checked
+
+    assert tin.elevations([(0.25, 0.25)]) == [pytest.approx(17.5)]
+
+
 def test_landxml_pipe_network_parser(tmp_path):
     xml = tmp_path / "network.xml"
     xml.write_text(

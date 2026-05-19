@@ -12,11 +12,10 @@ __pycache__/
 dist/*
 !dist/.gitkeep
 zip_build/
+wnt.zip
 
 # Local QGIS/plugin auxiliary folders
 help/
-scripts/*
-!scripts/package_plugin.ps1
 
 # Local EPANET toolkit configuration
 toolkit.ini

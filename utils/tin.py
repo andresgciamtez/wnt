@@ -2,8 +2,14 @@
 
 import xml.etree.ElementTree as ET
 
+from qgis.core import (QgsFeature,
+                       QgsGeometry,
+                       QgsRectangle,
+                       QgsSpatialIndex)
+
 ACCEPTABLE_DEVIATION = 1E-5
 NS = '{http://www.landxml.org/schema/LandXML-1.2}'
+VERTICES_PER_FACE = 3
 
 
 def xmlname(name):
@@ -23,6 +29,16 @@ class Triangle:
         a += self.v2[0]*(self.v3[1]-self.v1[1])
         a += self.v3[0]*(self.v1[1]-self.v2[1])
         return abs(a)/2
+
+    def bounding_box(self):
+        '''Return the XY bounding box.'''
+        xs = (self.v1[0], self.v2[0], self.v3[0])
+        ys = (self.v1[1], self.v2[1], self.v3[1])
+        return QgsRectangle(min(xs), min(ys), max(xs), max(ys))
+
+    def is_degenerate(self, tol=ACCEPTABLE_DEVIATION):
+        '''Check if the triangle has usable XY area.'''
+        return self.xy_area() <= tol
 
     def is_inside(self, point, tol=ACCEPTABLE_DEVIATION):
         '''Check if the point (x, y) is inside.'''
@@ -44,6 +60,8 @@ class Triangle:
         e = self.v2[2] - self.v1[2]
         f = self.v3[2] - self.v1[2]
         det = a*d - b*c
+        if abs(det) <= ACCEPTABLE_DEVIATION:
+            raise ValueError('Cannot interpolate elevation from a degenerate triangle.')
         jx = (d*e - b*f)/det
         jy = (-c*e + a*f)/det
         dx = point[0] - self.v1[0]
@@ -56,6 +74,8 @@ class TIN:
     def __init__(self):
         self._faces = []
         self._points = {}
+        self._triangles = []
+        self._spatial_index = QgsSpatialIndex()
 
     def from_landxml(self, file, surfname=''):
         '''Load a TIN surface from a LandXML file.
@@ -77,11 +97,38 @@ class TIN:
             faces = definition.find(xmlname('Faces'))
             if points is None or faces is None:
                 continue
+
+            # Build the surface locally so a failed load cannot leave partial state.
+            new_points = {}
+            new_faces = []
             for point in points:
                 y, x, z = tuple(map(float, point.text.split()))
-                self._points[point.attrib['id']] = x, y, z
+                new_points[point.attrib['id']] = x, y, z
             for face in faces:
-                self._faces.append(face.text.split())
+                vertices = face.text.split()
+                if len(vertices) != VERTICES_PER_FACE:
+                    raise ValueError('TIN faces must reference exactly three points.')
+                new_faces.append(vertices)
+
+            # Precompute validated triangles once; interpolation can reuse them.
+            new_triangles = []
+            new_spatial_index = QgsSpatialIndex()
+            for face in new_faces:
+                vertices = [new_points[vertex] for vertex in face]
+                triangle = Triangle(*vertices)
+                if triangle.is_degenerate():
+                    raise ValueError('TIN faces must have non-zero XY area.')
+
+                feature = QgsFeature()
+                feature.setId(len(new_triangles))
+                feature.setGeometry(QgsGeometry.fromRect(triangle.bounding_box()))
+                new_spatial_index.addFeature(feature)
+                new_triangles.append(triangle)
+
+            self._points = new_points
+            self._faces = new_faces
+            self._triangles = new_triangles
+            self._spatial_index = new_spatial_index
             break
         else:
             raise Exception('Incorrect name or none surface found.')
@@ -91,11 +138,11 @@ class TIN:
         '''
         result = []
         for p in points:
-            for face in self._faces:
-                v1, v2, v3 = [self._points[vertex] for vertex in face]
-                t = Triangle(v1, v2, v3)
-                if t.is_inside(p):
-                    result.append(t.z(p))
+            candidates = self._spatial_index.intersects(QgsRectangle(p[0], p[1], p[0], p[1]))
+            for triangle_id in candidates:
+                triangle = self._triangles[triangle_id]
+                if triangle.is_inside(p):
+                    result.append(triangle.z(p))
                     break
             else:
                 result.append(None)
