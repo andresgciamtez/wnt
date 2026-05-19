@@ -1,6 +1,7 @@
 """Build network node and link layers from line features."""
 
-from math import dist
+from collections import defaultdict
+from math import dist, isfinite
 from qgis.PyQt.QtCore import QMetaType
 from qgis.core import (QgsFeature,
                        QgsField,
@@ -8,13 +9,13 @@ from qgis.core import (QgsFeature,
                        QgsGeometry,
                        QgsWkbTypes,
                        QgsProcessing,
+                       QgsProcessingParameterBoolean,
                        QgsProcessingParameterNumber,
                        QgsProcessingParameterDistance,
                        QgsProcessingParameterString,
                        QgsProcessingParameterFeatureSink,
                        QgsProcessingParameterFeatureSource,
-                       QgsPointXY,
-                       QgsFeatureRequest
+                       QgsPointXY
                        )
 from .base import WntProcessingAlgorithm
 from ..utils import core as tools
@@ -36,6 +37,7 @@ class NetworkFromLinesAlgorithm(WntProcessingAlgorithm):
     MASK_LINK = 'MASK_LINK'
     INITIAL_LINK = 'INITIAL_LINK'
     INCREMENT_LINK = 'INCREMENT_LINK'
+    USE_LINE_ELEVATION = 'USE_LINE_ELEVATION'
     OUTPUT_NODES = 'OUTPUT_NODES'
     OUTPUT_LINES = 'OUTPUT_LINES'
 
@@ -80,8 +82,10 @@ class NetworkFromLinesAlgorithm(WntProcessingAlgorithm):
 <li>The node layer contains <code>id</code>, <code>type</code>, and <code>elevation</code>.</li>
 <li>The link layer contains <code>id</code>, <code>start</code>, <code>end</code>, <code>type</code>, and <code>length</code>.</li>
 <li>Input layer fields are preserved in the output link layer.</li>
+<li>Multipart geometries are split into individual output links.</li>
+<li>When enabled, line endpoint Z values are copied to nodes and checked against the merge tolerance.</li>
 </ul>
-<p>Limitations: multipart geometries and Z values are not supported. Looped lines are rejected.</p>
+<p>Looped lines are rejected.</p>
         ''')
 
     def initAlgorithm(self, config=None):
@@ -152,6 +156,13 @@ class NetworkFromLinesAlgorithm(WntProcessingAlgorithm):
                 defaultValue=1
                 )
             )
+        self.addParameter(
+            QgsProcessingParameterBoolean(
+                self.USE_LINE_ELEVATION,
+                self.tr('Use line endpoint Z values as node elevations'),
+                defaultValue=False
+                )
+            )
 
         # ADD NODE AND LINK FEATURE SINK
         self.addParameter(
@@ -180,31 +191,33 @@ class NetworkFromLinesAlgorithm(WntProcessingAlgorithm):
         lmask = self.parameterAsString(parameters, self.MASK_LINK, context)
         lini = self.parameterAsInt(parameters, self.INITIAL_LINK, context)
         linc = self.parameterAsInt(parameters, self.INCREMENT_LINK, context)
+        use_line_elevation = self.parameterAsBool(parameters, self.USE_LINE_ELEVATION, context)
 
         # SEND INFORMATION TO THE USER
         log_start(feedback, self.displayName())
         log_crs(feedback, linelayer.sourceCrs())
 
-        if linelayer.wkbType() == QgsWkbTypes.MultiLineString:
-            error(feedback, "Source geometry is MultiLineString")
-            return {}
-
-        # READ LINESTRINGS (Geometry only pass)
+        # READ LINESTRINGS
         lines = []
+        line_attrs = []
+        line_elevations = []
         feedback.pushInfo("Reading input geometries...")
-        request = QgsFeatureRequest().setNoAttributes()
-        for feature in linelayer.getFeatures(request):
+        for feature in linelayer.getFeatures():
             geom = feature.geometry()
-            polyline = geom.asPolyline()
-            if len(polyline) < 2:
-                error(feedback, f"Invalid LineString geometry (FID: {feature.id()})")
-                return {}
-            line = [(p.x(), p.y()) for p in polyline]
+            for line in self._line_parts(geom):
+                if len(line) < 2:
+                    error(feedback, f"Invalid LineString geometry (FID: {feature.id()})")
+                    return {}
 
-            if dist(line[0], line[-1]) < tol:
-                error(feedback, f"Looped LineString detected (FID: {feature.id()})")
-                return {}
-            lines.append(line)
+                start = tools.xy(line[0])
+                end = tools.xy(line[-1])
+                if dist(start, end) < tol:
+                    error(feedback, f"Looped LineString detected (FID: {feature.id()})")
+                    return {}
+
+                lines.append(line)
+                line_attrs.append(feature.attributes())
+                line_elevations.append((self._point_z(line[0]), self._point_z(line[-1])))
 
         info(feedback, "Input lines", len(lines))
 
@@ -217,6 +230,10 @@ class NetworkFromLinesAlgorithm(WntProcessingAlgorithm):
 
         # CALCULATE NETWORK
         nodes, links = tools.net_from_linestrings(lines, tol)
+        node_elevations = self._node_elevations(links, line_elevations, tol) if use_line_elevation else {}
+        if node_elevations is None:
+            error(feedback, "Line endpoint elevations merged into a node differ more than tolerance")
+            return {}
 
         # GENERATE NODE LAYER
         node_fields = QgsFields()
@@ -236,9 +253,10 @@ class NetworkFromLinesAlgorithm(WntProcessingAlgorithm):
         node_features = []
         for ncnt, (x, y) in enumerate(nodes):
             nodeid = n_format(ncnt)
+            elevation = node_elevations.get(ncnt, 0.0)
             f = QgsFeature(node_fields)
             f.setGeometry(QgsGeometry.fromPointXY(QgsPointXY(x, y)))
-            f.setAttributes([nodeid, '', 0.0])
+            f.setAttributes([nodeid, '', elevation])
             node_features.append(f)
 
             if len(node_features) >= 200:
@@ -268,10 +286,7 @@ class NetworkFromLinesAlgorithm(WntProcessingAlgorithm):
 
         # ADD LINK FEATURES (Bulk)
         link_features = []
-        # We need the attributes from the original features
-        lcnt = 0
-        for f_orig in linelayer.getFeatures():
-            link = links[lcnt]
+        for lcnt, link in enumerate(links):
             linkid = l_format(lcnt)
             start_id = n_format(link[0])
             end_id = n_format(link[1])
@@ -281,14 +296,12 @@ class NetworkFromLinesAlgorithm(WntProcessingAlgorithm):
             length = tools.polyline_length(poly)
 
             attr = [linkid, start_id, end_id, 'PIPE', length]
-            attr.extend(f_orig.attributes())
+            attr.extend(line_attrs[lcnt])
 
             g = QgsFeature(link_fields)
             g.setGeometry(QgsGeometry.fromPolylineXY(poly))
             g.setAttributes(attr)
             link_features.append(g)
-            lcnt += 1
-
             if len(link_features) >= 200:
                 link_sink.addFeatures(link_features)
                 link_features = []
@@ -305,3 +318,54 @@ class NetworkFromLinesAlgorithm(WntProcessingAlgorithm):
             return {}
 
         return {self.OUTPUT_NODES: node_id, self.OUTPUT_LINES: link_id}
+
+    @staticmethod
+    def _line_parts(geometry):
+        """Return single-part QGIS polylines from a line or multiline geometry."""
+        if hasattr(geometry, 'constGet'):
+            geometry_object = geometry.constGet()
+            if hasattr(geometry_object, 'numGeometries'):
+                return [
+                    NetworkFromLinesAlgorithm._points_from_line(geometry_object.geometryN(index))
+                    for index in range(geometry_object.numGeometries())
+                ]
+            return [NetworkFromLinesAlgorithm._points_from_line(geometry_object)]
+
+        if hasattr(geometry, 'asMultiPolyline'):
+            lines = geometry.asMultiPolyline()
+            if lines:
+                return lines
+        return [geometry.asPolyline()]
+
+    @staticmethod
+    def _points_from_line(line):
+        """Return QGIS points from a core line geometry."""
+        if hasattr(line, 'numPoints') and hasattr(line, 'pointN'):
+            return [line.pointN(index) for index in range(line.numPoints())]
+        return list(line)
+
+    @staticmethod
+    def _point_z(point):
+        """Return a point Z value when present and finite."""
+        if not hasattr(point, 'z'):
+            return None
+        z_value = point.z()
+        return z_value if isfinite(z_value) else None
+
+    @staticmethod
+    def _node_elevations(links, line_elevations, tol):
+        """Return checked node elevations from line endpoint Z values."""
+        samples = defaultdict(list)
+        for link, (start_z, end_z) in zip(links, line_elevations):
+            start_node, end_node, _ = link
+            if start_z is not None:
+                samples[start_node].append(start_z)
+            if end_z is not None:
+                samples[end_node].append(end_z)
+
+        elevations = {}
+        for node_index, values in samples.items():
+            if max(values) - min(values) > tol:
+                return None
+            elevations[node_index] = sum(values) / len(values)
+        return elevations

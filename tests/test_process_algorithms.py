@@ -3,7 +3,7 @@
 import textwrap
 
 import pytest
-from qgis.core import QgsGeometry, QgsPointXY
+from qgis.core import QgsGeometry, QgsLineString, QgsMultiLineString, QgsPoint, QgsPointXY
 
 from wnt.processes import messages
 from wnt.processes.wnt_assign_demand import AssignDemandAlgorithm
@@ -213,6 +213,11 @@ def bind_common_parameters(monkeypatch, algorithm, sources=None, fields=None, fi
     )
     monkeypatch.setattr(
         algorithm,
+        "parameterAsBool",
+        lambda parameters, name, context: fields.get(name, False),
+    )
+    monkeypatch.setattr(
+        algorithm,
         "parameterAsFile",
         lambda parameters, name, context: str(files[name]),
     )
@@ -237,15 +242,19 @@ def bind_common_parameters(monkeypatch, algorithm, sources=None, fields=None, fi
 
 
 class FakePoint:
-    def __init__(self, x, y):
+    def __init__(self, x, y, z=None):
         self._x = x
         self._y = y
+        self._z = z
 
     def x(self):
         return self._x
 
     def y(self):
         return self._y
+
+    def z(self):
+        return self._z if self._z is not None else float("nan")
 
     def distance(self, other):
         return ((self._x - other.x()) ** 2 + (self._y - other.y()) ** 2) ** 0.5
@@ -260,16 +269,20 @@ class FakeLineGeometry:
 
 
 class FakeGeometry:
-    def __init__(self, x, y, wkt=None, polyline=None):
+    def __init__(self, x, y, wkt=None, polyline=None, multipolyline=None):
         self._point = FakePoint(x, y)
         self._wkt = wkt
         self._polyline = polyline
+        self._multipolyline = multipolyline
 
     def asPoint(self):
         return self._point
 
     def asPolyline(self):
         return self._polyline or [self._point]
+
+    def asMultiPolyline(self):
+        return self._multipolyline or []
 
     def shortestLine(self, other):
         return FakeLineGeometry(self._point.distance(other.asPoint()))
@@ -957,10 +970,6 @@ def test_network_from_lines_builds_node_and_link_outputs(monkeypatch):
     patch_lightweight_qgis_feature_classes(monkeypatch, "wnt.processes.wnt_network_from_lines")
     monkeypatch.setattr("wnt.processes.wnt_network_from_lines.QgsPointXY", lambda x, y: FakePoint(x, y))
     monkeypatch.setattr("wnt.processes.wnt_network_from_lines.QgsGeometry", FakeQgsGeometry)
-    monkeypatch.setattr(
-        "wnt.processes.wnt_network_from_lines.QgsFeatureRequest",
-        lambda: type("Request", (), {"setNoAttributes": lambda self: self})(),
-    )
     fields = FakeFields([FakeNamedField("material")])
     lines = FakeSource(
         [
@@ -1010,12 +1019,33 @@ def test_network_from_lines_builds_node_and_link_outputs(monkeypatch):
     assert algorithm.processAlgorithm({}, None, FakeFeedback(canceled=True)) == {}
 
 
-def test_network_from_lines_rejects_multiline_invalid_and_looped(monkeypatch):
+def test_network_from_lines_splits_multipart_and_uses_z_elevations(monkeypatch):
     algorithm = NetworkFromLinesAlgorithm()
-    bind_common_parameters(
+    patch_lightweight_qgis_feature_classes(monkeypatch, "wnt.processes.wnt_network_from_lines")
+    monkeypatch.setattr("wnt.processes.wnt_network_from_lines.QgsPointXY", lambda x, y: FakePoint(x, y))
+    monkeypatch.setattr("wnt.processes.wnt_network_from_lines.QgsGeometry", FakeQgsGeometry)
+    fields = FakeFields([FakeNamedField("material")])
+    lines = FakeSource(
+        [
+            FakeFeature(
+                {"material": "PVC"},
+                FakeGeometry(
+                    0,
+                    0,
+                    multipolyline=[
+                        [FakePoint(0, 0, 10.0), FakePoint(1, 0, 11.0)],
+                        [FakePoint(1, 0, 11.0004), FakePoint(2, 0, 12.0)],
+                    ],
+                ),
+                fid=11,
+            ),
+        ],
+        fields=fields,
+    )
+    sinks = bind_common_parameters(
         monkeypatch,
         algorithm,
-        sources={algorithm.INPUT: FakeSource([], wkb_type=5)},
+        sources={algorithm.INPUT: lines},
         fields={
             algorithm.TOLERANCE: 0.001,
             algorithm.MASK_NODE: "N$",
@@ -1024,17 +1054,79 @@ def test_network_from_lines_rejects_multiline_invalid_and_looped(monkeypatch):
             algorithm.MASK_LINK: "L$",
             algorithm.INITIAL_LINK: 1,
             algorithm.INCREMENT_LINK: 1,
+            algorithm.USE_LINE_ELEVATION: True,
         },
     )
-    monkeypatch.setattr("wnt.processes.wnt_network_from_lines.QgsWkbTypes.MultiLineString", 5)
+
+    result = algorithm.processAlgorithm({}, None, FakeFeedback())
+
+    assert result == {
+        algorithm.OUTPUT_NODES: f"{algorithm.OUTPUT_NODES}_id",
+        algorithm.OUTPUT_LINES: f"{algorithm.OUTPUT_LINES}_id",
+    }
+    assert [feature.attributes_value for feature in sinks[algorithm.OUTPUT_NODES].features] == [
+        ["N1", "", 10.0],
+        ["N2", "", pytest.approx(11.0002)],
+        ["N3", "", 12.0],
+    ]
+    assert [feature.attributes_value for feature in sinks[algorithm.OUTPUT_LINES].features] == [
+        ["L1", "N1", "N2", "PIPE", 1.0, "PVC"],
+        ["L2", "N2", "N3", "PIPE", 1.0, "PVC"],
+    ]
+
+
+def test_network_from_lines_extracts_qgis_multiline_parts_with_z():
+    multiline = QgsMultiLineString()
+    multiline.addGeometry(QgsLineString([QgsPoint(0, 0, 10), QgsPoint(1, 0, 11)]))
+    multiline.addGeometry(QgsLineString([QgsPoint(1, 0, 11), QgsPoint(2, 0, 12)]))
+
+    parts = NetworkFromLinesAlgorithm._line_parts(QgsGeometry(multiline))
+
+    assert len(parts) == 2
+    assert parts[0][0].z() == 10
+    assert parts[1][-1].z() == 12
+
+
+def test_network_from_lines_rejects_conflicting_z_elevations(monkeypatch):
+    algorithm = NetworkFromLinesAlgorithm()
+    patch_lightweight_qgis_feature_classes(monkeypatch, "wnt.processes.wnt_network_from_lines")
+    lines = FakeSource(
+        [
+            FakeFeature(
+                {},
+                FakeGeometry(0, 0, polyline=[FakePoint(0, 0, 10.0), FakePoint(1, 0, 11.0)]),
+            ),
+            FakeFeature(
+                {},
+                FakeGeometry(1, 0, polyline=[FakePoint(1, 0, 11.5), FakePoint(2, 0, 12.0)]),
+            ),
+        ]
+    )
+    bind_common_parameters(
+        monkeypatch,
+        algorithm,
+        sources={algorithm.INPUT: lines},
+        fields={
+            algorithm.TOLERANCE: 0.001,
+            algorithm.MASK_NODE: "N$",
+            algorithm.INITIAL_NODE: 1,
+            algorithm.INCREMENT_NODE: 1,
+            algorithm.MASK_LINK: "L$",
+            algorithm.INITIAL_LINK: 1,
+            algorithm.INCREMENT_LINK: 1,
+            algorithm.USE_LINE_ELEVATION: True,
+        },
+    )
+
     feedback = FakeFeedback()
     assert algorithm.processAlgorithm({}, None, feedback) == {}
-    assert feedback.errors == ["ERROR: Source geometry is MultiLineString"]
+    assert feedback.errors == [
+        "ERROR: Line endpoint elevations merged into a node differ more than tolerance"
+    ]
 
-    monkeypatch.setattr(
-        "wnt.processes.wnt_network_from_lines.QgsFeatureRequest",
-        lambda: type("Request", (), {"setNoAttributes": lambda self: self})(),
-    )
+
+def test_network_from_lines_rejects_invalid_and_looped(monkeypatch):
+    algorithm = NetworkFromLinesAlgorithm()
     invalid = FakeSource([FakeFeature({}, FakeGeometry(0, 0, polyline=[FakePoint(0, 0)]), fid=7)])
     bind_common_parameters(
         monkeypatch,
