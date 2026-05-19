@@ -657,10 +657,6 @@ def test_network_from_epanet_imports_node_and_link_features(monkeypatch, tmp_pat
 
 def test_network_from_landxml_imports_features(monkeypatch, tmp_path):
     algorithm = NetworkFromLandXMLAlgorithm()
-    monkeypatch.setattr("wnt.processes.wnt_network_from_landxml.QgsFeature", FakeOutputFeature)
-    monkeypatch.setattr("wnt.processes.wnt_network_from_landxml.QgsPoint", lambda *args: args)
-    monkeypatch.setattr("wnt.processes.wnt_network_from_landxml.QgsLineString", lambda points: points)
-    monkeypatch.setattr("wnt.processes.wnt_network_from_landxml.QgsGeometry", lambda geometry: geometry)
     xml = tmp_path / "network.xml"
     xml.write_text(
         """
@@ -692,7 +688,9 @@ def test_network_from_landxml_imports_features(monkeypatch, tmp_path):
         algorithm.OUTPUT_LINES: f"{algorithm.OUTPUT_LINES}_id",
     }
     assert len(sinks[algorithm.OUTPUT_NODES].features) == 2
-    assert sinks[algorithm.OUTPUT_LINES].features[0].attributes_value[2:5] == ["P1", "S1", "S2"]
+    assert sinks[algorithm.OUTPUT_LINES].features[0].attributes()[2:5] == ["P1", "S1", "S2"]
+    assert sinks[algorithm.OUTPUT_NODES].features[0].geometry().asWkt().startswith("Point")
+    assert sinks[algorithm.OUTPUT_LINES].features[0].geometry().asWkt().startswith("LineString")
     assert algorithm.processAlgorithm({}, None, FakeFeedback(canceled=True)) == {}
 
 

@@ -1,4 +1,4 @@
-﻿"""Import network layers from a LandXML pipe network."""
+"""Import network layers from a LandXML pipe network."""
 
 from qgis.PyQt.QtCore import QMetaType
 from qgis.core import (QgsCoordinateReferenceSystem,
@@ -7,6 +7,7 @@ from qgis.core import (QgsCoordinateReferenceSystem,
                        QgsFeature,
                        QgsLineString,
                        QgsPoint,
+                       QgsPointXY,
                        QgsProcessingParameterFile,
                        QgsProcessingParameterFeatureSink,
                        QgsGeometry,
@@ -19,7 +20,7 @@ from .messages import finish, info, start
 
 class NetworkFromLandXMLAlgorithm(WntProcessingAlgorithm):
     """
-    Built a network from an epanet file.
+    Build a network from a LandXML file.
     """
 
     # DEFINE CONSTANTS
@@ -108,9 +109,14 @@ class NetworkFromLandXMLAlgorithm(WntProcessingAlgorithm):
         imp_net = landxml.network_from_xml(landxmlfn)
         networks = imp_net['networks']
         if 'epsg_code' in imp_net:
-            crs = QgsCoordinateReferenceSystem('EPSG:' + imp_net['epsg_code'])
-        else:
+            epsg_code = imp_net['epsg_code']
+            if not epsg_code.upper().startswith('EPSG:'):
+                epsg_code = 'EPSG:' + epsg_code
+            crs = QgsCoordinateReferenceSystem(epsg_code)
+        elif 'wkt_crs' in imp_net:
             crs = QgsCoordinateReferenceSystem('WKT:' + imp_net['wkt_crs'])
+        else:
+            crs = QgsCoordinateReferenceSystem()
 
         # SHOW INFO
         start(feedback, self.displayName())
@@ -167,8 +173,8 @@ class NetworkFromLandXMLAlgorithm(WntProcessingAlgorithm):
             for nodename, node in network['nodes'].items():
                 nodcnt += 1
                 f = QgsFeature()
-                point = QgsPoint(node['x'], node['y'])
-                f.setGeometry(point)
+                point = QgsPointXY(node['x'], node['y'])
+                f.setGeometry(QgsGeometry.fromPointXY(point))
                 f.setAttributes([netname,
                                  net_type,
                                  nodename,

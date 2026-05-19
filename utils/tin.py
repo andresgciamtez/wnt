@@ -1,8 +1,14 @@
-﻿"""TIN interpolation utilities for LandXML surfaces."""
+"""TIN interpolation utilities for LandXML surfaces."""
 
 import xml.etree.ElementTree as ET
 
 ACCEPTABLE_DEVIATION = 1E-5
+NS = '{http://www.landxml.org/schema/LandXML-1.2}'
+
+
+def xmlname(name):
+    return NS + name
+
 
 class Triangle:
     '''Triangle defined for 3 points, (xi, yi, zi).'''
@@ -52,26 +58,31 @@ class TIN:
         self._points = {}
 
     def from_landxml(self, file, surfname=''):
-        '''Load a TIN surface from a landXLM file.
+        '''Load a TIN surface from a LandXML file.
 
         Parameters
         ----------
         file, string, is the LandXML file name
         surfname, string, is the surface name, by default load the first one
         '''
-        sname = '{http://www.landxml.org/schema/LandXML-1.2}Surface'
-        dname = '{http://www.landxml.org/schema/LandXML-1.2}Definition'
         tree = ET.parse(file)
         root = tree.getroot()
-        for surface in root.iter(sname):
-            if surface.find(dname).attrib['surfType'] == 'TIN':
-                if surfname == '' or surfname == surface.attrib['name']:
-                    for point in surface[1][0]:
-                        y, x, z = tuple(map(float, point.text.split()))
-                        self._points[point.attrib['id']] = x, y, z
-                    for face in surface[1][1]:
-                        self._faces.append(face.text.split())
-                    break
+        for surface in root.iter(xmlname('Surface')):
+            definition = surface.find(xmlname('Definition'))
+            if definition is None or definition.attrib.get('surfType') != 'TIN':
+                continue
+            if surfname != '' and surfname != surface.attrib['name']:
+                continue
+            points = definition.find(xmlname('Pnts'))
+            faces = definition.find(xmlname('Faces'))
+            if points is None or faces is None:
+                continue
+            for point in points:
+                y, x, z = tuple(map(float, point.text.split()))
+                self._points[point.attrib['id']] = x, y, z
+            for face in faces:
+                self._faces.append(face.text.split())
+            break
         else:
             raise Exception('Incorrect name or none surface found.')
 
@@ -89,4 +100,3 @@ class TIN:
             else:
                 result.append(None)
         return result
-

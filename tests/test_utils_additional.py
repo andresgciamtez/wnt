@@ -398,7 +398,6 @@ def test_tin_triangle_and_landxml_loading(tmp_path):
             <LandXML xmlns="http://www.landxml.org/schema/LandXML-1.2">
               <Surfaces>
                 <Surface name="Ground">
-                  <Metadata />
                   <Definition surfType="TIN">
                     <Pnts>
                       <P id="1">0 0 1</P>
@@ -407,6 +406,7 @@ def test_tin_triangle_and_landxml_loading(tmp_path):
                     </Pnts>
                     <Faces><F>1 2 3</F></Faces>
                   </Definition>
+                  <Metadata />
                 </Surface>
               </Surfaces>
             </LandXML>
@@ -502,3 +502,44 @@ def test_landxml_pipe_network_parser(tmp_path):
     )
     with pytest.raises(NotImplementedError, match="Pressurized"):
         network_from_xml(xml)
+
+
+def test_landxml_parser_handles_optional_crs_desc_and_inverts(tmp_path):
+    xml = tmp_path / "network.xml"
+    xml.write_text(
+        textwrap.dedent(
+            """
+            <LandXML xmlns="http://www.landxml.org/schema/LandXML-1.2">
+              <PipeNetwork name="Storm" pipeNetType="storm">
+                <Struct name="S1" elevSump="1" elevRim="3">
+                  <Center>10 20</Center>
+                  <Invert refPipe="P1" elev="1.5" />
+                </Struct>
+                <Struct name="S2" elevSump="2" elevRim="5">
+                  <Center>11 21</Center>
+                  <Invert refPipe="P1" elev="2.5" />
+                </Struct>
+                <Struct name="S3" elevSump="2" elevRim="5">
+                  <Center>12 22</Center>
+                </Struct>
+                <Pipe name="P1" refStart="S1" refEnd="S2" length="12">
+                  <CircPipe diameter="300" />
+                </Pipe>
+                <Pipe name="P2" refStart="S2" refEnd="S3" length="8">
+                  <CircPipe diameter="200" />
+                </Pipe>
+              </PipeNetwork>
+            </LandXML>
+            """
+        ).strip(),
+        encoding="utf-8",
+    )
+
+    data = network_from_xml(xml)
+    storm = data["networks"]["Storm"]
+
+    assert "epsg_code" not in data
+    assert "wkt_crs" not in data
+    assert set(storm["nodes"]) == {"S1", "S2", "S3"}
+    assert set(storm["links"]) == {"P1"}
+    assert storm["links"]["P1"]["slope"] == 0

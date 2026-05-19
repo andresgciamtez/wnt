@@ -1,23 +1,26 @@
-﻿"""LandXML pipe network parser."""
+"""LandXML pipe network parser."""
 
 import xml.etree.ElementTree as ET
 
+NS = '{http://www.landxml.org/schema/LandXML-1.2}'
+
+
+def xmlname(name):
+    return NS + name
+
 
 def network_from_xml(xmlfn):
-    '''Import network from a LandXLM file.'''
-    def xmlname(name):
-        prefix = '{http://www.landxml.org/schema/LandXML-1.2}'
-        return prefix + name
-
+    '''Import network from a LandXML file.'''
     tree = ET.parse(xmlfn)
     root = tree.getroot()
     crs = root.find(xmlname('CoordinateSystem'))
     epsg_code = None
     wkt_crs = None
-    if 'epsgCode' in crs.attrib:
-        epsg_code = crs.attrib['epsgCode']
-    else:
-        wkt_crs = crs.attrib['ogcWktCode']
+    if crs is not None:
+        if 'epsgCode' in crs.attrib:
+            epsg_code = crs.attrib['epsgCode']
+        elif 'ogcWktCode' in crs.attrib:
+            wkt_crs = crs.attrib['ogcWktCode']
     networks = {}
 
     # READ NETWORK
@@ -25,12 +28,12 @@ def network_from_xml(xmlfn):
         net_type = pipenetwork.attrib['pipeNetType']
         if net_type == 'storm':
 
-            #READ STRUCTS
+            # READ STRUCTS
             nodes = {}
             inverts = {}
             for struct in pipenetwork.iter(xmlname('Struct')):
                 name = struct.attrib['name']
-                desc = struct.attrib['desc']
+                desc = struct.attrib.get('desc', '')
                 if desc != "Dummy Null Structure for LandXML purposes":
                     node = {}
                     sump = round(float(struct.attrib['elevSump']), 3)
@@ -63,16 +66,22 @@ def network_from_xml(xmlfn):
                 name = pipe.attrib['name']
                 start = pipe.attrib['refStart']
                 end = pipe.attrib['refEnd']
+                start_invert = inverts.get((name, start))
+                end_invert = inverts.get((name, end))
+                if not start_invert or not end_invert:
+                    continue
                 pipe_data = {'start': start,
                              'end': end,
-                             'start_elev': inverts[(name, start)]['elev'],
-                             'start_offset': inverts[(name, start)]['offset'],
-                             'start_depth': inverts[(name, start)]['depth'],
-                             'end_elev': inverts[(name, end)]['elev'],
-                             'end_offset': inverts[(name, end)]['offset'],
-                             'end_depth': inverts[(name, end)]['depth'],
+                             'start_elev': start_invert['elev'],
+                             'start_offset': start_invert['offset'],
+                             'start_depth': start_invert['depth'],
+                             'end_elev': end_invert['elev'],
+                             'end_offset': end_invert['offset'],
+                             'end_depth': end_invert['depth'],
                              'length': round(float(pipe.attrib['length']), 3),
-                             'slope': round(float(pipe.attrib['slope']), 4)
+                             'slope': round(float(pipe.attrib.get('slope', 0)), 4),
+                             'sect_type': None,
+                             'section': None,
                              }
                 for child in list(pipe):
                     if child.tag == xmlname('CircPipe'):
@@ -94,5 +103,7 @@ def network_from_xml(xmlfn):
                                                 }
     if epsg_code:
         return {'networks': networks, 'epsg_code': epsg_code}
-    return {'networks': networks, 'wkt_crs': wkt_crs}
+    if wkt_crs:
+        return {'networks': networks, 'wkt_crs': wkt_crs}
+    return {'networks': networks}
 
