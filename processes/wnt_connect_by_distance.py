@@ -1,4 +1,4 @@
-﻿"""Connect source and target features by distance."""
+"""Connect source and target features by distance."""
 
 from qgis.PyQt.QtCore import QMetaType
 from qgis.core import (QgsFeature,
@@ -21,9 +21,9 @@ class ConnectByDistanceAlgorithm(WntProcessingAlgorithm):
     """
 
     # DEFINE CONSTANTS
-    SOURCE_INPUT = 'SOURCE_LAYER_INPUT'
-    TARGET_INPUT = 'TARGET_LAYER_INPUT'
-    CONNECTION_OUTPUT = 'CONNECTION_OUTPUT'
+    INPUT_SOURCE = 'INPUT_SOURCE'
+    INPUT_TARGET = 'INPUT_TARGET'
+    OUTPUT_CONNECTIONS = 'OUTPUT_CONNECTIONS'
     MAX_CONNECTIONS = 'MAX_CONNECTIONS'
     MAX_DISTANCE = 'MAX_DISTANCE'
 
@@ -79,7 +79,7 @@ class ConnectByDistanceAlgorithm(WntProcessingAlgorithm):
         # INPUT
         self.addParameter(
             QgsProcessingParameterFeatureSource(
-                self.SOURCE_INPUT,
+                self.INPUT_SOURCE,
                 self.tr('Source layer'),
                 types=[QgsProcessing.TypeVectorAnyGeometry]
                 )
@@ -87,7 +87,7 @@ class ConnectByDistanceAlgorithm(WntProcessingAlgorithm):
 
         self.addParameter(
             QgsProcessingParameterFeatureSource(
-                self.TARGET_INPUT,
+                self.INPUT_TARGET,
                 self.tr('Target layer'),
                 types=[QgsProcessing.TypeVectorAnyGeometry]
                 )
@@ -114,7 +114,7 @@ class ConnectByDistanceAlgorithm(WntProcessingAlgorithm):
         # ADD LINKS FEATURE SINK
         self.addParameter(
             QgsProcessingParameterFeatureSink(
-                self.CONNECTION_OUTPUT,
+                self.OUTPUT_CONNECTIONS,
                 self.tr('Connection layer')
             )
         )
@@ -124,8 +124,8 @@ class ConnectByDistanceAlgorithm(WntProcessingAlgorithm):
         RUN PROCESS
         """
         # INPUT
-        s_ly = self.parameterAsSource(parameters, self.SOURCE_INPUT, context)
-        t_ly = self.parameterAsSource(parameters, self.TARGET_INPUT, context)
+        s_ly = self.parameterAsSource(parameters, self.INPUT_SOURCE, context)
+        t_ly = self.parameterAsSource(parameters, self.INPUT_TARGET, context)
         max_con = self.parameterAsInt(parameters, self.MAX_CONNECTIONS, context)
         max_dst = self.parameterAsDouble(parameters, self.MAX_DISTANCE, context)
 
@@ -148,7 +148,7 @@ class ConnectByDistanceAlgorithm(WntProcessingAlgorithm):
         fields.append(QgsField('n', QMetaType.Int))
         (connection_sink, connection_id) = self.parameterAsSink(
             parameters,
-            self.CONNECTION_OUTPUT,
+            self.OUTPUT_CONNECTIONS,
             context,
             fields,
             QgsWkbTypes.LineString,
@@ -192,5 +192,5 @@ class ConnectByDistanceAlgorithm(WntProcessingAlgorithm):
             return {}
 
         # OUTPUT
-        return {self.CONNECTION_OUTPUT: connection_id}
+        return {self.OUTPUT_CONNECTIONS: connection_id}
 

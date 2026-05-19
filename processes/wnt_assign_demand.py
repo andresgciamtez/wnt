@@ -1,4 +1,4 @@
-﻿"""Assign demand sources to target network nodes."""
+"""Assign demand sources to target network nodes."""
 
 from qgis.PyQt.QtCore import QMetaType
 from qgis.core import (QgsFeature,
@@ -23,10 +23,10 @@ class AssignDemandAlgorithm(WntProcessingAlgorithm):
     """
 
     # DEFINE CONSTANTS
-    SOURCE_INPUT = 'SOURCE_LAYER_INPUT'
-    SOURCE_FIELDS = 'SOURCE_FIELDS'
-    TARGET_INPUT = 'TARGET_LAYER_INPUT'
-    ASSIGN_OUTPUT = 'ASSIGNMENT_LAYER_OUTPUT'
+    INPUT_SOURCE = 'INPUT_SOURCE'
+    FIELDS_SOURCE = 'FIELDS_SOURCE'
+    INPUT_TARGET = 'INPUT_TARGET'
+    OUTPUT_ASSIGNMENTS = 'OUTPUT_ASSIGNMENTS'
     OUTPUT_NODES = 'OUTPUT_NODES'
 
 
@@ -81,23 +81,23 @@ class AssignDemandAlgorithm(WntProcessingAlgorithm):
         # INPUT
         self.addParameter(
             QgsProcessingParameterFeatureSource(
-                self.SOURCE_INPUT,
+                self.INPUT_SOURCE,
                 self.tr('Source layer'),
                 types=[QgsProcessing.TypeVectorPoint]
                 )
             )
         self.addParameter(
             QgsProcessingParameterField(
-                self.SOURCE_FIELDS,
+                self.FIELDS_SOURCE,
                 self.tr('Source demand fields'),
                 None,
-                self.SOURCE_INPUT,
+                self.INPUT_SOURCE,
                 allowMultiple=True
                 )
             )
         self.addParameter(
             QgsProcessingParameterFeatureSource(
-                self.TARGET_INPUT,
+                self.INPUT_TARGET,
                 self.tr('Target layer'),
                 types=[QgsProcessing.TypeVectorPoint]
                 )
@@ -106,7 +106,7 @@ class AssignDemandAlgorithm(WntProcessingAlgorithm):
         # ADD PAIRS FEATURE SINK
         self.addParameter(
             QgsProcessingParameterFeatureSink(
-                self.ASSIGN_OUTPUT,
+                self.OUTPUT_ASSIGNMENTS,
                 self.tr('Assignment layer')
             )
         )
@@ -122,9 +122,9 @@ class AssignDemandAlgorithm(WntProcessingAlgorithm):
         RUN PROCESS
         """
         # INPUT
-        slayer = self.parameterAsSource(parameters, self.SOURCE_INPUT, context)
-        sfields = self.parameterAsFields(parameters, self.SOURCE_FIELDS, context)
-        tlayer = self.parameterAsSource(parameters, self.TARGET_INPUT, context)
+        slayer = self.parameterAsSource(parameters, self.INPUT_SOURCE, context)
+        sfields = self.parameterAsFields(parameters, self.FIELDS_SOURCE, context)
+        tlayer = self.parameterAsSource(parameters, self.INPUT_TARGET, context)
 
         # CHECK CRS
         crs = slayer.sourceCrs()
@@ -145,7 +145,7 @@ class AssignDemandAlgorithm(WntProcessingAlgorithm):
 
         (assignment_sink, assignment_id) = self.parameterAsSink(
             parameters,
-            self.ASSIGN_OUTPUT,
+            self.OUTPUT_ASSIGNMENTS,
             context,
             fields,
             QgsWkbTypes.LineString,
@@ -266,4 +266,4 @@ class AssignDemandAlgorithm(WntProcessingAlgorithm):
             return {}
 
         # OUTPUT
-        return {self.ASSIGN_OUTPUT: assignment_id, self.OUTPUT_NODES: node_id}
+        return {self.OUTPUT_ASSIGNMENTS: assignment_id, self.OUTPUT_NODES: node_id}

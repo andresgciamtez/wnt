@@ -1,4 +1,4 @@
-﻿"""Export an EPANET demand scenario file."""
+"""Export an EPANET demand scenario file."""
 
 from qgis.core import (QgsProcessing,
                        QgsProcessingParameterFeatureSource,
@@ -9,12 +9,12 @@ from .messages import finish, info, start
 
 class ScnFromDemandsAlgorithm(WntProcessingAlgorithm):
     """
-    Build an epanet scenary file from nodal demands.
+    Build an EPANET scenary file from nodal demands.
     """
 
     # DEFINE CONSTANTS
     INPUT_NODES = 'INPUT_NODES'
-    DEM_FIELD = 'DEM_FIELD'
+    FIELD_DEMAND = 'FIELD_DEMAND'
     OUTPUT = 'OUTPUT'
 
 
@@ -75,7 +75,7 @@ class ScnFromDemandsAlgorithm(WntProcessingAlgorithm):
             )
         self.addParameter(
             QgsProcessingParameterField(
-                self.DEM_FIELD,
+                self.FIELD_DEMAND,
                 self.tr('Field containing demand'),
                 'demand',
                 self.INPUT_NODES,
@@ -86,7 +86,7 @@ class ScnFromDemandsAlgorithm(WntProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterFileDestination(
                 self.OUTPUT,
-                self.tr('Epanet scenario file'),
+                self.tr('EPANET scenario file'),
                 fileFilter='*.scn'
                 )
             )
@@ -98,7 +98,7 @@ class ScnFromDemandsAlgorithm(WntProcessingAlgorithm):
 
         # INPUT
         nodes = self.parameterAsSource(parameters, self.INPUT_NODES, context)
-        defields = self.parameterAsFields(parameters, self.DEM_FIELD, context)
+        defields = self.parameterAsFields(parameters, self.FIELD_DEMAND, context)
 
         # IF NO FIELD WAS SELECTED RETURN {}
         if not defields:

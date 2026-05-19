@@ -1,4 +1,4 @@
-﻿"""Set node elevations from a raster DEM."""
+"""Set node elevations from a raster DEM."""
 
 from qgis.core import (QgsProcessing,
                        QgsFeatureSink,
@@ -18,8 +18,8 @@ class ElevationFromRasterAlgorithm(WntProcessingAlgorithm):
 
     # DEFINE CONSTANTS
     INPUT_NODES = 'INPUT_NODES'
-    DEM_INPUT = 'DEM_INPUT'
-    ELEV_FIELD = 'ELEV_FIELD'
+    INPUT_DEM = 'INPUT_DEM'
+    FIELD_ELEVATION = 'FIELD_ELEVATION'
     OUTPUT = 'OUTPUT'
 
 
@@ -80,7 +80,7 @@ class ElevationFromRasterAlgorithm(WntProcessingAlgorithm):
             )
         self.addParameter(
             QgsProcessingParameterField(
-                self.ELEV_FIELD,
+                self.FIELD_ELEVATION,
                 self.tr('Elevation field.'),
                 None,
                 self.INPUT_NODES
@@ -88,7 +88,7 @@ class ElevationFromRasterAlgorithm(WntProcessingAlgorithm):
             )
         self.addParameter(
             QgsProcessingParameterRasterLayer(
-                self.DEM_INPUT,
+                self.INPUT_DEM,
                 self.tr('DEM raster layer input')
                 )
             )
@@ -108,8 +108,8 @@ class ElevationFromRasterAlgorithm(WntProcessingAlgorithm):
 
         # INPUT
         nodelayer = self.parameterAsSource(parameters, self.INPUT_NODES, context)
-        demlayer = self.parameterAsRasterLayer(parameters, self.DEM_INPUT, context)
-        efield = self.parameterAsString(parameters, self.ELEV_FIELD, context)
+        demlayer = self.parameterAsRasterLayer(parameters, self.INPUT_DEM, context)
+        efield = self.parameterAsString(parameters, self.FIELD_ELEVATION, context)
 
         # CHECK CRS
         crs = nodelayer.sourceCrs()

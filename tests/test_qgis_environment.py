@@ -49,7 +49,7 @@ def test_raster_elevation_field_parameter_is_bound_to_node_layer():
     algorithm = ElevationFromRasterAlgorithm()
     algorithm.initAlgorithm()
 
-    parameter = algorithm.parameterDefinition(algorithm.ELEV_FIELD)
+    parameter = algorithm.parameterDefinition(algorithm.FIELD_ELEVATION)
 
     assert parameter.parentLayerParameterName() == algorithm.INPUT_NODES
 

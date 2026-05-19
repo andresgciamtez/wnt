@@ -1,18 +1,81 @@
-﻿"""Split line features at point locations."""
+"""Split line features at point locations."""
 
-from math import dist
-from qgis.core import (QgsGeometry,
+from math import dist, hypot
+from qgis.core import (Qgis,
+                       QgsFeature,
+                       QgsGeometry,
                        QgsWkbTypes,
-                       QgsPoint,
+                       QgsPointXY,
                        QgsProcessing,
                        QgsProcessingParameterDistance,
                        QgsProcessingParameterFeatureSource,
                        QgsProcessingParameterFeatureSink
                        )
 from .base import WntProcessingAlgorithm
-from ..utils import split
 from .messages import crs as log_crs
 from .messages import error, finish, info, start
+
+
+def _splitter_for_point(geometry, point, tolerance):
+    sqr_dist, nearest, next_vertex, _ = geometry.closestSegmentWithContext(point)
+    if sqr_dist < 0 or sqr_dist > tolerance * tolerance:
+        return None
+
+    vertices = list(geometry.vertices())
+    if next_vertex <= 0 or next_vertex >= len(vertices):
+        return None
+
+    previous = vertices[next_vertex - 1]
+    following = vertices[next_vertex]
+    dx = following.x() - previous.x()
+    dy = following.y() - previous.y()
+    length = hypot(dx, dy)
+    if length == 0:
+        return None
+
+    offset = max(tolerance * 2, length * 1e-6, 1e-9)
+    nx = -dy / length * offset
+    ny = dx / length * offset
+    return [
+        QgsPointXY(nearest.x() - nx, nearest.y() - ny),
+        QgsPointXY(nearest.x() + nx, nearest.y() + ny),
+    ]
+
+
+def _split_geometry_at_points(geometry, points, tolerance):
+    parts = [QgsGeometry(geometry)]
+    for point in points:
+        point_xy = QgsPointXY(point[0], point[1])
+        point_geometry = QgsGeometry.fromPointXY(point_xy)
+        new_parts = []
+        for part in parts:
+            if part.distance(point_geometry) > tolerance:
+                new_parts.append(part)
+                continue
+
+            splitter = _splitter_for_point(part, point_xy, tolerance)
+            if splitter is None:
+                new_parts.append(part)
+                continue
+
+            result, split_parts, _ = part.splitGeometry(splitter, False)
+            if result == Qgis.GeometryOperationResult.Success and split_parts:
+                new_parts.append(part)
+                new_parts.extend(split_parts)
+            else:
+                new_parts.append(part)
+        parts = new_parts
+
+    return parts if len(parts) > 1 else None
+
+
+def _feature_with_geometry(feature, geometry):
+    try:
+        new_feature = QgsFeature(feature)
+    except TypeError:
+        new_feature = feature
+    new_feature.setGeometry(geometry)
+    return new_feature
 
 class SplitLinesAtPointsAlgorithm(WntProcessingAlgorithm):
     """
@@ -20,8 +83,8 @@ class SplitLinesAtPointsAlgorithm(WntProcessingAlgorithm):
     """
 
     # DEFINE CONSTANTS
-    POINT_INPUT = 'POINT_INPUT'
-    LINE_INPUT = 'LINE_INPUT'
+    INPUT_POINTS = 'INPUT_POINTS'
+    INPUT_LINES = 'INPUT_LINES'
     TOLERANCE = 'TOLERANCE'
     OUTPUT = 'OUTPUT'
 
@@ -76,14 +139,14 @@ class SplitLinesAtPointsAlgorithm(WntProcessingAlgorithm):
         #   DEFINE INPUT
         self.addParameter(
             QgsProcessingParameterFeatureSource(
-                self.POINT_INPUT,
+                self.INPUT_POINTS,
                 self.tr('Input point layer'),
                 [QgsProcessing.TypeVectorPoint]
                 )
             )
         self.addParameter(
             QgsProcessingParameterFeatureSource(
-                self.LINE_INPUT,
+                self.INPUT_LINES,
                 self.tr('Input line layer'),
                 [QgsProcessing.TypeVectorLine]
                 )
@@ -111,8 +174,8 @@ class SplitLinesAtPointsAlgorithm(WntProcessingAlgorithm):
         RUN PROCESS
         """
         # INPUT
-        pntlayer = self.parameterAsSource(parameters, self.POINT_INPUT, context)
-        linlayer = self.parameterAsSource(parameters, self.LINE_INPUT, context)
+        pntlayer = self.parameterAsSource(parameters, self.INPUT_POINTS, context)
+        linlayer = self.parameterAsSource(parameters, self.INPUT_LINES, context)
         tolerance = self.parameterAsDouble(parameters, self.TOLERANCE, context)
 
         # CHECK CRS
@@ -151,17 +214,15 @@ class SplitLinesAtPointsAlgorithm(WntProcessingAlgorithm):
         info(feedback, "Overlapped points", pntlayer.featureCount() - len(points))
 
         # LOAD AND SPLIT LINES
-        cnt = 0                         # link counter
+        cnt = 0                         # output link counter
         tot = linlayer.featureCount()
-        x1 = y1 = 1e24                   # initialize x boundbox
-        x2 = y2 = -1e24                  # initialize y boundbox
-
+        processed = 0                   # input feature counter
         # LINES LOOP
         for f in linlayer.getFeatures():
-            line = []
+            x1 = y1 = 1e24               # initialize x boundbox
+            x2 = y2 = -1e24              # initialize y boundbox
             for vertex in f.geometry().asPolyline():
                 x, y = vertex.x(), vertex.y()
-                line.append((x, y))
 
                 # CALCULATE BOUNDBOX
                 x1, y1 = min(x1, x), min(y1, y)
@@ -176,26 +237,28 @@ class SplitLinesAtPointsAlgorithm(WntProcessingAlgorithm):
                     fpoints.append(point)
            # SPLIT
             if fpoints:
-                splitted = split.split_linestring_m(line, fpoints, tolerance)
+                splitted = _split_geometry_at_points(f.geometry(), fpoints, tolerance)
                 if splitted:
 
                     # ADD NEW LINESTRINGS
-                    for part in splitted:
-                        newpolyline = []
-                        for vertex in part:
-                            x, y = vertex[0:2]
-                            newpolyline.append(QgsPoint(x, y))
-                        f.setGeometry(QgsGeometry.fromPolyline(newpolyline))
-                        sink.addFeature(f)
+                    for geometry in splitted:
+                        sink.addFeature(_feature_with_geometry(f, geometry))
                         cnt += 1
+                else:
+
+                    # KEEP ORIGINAL FEATURE
+                    sink.addFeature(f)
+                    cnt += 1
             else:
 
                 # KEEP ORIGINAL FEATURE
                 sink.addFeature(f)
                 cnt += 1
 
+            processed += 1
             # SHOW PROGRESS
-            feedback.setProgress(100*cnt/tot) # Update the progress bar
+            if tot > 0:
+                feedback.setProgress(100*processed/tot) # Update the progress bar
 
         info(feedback, "Input lines", tot)
         info(feedback, "Output lines", cnt)

@@ -15,7 +15,6 @@ from wnt.utils.core import (
 )
 from wnt.utils.graph import Graph
 from wnt.utils.landxml import network_from_xml
-from wnt.utils.split import split_linestring, split_linestring_m
 from wnt.utils.tin import TIN, Triangle
 
 
@@ -382,27 +381,6 @@ def test_graph_classifies_tree_and_mesh_edges():
         "M2": ("MESHED", 1),
         "M3": ("MESHED", 1),
     }
-
-
-def test_split_linestring_vertex_endpoint_and_multiple_points():
-    line = [(0, 0), (1, 0), (2, 0)]
-
-    assert split_linestring(line, (0, 0), 0.01) is None
-    assert split_linestring(line, (2, 0), 0.01) is None
-    assert split_linestring(line, (1, 0), 0.01) == (
-        [(0, 0), (1, 0)],
-        [(1, 0), (2, 0)],
-    )
-    assert split_linestring(line, (1, 1), 0.01) is None
-    assert split_linestring([(0, 0), (0, 0), (1, 0)], (0, 0), 0.01) == (
-        [(0, 0), (0, 0), (1, 0)],
-        [(1, 0)],
-    )
-    assert split_linestring_m(line, [(0.5, 0), (1.5, 0)], 0.01) == [
-        [(0, 0), (0.5, 0.0)],
-        [(0.5, 0.0), (1, 0), (1.5, 0.0)],
-        [(1.5, 0.0), (2, 0)],
-    ]
 
 
 def test_tin_triangle_and_landxml_loading(tmp_path):

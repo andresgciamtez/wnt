@@ -3,6 +3,7 @@
 import textwrap
 
 import pytest
+from qgis.core import QgsGeometry, QgsPointXY
 
 from wnt.processes import messages
 from wnt.processes.wnt_assign_demand import AssignDemandAlgorithm
@@ -424,14 +425,14 @@ def test_connect_by_distance_writes_nearest_connections_and_crs_error(monkeypatc
     sinks = bind_common_parameters(
         monkeypatch,
         algorithm,
-        sources={algorithm.SOURCE_INPUT: source, algorithm.TARGET_INPUT: target},
+        sources={algorithm.INPUT_SOURCE: source, algorithm.INPUT_TARGET: target},
         fields={algorithm.MAX_CONNECTIONS: 1, algorithm.MAX_DISTANCE: 5},
     )
 
     result = algorithm.processAlgorithm({}, None, FakeFeedback())
 
-    assert result == {algorithm.CONNECTION_OUTPUT: f"{algorithm.CONNECTION_OUTPUT}_id"}
-    attrs = [feature.attributes_value for feature in sinks[algorithm.CONNECTION_OUTPUT].features]
+    assert result == {algorithm.OUTPUT_CONNECTIONS: f"{algorithm.OUTPUT_CONNECTIONS}_id"}
+    attrs = [feature.attributes_value for feature in sinks[algorithm.OUTPUT_CONNECTIONS].features]
     assert attrs == [["S1", "T1", 1.0, 1]]
     assert algorithm.processAlgorithm({}, None, FakeFeedback(canceled=True)) == {}
 
@@ -439,7 +440,7 @@ def test_connect_by_distance_writes_nearest_connections_and_crs_error(monkeypatc
     bind_common_parameters(
         monkeypatch,
         algorithm,
-        sources={algorithm.SOURCE_INPUT: source, algorithm.TARGET_INPUT: bad_target},
+        sources={algorithm.INPUT_SOURCE: source, algorithm.INPUT_TARGET: bad_target},
         fields={algorithm.MAX_CONNECTIONS: 1, algorithm.MAX_DISTANCE: 5},
     )
     feedback = FakeFeedback()
@@ -460,8 +461,8 @@ def test_elevation_from_raster_processes_and_skips_nodes(monkeypatch):
     sinks = bind_common_parameters(
         monkeypatch,
         algorithm,
-        sources={algorithm.INPUT_NODES: nodes, algorithm.DEM_INPUT: raster},
-        fields={algorithm.ELEV_FIELD: "elevation"},
+        sources={algorithm.INPUT_NODES: nodes, algorithm.INPUT_DEM: raster},
+        fields={algorithm.FIELD_ELEVATION: "elevation"},
     )
 
     result = algorithm.processAlgorithm({}, None, FakeFeedback())
@@ -475,8 +476,8 @@ def test_elevation_from_raster_processes_and_skips_nodes(monkeypatch):
     bind_common_parameters(
         monkeypatch,
         algorithm,
-        sources={algorithm.INPUT_NODES: nodes, algorithm.DEM_INPUT: bad_raster},
-        fields={algorithm.ELEV_FIELD: "elevation"},
+        sources={algorithm.INPUT_NODES: nodes, algorithm.INPUT_DEM: bad_raster},
+        fields={algorithm.FIELD_ELEVATION: "elevation"},
     )
     feedback = FakeFeedback()
 
@@ -517,8 +518,8 @@ def test_elevation_from_tin_interpolates_nodes(monkeypatch, tmp_path):
         monkeypatch,
         algorithm,
         sources={algorithm.INPUT_NODES: nodes},
-        fields={algorithm.ELEV_FIELD: "elevation", algorithm.SURFACE_NAME: "Ground"},
-        files={algorithm.TIN_INPUT: xml},
+        fields={algorithm.FIELD_ELEVATION: "elevation", algorithm.SURFACE_NAME: "Ground"},
+        files={algorithm.INPUT_TIN: xml},
     )
 
     result = algorithm.processAlgorithm({}, None, FakeFeedback())
@@ -544,14 +545,14 @@ def test_hydrant_pairs_writes_pairs_within_distance(monkeypatch):
     sinks = bind_common_parameters(
         monkeypatch,
         algorithm,
-        sources={algorithm.HYD_INPUT: hydrants},
-        fields={algorithm.ID_FIELD: "hid", algorithm.MAX_DIST: 5},
+        sources={algorithm.INPUT_HYDRANTS: hydrants},
+        fields={algorithm.FIELD_ID: "hid", algorithm.MAX_DISTANCE: 5},
     )
 
     result = algorithm.processAlgorithm({}, None, FakeFeedback())
 
-    assert result == {algorithm.PAIRS_OUTPUT: f"{algorithm.PAIRS_OUTPUT}_id"}
-    assert [feature.attributes_value for feature in sinks[algorithm.PAIRS_OUTPUT].features] == [
+    assert result == {algorithm.OUTPUT_PAIRS: f"{algorithm.OUTPUT_PAIRS}_id"}
+    assert [feature.attributes_value for feature in sinks[algorithm.OUTPUT_PAIRS].features] == [
         ["0", "H1", "H2", 5.0]
     ]
     assert algorithm.processAlgorithm({}, None, FakeFeedback(canceled=True)) == {}
@@ -566,9 +567,9 @@ def epanet_template_text():
 
 def test_epanet_from_network_exports_file_and_rejects_crs(monkeypatch, tmp_path):
     algorithm = EpanetFromNetworkAlgorithm()
-    template = tmp_path / "template.inp"
+    INPUT_TEMPLATE = tmp_path / "template.inp"
     output = tmp_path / "model.inp"
-    template.write_text(epanet_template_text(), encoding="latin-1")
+    INPUT_TEMPLATE.write_text(epanet_template_text(), encoding="latin-1")
     nodes = FakeSource(
         [
             FakeFeature({"id": "J1", "type": "JUNCTION", "elevation": 1}, FakeGeometry(0, 0)),
@@ -587,7 +588,7 @@ def test_epanet_from_network_exports_file_and_rejects_crs(monkeypatch, tmp_path)
         monkeypatch,
         algorithm,
         sources={algorithm.INPUT_NODES: nodes, algorithm.INPUT_LINES: links},
-        files={algorithm.TEMPLATE: template, algorithm.OUTPUT: output},
+        files={algorithm.INPUT_TEMPLATE: INPUT_TEMPLATE, algorithm.OUTPUT: output},
     )
 
     result = algorithm.processAlgorithm({}, None, FakeFeedback())
@@ -603,7 +604,7 @@ def test_epanet_from_network_exports_file_and_rejects_crs(monkeypatch, tmp_path)
         monkeypatch,
         algorithm,
         sources={algorithm.INPUT_NODES: nodes, algorithm.INPUT_LINES: bad_links},
-        files={algorithm.TEMPLATE: template, algorithm.OUTPUT: output},
+        files={algorithm.INPUT_TEMPLATE: INPUT_TEMPLATE, algorithm.OUTPUT: output},
     )
     feedback = FakeFeedback()
 
@@ -714,14 +715,14 @@ def test_assign_demand_accumulates_nearest_target(monkeypatch):
     algorithm = AssignDemandAlgorithm()
     patch_lightweight_qgis_feature_classes(monkeypatch, "wnt.processes.wnt_assign_demand")
     monkeypatch.setattr("wnt.processes.wnt_assign_demand.QgsSpatialIndex", FakeSpatialIndex)
-    source_fields = FakeFields([FakeNamedField("id"), FakeNamedField("base"), FakeNamedField("fire")])
+    FIELDS_SOURCE = FakeFields([FakeNamedField("id"), FakeNamedField("base"), FakeNamedField("fire")])
     target_fields = FakeFields([FakeNamedField("id")])
     sources = FakeSource(
         [
             FakeFeature({"id": "S1", "base": 1.0, "fire": 2.0}, FakeGeometry(0, 0), fid=1),
             FakeFeature({"id": "S2", "base": 3.0, "fire": 4.0}, FakeGeometry(10, 0), fid=2),
         ],
-        fields=source_fields,
+        fields=FIELDS_SOURCE,
     )
     targets = FakeSource(
         [
@@ -733,18 +734,18 @@ def test_assign_demand_accumulates_nearest_target(monkeypatch):
     sinks = bind_common_parameters(
         monkeypatch,
         algorithm,
-        sources={algorithm.SOURCE_INPUT: sources, algorithm.TARGET_INPUT: targets},
-        fields={algorithm.SOURCE_FIELDS: ["base", "fire"]},
+        sources={algorithm.INPUT_SOURCE: sources, algorithm.INPUT_TARGET: targets},
+        fields={algorithm.FIELDS_SOURCE: ["base", "fire"]},
     )
 
     result = algorithm.processAlgorithm({}, None, FakeFeedback())
 
     assert result == {
-        algorithm.ASSIGN_OUTPUT: f"{algorithm.ASSIGN_OUTPUT}_id",
+        algorithm.OUTPUT_ASSIGNMENTS: f"{algorithm.OUTPUT_ASSIGNMENTS}_id",
         algorithm.OUTPUT_NODES: f"{algorithm.OUTPUT_NODES}_id",
     }
     assignment_attrs = [
-        feature.attributes_value for feature in sinks[algorithm.ASSIGN_OUTPUT].features
+        feature.attributes_value for feature in sinks[algorithm.OUTPUT_ASSIGNMENTS].features
     ]
     node_attrs = [feature.attributes_value for feature in sinks[algorithm.OUTPUT_NODES].features]
     assert assignment_attrs == [["S1", "T1", 1.0, 2.0], ["S2", "T2", 3.0, 4.0]]
@@ -755,8 +756,8 @@ def test_assign_demand_accumulates_nearest_target(monkeypatch):
     bind_common_parameters(
         monkeypatch,
         algorithm,
-        sources={algorithm.SOURCE_INPUT: sources, algorithm.TARGET_INPUT: bad_targets},
-        fields={algorithm.SOURCE_FIELDS: ["base"]},
+        sources={algorithm.INPUT_SOURCE: sources, algorithm.INPUT_TARGET: bad_targets},
+        fields={algorithm.FIELDS_SOURCE: ["base"]},
     )
     feedback = FakeFeedback()
     assert algorithm.processAlgorithm({}, None, feedback) == {}
@@ -790,20 +791,20 @@ def test_update_assignment_updates_moved_target_and_errors(monkeypatch):
         monkeypatch,
         algorithm,
         sources={
-            algorithm.SOURCE_INPUT: sources,
-            algorithm.TARGET_INPUT: targets,
-            algorithm.ASSIGN_INPUT: assignments,
+            algorithm.INPUT_SOURCE: sources,
+            algorithm.INPUT_TARGET: targets,
+            algorithm.INPUT_ASSIGNMENTS: assignments,
         },
     )
 
     result = algorithm.processAlgorithm({}, None, FakeFeedback())
 
     assert result == {
-        algorithm.ASSIGN_OUTPUT: f"{algorithm.ASSIGN_OUTPUT}_id",
-        algorithm.TARGET_OUTPUT: f"{algorithm.TARGET_OUTPUT}_id",
+        algorithm.OUTPUT_ASSIGNMENTS: f"{algorithm.OUTPUT_ASSIGNMENTS}_id",
+        algorithm.OUTPUT_TARGETS: f"{algorithm.OUTPUT_TARGETS}_id",
     }
-    assert sinks[algorithm.ASSIGN_OUTPUT].features[0]["target"] == "T2"
-    assert [feature["base"] for feature in sinks[algorithm.TARGET_OUTPUT].features] == [0, 5.0]
+    assert sinks[algorithm.OUTPUT_ASSIGNMENTS].features[0]["target"] == "T2"
+    assert [feature["base"] for feature in sinks[algorithm.OUTPUT_TARGETS].features] == [0, 5.0]
     assert algorithm.processAlgorithm({}, None, FakeFeedback(canceled=True)) == {}
 
     misplaced = FakeSource(
@@ -819,9 +820,9 @@ def test_update_assignment_updates_moved_target_and_errors(monkeypatch):
         monkeypatch,
         algorithm,
         sources={
-            algorithm.SOURCE_INPUT: sources,
-            algorithm.TARGET_INPUT: targets,
-            algorithm.ASSIGN_INPUT: misplaced,
+            algorithm.INPUT_SOURCE: sources,
+            algorithm.INPUT_TARGET: targets,
+            algorithm.INPUT_ASSIGNMENTS: misplaced,
         },
     )
     feedback = FakeFeedback()
@@ -832,25 +833,23 @@ def test_update_assignment_updates_moved_target_and_errors(monkeypatch):
 def test_split_lines_at_points_splits_and_keeps_original(monkeypatch):
     algorithm = SplitLinesAtPointsAlgorithm()
 
-    monkeypatch.setattr("wnt.processes.wnt_split_lines_at_points.QgsPoint", lambda x, y: FakePoint(x, y))
-    monkeypatch.setattr("wnt.processes.wnt_split_lines_at_points.QgsGeometry", FakeQgsGeometry)
     points = FakeSource(
         [
-            FakeFeature({"id": "P1"}, FakeGeometry(1, 0)),
-            FakeFeature({"id": "P2"}, FakeGeometry(1.0001, 0)),
-            FakeFeature({"id": "P3"}, FakeGeometry(10, 10)),
+            FakeFeature({"id": "P1"}, QgsGeometry.fromPointXY(QgsPointXY(1, 0))),
+            FakeFeature({"id": "P2"}, QgsGeometry.fromPointXY(QgsPointXY(1.0001, 0))),
+            FakeFeature({"id": "P3"}, QgsGeometry.fromPointXY(QgsPointXY(10, 10))),
         ]
     )
     lines = FakeSource(
         [
-            FakeFeature({"id": "L1"}, FakeGeometry(0, 0, polyline=[FakePoint(0, 0), FakePoint(2, 0)])),
-            FakeFeature({"id": "L2"}, FakeGeometry(0, 1, polyline=[FakePoint(0, 1), FakePoint(2, 1)])),
+            FakeFeature({"id": "L1"}, QgsGeometry.fromPolylineXY([QgsPointXY(0, 0), QgsPointXY(2, 0)])),
+            FakeFeature({"id": "L2"}, QgsGeometry.fromPolylineXY([QgsPointXY(0, 1), QgsPointXY(2, 1)])),
         ]
     )
     sinks = bind_common_parameters(
         monkeypatch,
         algorithm,
-        sources={algorithm.POINT_INPUT: points, algorithm.LINE_INPUT: lines},
+        sources={algorithm.INPUT_POINTS: points, algorithm.INPUT_LINES: lines},
         fields={algorithm.TOLERANCE: 0.01},
     )
 
@@ -864,7 +863,7 @@ def test_split_lines_at_points_splits_and_keeps_original(monkeypatch):
     bind_common_parameters(
         monkeypatch,
         algorithm,
-        sources={algorithm.POINT_INPUT: points, algorithm.LINE_INPUT: bad_lines},
+        sources={algorithm.INPUT_POINTS: points, algorithm.INPUT_LINES: bad_lines},
         fields={algorithm.TOLERANCE: 0.01},
     )
     feedback = FakeFeedback()
@@ -905,10 +904,10 @@ def test_merge_networks_aligns_fields_and_warns_for_offset_connections(monkeypat
         monkeypatch,
         algorithm,
         sources={
-            algorithm.NODE1_INPUT: n1,
-            algorithm.LINK1_INPUT: l1,
-            algorithm.NODE2_INPUT: n2,
-            algorithm.LINK2_INPUT: l2,
+            algorithm.INPUT_NODES_1: n1,
+            algorithm.INPUT_LINES_1: l1,
+            algorithm.INPUT_NODES_2: n2,
+            algorithm.INPUT_LINES_2: l2,
         },
     )
     feedback = FakeFeedback()
@@ -936,10 +935,10 @@ def test_merge_networks_aligns_fields_and_warns_for_offset_connections(monkeypat
         monkeypatch,
         algorithm,
         sources={
-            algorithm.NODE1_INPUT: n1,
-            algorithm.LINK1_INPUT: l1,
-            algorithm.NODE2_INPUT: bad,
-            algorithm.LINK2_INPUT: l2,
+            algorithm.INPUT_NODES_1: n1,
+            algorithm.INPUT_LINES_1: l1,
+            algorithm.INPUT_NODES_2: bad,
+            algorithm.INPUT_LINES_2: l2,
         },
     )
     feedback = FakeFeedback()
@@ -986,12 +985,12 @@ def test_network_from_lines_builds_node_and_link_outputs(monkeypatch):
         sources={algorithm.INPUT: lines},
         fields={
             algorithm.TOLERANCE: 0.001,
-            algorithm.NODE_MASK: "N$",
-            algorithm.NODE_INI: 1,
-            algorithm.NODE_INC: 1,
-            algorithm.LINK_MASK: "L$",
-            algorithm.LINK_INI: 1,
-            algorithm.LINK_INC: 1,
+            algorithm.MASK_NODE: "N$",
+            algorithm.INITIAL_NODE: 1,
+            algorithm.INCREMENT_NODE: 1,
+            algorithm.MASK_LINK: "L$",
+            algorithm.INITIAL_LINK: 1,
+            algorithm.INCREMENT_LINK: 1,
         },
     )
 
@@ -1021,12 +1020,12 @@ def test_network_from_lines_rejects_multiline_invalid_and_looped(monkeypatch):
         sources={algorithm.INPUT: FakeSource([], wkb_type=5)},
         fields={
             algorithm.TOLERANCE: 0.001,
-            algorithm.NODE_MASK: "N$",
-            algorithm.NODE_INI: 1,
-            algorithm.NODE_INC: 1,
-            algorithm.LINK_MASK: "L$",
-            algorithm.LINK_INI: 1,
-            algorithm.LINK_INC: 1,
+            algorithm.MASK_NODE: "N$",
+            algorithm.INITIAL_NODE: 1,
+            algorithm.INCREMENT_NODE: 1,
+            algorithm.MASK_LINK: "L$",
+            algorithm.INITIAL_LINK: 1,
+            algorithm.INCREMENT_LINK: 1,
         },
     )
     monkeypatch.setattr("wnt.processes.wnt_network_from_lines.QgsWkbTypes.MultiLineString", 5)
@@ -1045,12 +1044,12 @@ def test_network_from_lines_rejects_multiline_invalid_and_looped(monkeypatch):
         sources={algorithm.INPUT: invalid},
         fields={
             algorithm.TOLERANCE: 0.001,
-            algorithm.NODE_MASK: "N$",
-            algorithm.NODE_INI: 1,
-            algorithm.NODE_INC: 1,
-            algorithm.LINK_MASK: "L$",
-            algorithm.LINK_INI: 1,
-            algorithm.LINK_INC: 1,
+            algorithm.MASK_NODE: "N$",
+            algorithm.INITIAL_NODE: 1,
+            algorithm.INCREMENT_NODE: 1,
+            algorithm.MASK_LINK: "L$",
+            algorithm.INITIAL_LINK: 1,
+            algorithm.INCREMENT_LINK: 1,
         },
     )
     feedback = FakeFeedback()
@@ -1072,12 +1071,12 @@ def test_network_from_lines_rejects_multiline_invalid_and_looped(monkeypatch):
         sources={algorithm.INPUT: looped},
         fields={
             algorithm.TOLERANCE: 0.001,
-            algorithm.NODE_MASK: "N$",
-            algorithm.NODE_INI: 1,
-            algorithm.NODE_INC: 1,
-            algorithm.LINK_MASK: "L$",
-            algorithm.LINK_INI: 1,
-            algorithm.LINK_INC: 1,
+            algorithm.MASK_NODE: "N$",
+            algorithm.INITIAL_NODE: 1,
+            algorithm.INCREMENT_NODE: 1,
+            algorithm.MASK_LINK: "L$",
+            algorithm.INITIAL_LINK: 1,
+            algorithm.INCREMENT_LINK: 1,
         },
     )
     feedback = FakeFeedback()
@@ -1372,10 +1371,10 @@ def test_validate_reports_all_problem_types(monkeypatch):
 
 def test_ppno_from_network_writes_ext_and_rejects_crs(monkeypatch, tmp_path):
     algorithm = PpnoFromNetworkAlgorithm()
-    template = tmp_path / "template.ext"
+    INPUT_TEMPLATE = tmp_path / "template.ext"
     output = tmp_path / "output.ext"
-    epanet = tmp_path / "model.inp"
-    template.write_text(
+    INPUT_EPANET = tmp_path / "model.inp"
+    INPUT_TEMPLATE.write_text(
         textwrap.dedent(
             """
             [TITLE]
@@ -1393,8 +1392,8 @@ def test_ppno_from_network_writes_ext_and_rejects_crs(monkeypatch, tmp_path):
         monkeypatch,
         algorithm,
         sources={algorithm.INPUT_NODES: nodes, algorithm.INPUT_LINES: links},
-        fields={algorithm.PRESS_FIELD: "pressure", algorithm.SERIES_FIELD: "series"},
-        files={algorithm.EPANET: epanet, algorithm.TEMPLATE: template, algorithm.OUTPUT: output},
+        fields={algorithm.FIELD_PRESSURE: "pressure", algorithm.FIELD_SERIES: "series"},
+        files={algorithm.INPUT_EPANET: INPUT_EPANET, algorithm.INPUT_TEMPLATE: INPUT_TEMPLATE, algorithm.OUTPUT: output},
     )
 
     result = algorithm.processAlgorithm({}, None, FakeFeedback())
@@ -1409,8 +1408,8 @@ def test_ppno_from_network_writes_ext_and_rejects_crs(monkeypatch, tmp_path):
         monkeypatch,
         algorithm,
         sources={algorithm.INPUT_NODES: nodes, algorithm.INPUT_LINES: bad_links},
-        fields={algorithm.PRESS_FIELD: "pressure", algorithm.SERIES_FIELD: "series"},
-        files={algorithm.EPANET: epanet, algorithm.TEMPLATE: template, algorithm.OUTPUT: output},
+        fields={algorithm.FIELD_PRESSURE: "pressure", algorithm.FIELD_SERIES: "series"},
+        files={algorithm.INPUT_EPANET: INPUT_EPANET, algorithm.INPUT_TEMPLATE: INPUT_TEMPLATE, algorithm.OUTPUT: output},
     )
     feedback = FakeFeedback()
 
@@ -1432,7 +1431,7 @@ def test_scn_from_demands_writes_selected_junction_demands(monkeypatch, tmp_path
         monkeypatch,
         algorithm,
         sources={algorithm.INPUT_NODES: nodes},
-        fields={algorithm.DEM_FIELD: ["base", "fire"]},
+        fields={algorithm.FIELD_DEMAND: ["base", "fire"]},
         files={algorithm.OUTPUT: output},
     )
 
@@ -1449,7 +1448,7 @@ def test_scn_from_demands_writes_selected_junction_demands(monkeypatch, tmp_path
         monkeypatch,
         algorithm,
         sources={algorithm.INPUT_NODES: nodes},
-        fields={algorithm.DEM_FIELD: []},
+        fields={algorithm.FIELD_DEMAND: []},
         files={algorithm.OUTPUT: output},
     )
     assert algorithm.processAlgorithm({}, None, FakeFeedback()) == {}
@@ -1469,7 +1468,7 @@ def test_scn_from_pipe_properties_writes_only_pipes(monkeypatch, tmp_path):
         monkeypatch,
         algorithm,
         sources={algorithm.INPUT_LINES: links},
-        fields={algorithm.DIA_FIELD: "diameter", algorithm.ROU_FIELD: "roughness"},
+        fields={algorithm.FIELD_DIAMETER: "diameter", algorithm.FIELD_ROUGHNESS: "roughness"},
         files={algorithm.OUTPUT: output},
     )
 

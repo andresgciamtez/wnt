@@ -1,4 +1,4 @@
-﻿"""Merge two network layer pairs."""
+"""Merge two network layer pairs."""
 
 from qgis.core import (QgsFeature,
                        QgsWkbTypes,
@@ -16,9 +16,9 @@ def aligned_feature(feature, fields):
     new_feature = QgsFeature(fields)
     new_feature.setGeometry(feature.geometry())
     attributes = []
-    source_fields = feature.fields()
+    FIELDS_SOURCE = feature.fields()
     for field in fields:
-        index = source_fields.lookupField(field.name())
+        index = FIELDS_SOURCE.lookupField(field.name())
         attributes.append(feature.attributes()[index] if index >= 0 else None)
     new_feature.setAttributes(attributes)
     return new_feature
@@ -29,10 +29,10 @@ class MergeNetworksAlgorithm(WntProcessingAlgorithm):
     """
 
     # DEFINE CONSTANTS
-    NODE1_INPUT = 'NODE1_INPUT'
-    LINK1_INPUT = 'LINK1_INPUT'
-    NODE2_INPUT = 'NODE2_INPUT'
-    LINK2_INPUT = 'LINK2_INPUT'
+    INPUT_NODES_1 = 'INPUT_NODES_1'
+    INPUT_LINES_1 = 'INPUT_LINES_1'
+    INPUT_NODES_2 = 'INPUT_NODES_2'
+    INPUT_LINES_2 = 'INPUT_LINES_2'
     OUTPUT_NODES = 'OUTPUT_NODES'
     OUTPUT_LINES = 'OUTPUT_LINES'
 
@@ -88,28 +88,28 @@ class MergeNetworksAlgorithm(WntProcessingAlgorithm):
         # INPUT
         self.addParameter(
             QgsProcessingParameterFeatureSource(
-                self.NODE1_INPUT,
+                self.INPUT_NODES_1,
                 self.tr('First node layer input'),
                 types=[QgsProcessing.TypeVectorPoint]
                 )
             )
         self.addParameter(
             QgsProcessingParameterFeatureSource(
-                self.LINK1_INPUT,
+                self.INPUT_LINES_1,
                 self.tr('First link layer input'),
                 types=[QgsProcessing.TypeVectorLine]
                 )
             )
         self.addParameter(
             QgsProcessingParameterFeatureSource(
-                self.NODE2_INPUT,
+                self.INPUT_NODES_2,
                 self.tr('Second node layer input'),
                 types=[QgsProcessing.TypeVectorPoint]
                 )
             )
         self.addParameter(
             QgsProcessingParameterFeatureSource(
-                self.LINK2_INPUT,
+                self.INPUT_LINES_2,
                 self.tr('Second link layer input'),
                 types=[QgsProcessing.TypeVectorLine]
                 )
@@ -134,10 +134,10 @@ class MergeNetworksAlgorithm(WntProcessingAlgorithm):
         RUN PROCESS
         """
         # INPUT
-        n1lay = self.parameterAsSource(parameters, self.NODE1_INPUT, context)
-        l1lay = self.parameterAsSource(parameters, self.LINK1_INPUT, context)
-        n2lay = self.parameterAsSource(parameters, self.NODE2_INPUT, context)
-        l2lay = self.parameterAsSource(parameters, self.LINK2_INPUT, context)
+        n1lay = self.parameterAsSource(parameters, self.INPUT_NODES_1, context)
+        l1lay = self.parameterAsSource(parameters, self.INPUT_LINES_1, context)
+        n2lay = self.parameterAsSource(parameters, self.INPUT_NODES_2, context)
+        l2lay = self.parameterAsSource(parameters, self.INPUT_LINES_2, context)
 
         # CHECK CRS
         crs = n1lay.sourceCrs()

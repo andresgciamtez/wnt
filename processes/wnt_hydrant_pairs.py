@@ -1,4 +1,4 @@
-﻿"""Create hydrant pair connection lines."""
+"""Create hydrant pair connection lines."""
 
 from qgis.PyQt.QtCore import QMetaType
 from qgis.core import (QgsFeature,
@@ -23,10 +23,10 @@ class HydrantPairsAlgorithm(WntProcessingAlgorithm):
     """
 
     # DEFINE CONSTANTS
-    HYD_INPUT = 'HYDRANT_INPUT'
-    ID_FIELD = 'HIDRANT_ID_FIELD'
-    MAX_DIST = 'MAX_DIST'
-    PAIRS_OUTPUT = 'PAIRS_OUTPUT'
+    INPUT_HYDRANTS = 'INPUT_HYDRANTS'
+    FIELD_ID = 'FIELD_ID'
+    MAX_DISTANCE = 'MAX_DISTANCE'
+    OUTPUT_PAIRS = 'OUTPUT_PAIRS'
 
 
     def createInstance(self):
@@ -79,22 +79,22 @@ class HydrantPairsAlgorithm(WntProcessingAlgorithm):
         # INPUT
         self.addParameter(
             QgsProcessingParameterFeatureSource(
-                self.HYD_INPUT,
+                self.INPUT_HYDRANTS,
                 self.tr('Hydrant layer input'),
                 types=[QgsProcessing.TypeVectorPoint]
                 )
             )
         self.addParameter(
             QgsProcessingParameterField(
-                self.ID_FIELD,
+                self.FIELD_ID,
                 self.tr('Hydrant ID field'),
                 'id',
-                self.HYD_INPUT
+                self.INPUT_HYDRANTS
                 )
             )
         self.addParameter(
             QgsProcessingParameterDistance(
-                self.MAX_DIST,
+                self.MAX_DISTANCE,
                 self.tr('Maximum hydrant separation'),
                 defaultValue=200,
                 minValue=0.1,
@@ -104,7 +104,7 @@ class HydrantPairsAlgorithm(WntProcessingAlgorithm):
         # ADD PAIRS FEATURE SINK
         self.addParameter(
             QgsProcessingParameterFeatureSink(
-                self.PAIRS_OUTPUT,
+                self.OUTPUT_PAIRS,
                 self.tr('Hydrant pairs layer')
             )
         )
@@ -114,9 +114,9 @@ class HydrantPairsAlgorithm(WntProcessingAlgorithm):
         RUN PROCESS
         """
         # INPUT
-        hydlayer = self.parameterAsSource(parameters, self.HYD_INPUT, context)
-        idfield = self.parameterAsString(parameters, self.ID_FIELD, context)
-        maxdist = self.parameterAsDouble(parameters, self.MAX_DIST, context)
+        hydlayer = self.parameterAsSource(parameters, self.INPUT_HYDRANTS, context)
+        idfield = self.parameterAsString(parameters, self.FIELD_ID, context)
+        maxdist = self.parameterAsDouble(parameters, self.MAX_DISTANCE, context)
 
         # SEND INFORMATION TO THE USER
         start(feedback, self.displayName())
@@ -146,7 +146,7 @@ class HydrantPairsAlgorithm(WntProcessingAlgorithm):
         fields.append(QgsField("distance", QMetaType.Double))
         (pairs_sink, pairs_id) = self.parameterAsSink(
             parameters,
-            self.PAIRS_OUTPUT,
+            self.OUTPUT_PAIRS,
             context,
             fields,
             QgsWkbTypes.LineString,
@@ -177,4 +177,4 @@ class HydrantPairsAlgorithm(WntProcessingAlgorithm):
             return {}
 
         # OUTPUT
-        return {self.PAIRS_OUTPUT: pairs_id}
+        return {self.OUTPUT_PAIRS: pairs_id}

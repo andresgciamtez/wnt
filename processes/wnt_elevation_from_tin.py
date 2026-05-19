@@ -1,4 +1,4 @@
-﻿"""Set node elevations from a LandXML TIN surface."""
+"""Set node elevations from a LandXML TIN surface."""
 
 from qgis.core import (QgsProcessing,
                        QgsProcessingParameterFile,
@@ -19,8 +19,8 @@ class ElevationFromTINAlgorithm(WntProcessingAlgorithm):
 
     # DEFINE CONSTANTS
     INPUT_NODES = 'INPUT_NODES'
-    ELEV_FIELD = 'ELEV_FIELD'
-    TIN_INPUT = 'TIN_INPUT'
+    FIELD_ELEVATION = 'FIELD_ELEVATION'
+    INPUT_TIN = 'INPUT_TIN'
     SURFACE_NAME = 'SURFACE_NAME'
     OUTPUT = 'OUTPUT'
 
@@ -82,7 +82,7 @@ class ElevationFromTINAlgorithm(WntProcessingAlgorithm):
             )
         self.addParameter(
             QgsProcessingParameterField(
-                self.ELEV_FIELD,
+                self.FIELD_ELEVATION,
                 self.tr('Elevation field'),
                 'elevation',
                 self.INPUT_NODES
@@ -90,7 +90,7 @@ class ElevationFromTINAlgorithm(WntProcessingAlgorithm):
             )
         self.addParameter(
             QgsProcessingParameterFile(
-                self.TIN_INPUT,
+                self.INPUT_TIN,
                 self.tr('LandXML file'),
                 extension='xml'
                 )
@@ -120,8 +120,8 @@ class ElevationFromTINAlgorithm(WntProcessingAlgorithm):
 
         # INPUT
         nodelayer = self.parameterAsSource(parameters, self.INPUT_NODES, context)
-        efield = self.parameterAsString(parameters, self.ELEV_FIELD, context)
-        tinlayer = self.parameterAsFile(parameters, self.TIN_INPUT, context)
+        efield = self.parameterAsString(parameters, self.FIELD_ELEVATION, context)
+        tinlayer = self.parameterAsFile(parameters, self.INPUT_TIN, context)
         sname = self.parameterAsString(parameters, self.SURFACE_NAME, context)
 
         # SEND INFORMATION TO THE USER

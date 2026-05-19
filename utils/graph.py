@@ -130,4 +130,3 @@ class Graph():
                     classified[label] = (graphtype, key)
         return classified
 
-

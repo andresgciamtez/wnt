@@ -1,4 +1,4 @@
-﻿"""Export an EPANET pipe properties scenario file."""
+"""Export an EPANET pipe properties scenario file."""
 
 from qgis.core import (QgsProcessing,
                        QgsProcessingParameterFeatureSource,
@@ -9,14 +9,14 @@ from .messages import finish, info, start
 
 class ScnFromPipePropertiesAlgorithm(WntProcessingAlgorithm):
     """
-    Build an epanet scenary file from pipe diameter and roughness.
+    Build an EPANET scenary file from pipe diameter and roughness.
     """
 
     # DEFINE CONSTANTS
 
     INPUT_LINES = 'INPUT_LINES'
-    DIA_FIELD = 'DIA_FIELD'
-    ROU_FIELD = 'ROU_FIELD'
+    FIELD_DIAMETER = 'FIELD_DIAMETER'
+    FIELD_ROUGHNESS = 'FIELD_ROUGHNESS'
     OUTPUT = 'OUTPUT'
 
 
@@ -78,7 +78,7 @@ class ScnFromPipePropertiesAlgorithm(WntProcessingAlgorithm):
             )
         self.addParameter(
             QgsProcessingParameterField(
-                self.DIA_FIELD,
+                self.FIELD_DIAMETER,
                 self.tr('Diameter field'),
                 'diameter',
                 self.INPUT_LINES
@@ -86,7 +86,7 @@ class ScnFromPipePropertiesAlgorithm(WntProcessingAlgorithm):
             )
         self.addParameter(
             QgsProcessingParameterField(
-                self.ROU_FIELD,
+                self.FIELD_ROUGHNESS,
                 self.tr('Roughness field'),
                 'roughness',
                 self.INPUT_LINES
@@ -97,7 +97,7 @@ class ScnFromPipePropertiesAlgorithm(WntProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterFileDestination(
                 self.OUTPUT,
-                self.tr('Epanet scenario file'),
+                self.tr('EPANET scenario file'),
                 fileFilter='*.scn'
                 )
             )
@@ -109,8 +109,8 @@ class ScnFromPipePropertiesAlgorithm(WntProcessingAlgorithm):
 
         # INPUT
         links = self.parameterAsSource(parameters, self.INPUT_LINES, context)
-        dfield = self.parameterAsString(parameters, self.DIA_FIELD, context)
-        rfield = self.parameterAsString(parameters, self.ROU_FIELD, context)
+        dfield = self.parameterAsString(parameters, self.FIELD_DIAMETER, context)
+        rfield = self.parameterAsString(parameters, self.FIELD_ROUGHNESS, context)
 
         # OUTPUT
         scnfile = self.parameterAsFileOutput(parameters, self.OUTPUT, context)

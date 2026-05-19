@@ -1,4 +1,4 @@
-﻿"""Export a network layer pair to an EPANET input file."""
+"""Export a network layer pair to an EPANET input file."""
 
 from qgis.core import (QgsProcessing,
                        QgsProcessingParameterFeatureSource,
@@ -11,14 +11,14 @@ from .messages import error, finish, info, start
 
 class EpanetFromNetworkAlgorithm(WntProcessingAlgorithm):
     """
-    Build an epanet model file from node and link layers.
+    Build an EPANET model file from node and link layers.
     """
 
     # DEFINE CONSTANTS
 
     INPUT_NODES = 'INPUT_NODES'
     INPUT_LINES = 'INPUT_LINES'
-    TEMPLATE = 'TEMPLATE'
+    INPUT_TEMPLATE = 'INPUT_TEMPLATE'
     OUTPUT = 'OUTPUT'
 
 
@@ -39,7 +39,7 @@ class EpanetFromNetworkAlgorithm(WntProcessingAlgorithm):
         Returns the translated algorithm name, which should be used for any
         user-visible display of the algorithm name.
         """
-        return 'Epanet file from network'
+        return 'EPANET file from network'
 
     def group(self):
         """
@@ -88,8 +88,8 @@ class EpanetFromNetworkAlgorithm(WntProcessingAlgorithm):
             )
         self.addParameter(
             QgsProcessingParameterFile(
-                self.TEMPLATE,
-                self.tr('Epanet template file'),
+                self.INPUT_TEMPLATE,
+                self.tr('EPANET template file'),
                 extension='inp'
                 )
             )
@@ -98,7 +98,7 @@ class EpanetFromNetworkAlgorithm(WntProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterFileDestination(
                 self.OUTPUT,
-                self.tr('Epanet model file'),
+                self.tr('EPANET model file'),
                 fileFilter='*.inp'
                 )
             )
@@ -110,7 +110,7 @@ class EpanetFromNetworkAlgorithm(WntProcessingAlgorithm):
         # INPUT
         nodes = self.parameterAsSource(parameters, self.INPUT_NODES, context)
         links = self.parameterAsSource(parameters, self.INPUT_LINES, context)
-        template = self.parameterAsFile(parameters, self.TEMPLATE, context)
+        template = self.parameterAsFile(parameters, self.INPUT_TEMPLATE, context)
 
         # CHECK CRS
         crs = nodes.sourceCrs()
@@ -124,7 +124,7 @@ class EpanetFromNetworkAlgorithm(WntProcessingAlgorithm):
             return {}
 
         # OUTPUT
-        epanet = self.parameterAsFileOutput(
+        EPANET = self.parameterAsFileOutput(
             parameters,
             self.OUTPUT,
             context
@@ -162,8 +162,8 @@ class EpanetFromNetworkAlgorithm(WntProcessingAlgorithm):
                 feedback.setProgress(50+50*lcnt/links.featureCount())
 
         # WRITE NET
-        newnet.to_epanet(epanet, template)
-        epanet = self.parameterAsFileOutput(
+        newnet.to_epanet(EPANET, template)
+        EPANET = self.parameterAsFileOutput(
             parameters,
             self.OUTPUT,
             context
@@ -172,7 +172,7 @@ class EpanetFromNetworkAlgorithm(WntProcessingAlgorithm):
         # SHOW INFO
         info(feedback, "Nodes exported", ncnt)
         info(feedback, "Links exported", lcnt)
-        info(feedback, "Output file", epanet)
+        info(feedback, "Output file", EPANET)
         finish(feedback)
 
         # PROCCES CANCELED
@@ -180,5 +180,5 @@ class EpanetFromNetworkAlgorithm(WntProcessingAlgorithm):
             return {}
 
         # OUTPUT
-        return {self.OUTPUT: epanet}
+        return {self.OUTPUT: EPANET}
 

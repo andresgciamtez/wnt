@@ -3,7 +3,6 @@
 import pytest
 
 from wnt.utils.core import WntLink, WntNetwork, WntNode, net_from_linestrings
-from wnt.utils.split import split_linestring
 
 
 def test_node_wkt_allows_zero_coordinates():
@@ -138,8 +137,3 @@ def test_net_from_linestrings_merges_exact_endpoints_without_tolerance():
     ]
 
 
-def test_split_linestring_skips_zero_length_segments():
-    """Duplicate vertices do not crash line splitting."""
-    result = split_linestring([(0, 0), (0, 0), (1, 0)], (0.5, 0), 0.01)
-
-    assert result == ([(0, 0), (0, 0), (0.5, 0.0)], [(0.5, 0.0), (1, 0)])

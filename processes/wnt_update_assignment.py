@@ -1,4 +1,4 @@
-﻿"""Update demand assignments after editing connection lines."""
+"""Update demand assignments after editing connection lines."""
 
 from qgis.core import (QgsProcessing,
                        QgsProcessingParameterFeatureSink,
@@ -17,11 +17,11 @@ class UpdateAssignmentAlgorithm(WntProcessingAlgorithm):
     """
 
     # DEFINE CONSTANTS
-    SOURCE_INPUT = 'SOURCE_LAYER_INPUT'
-    TARGET_INPUT = 'TARGET_LAYER_INPUT'
-    ASSIGN_INPUT = 'ASSIGNMENT_LAYER_INPUT'
-    TARGET_OUTPUT = 'TARGET_LAYER_OUTPUT'
-    ASSIGN_OUTPUT = 'ASSIGNMENT_LAYER_OUTPUT'
+    INPUT_SOURCE = 'INPUT_SOURCE'
+    INPUT_TARGET = 'INPUT_TARGET'
+    INPUT_ASSIGNMENTS = 'INPUT_ASSIGNMENTS'
+    OUTPUT_TARGETS = 'OUTPUT_TARGETS'
+    OUTPUT_ASSIGNMENTS = 'OUTPUT_ASSIGNMENTS'
 
 
     def createInstance(self):
@@ -74,21 +74,21 @@ class UpdateAssignmentAlgorithm(WntProcessingAlgorithm):
         # INPUT
         self.addParameter(
             QgsProcessingParameterFeatureSource(
-                self.SOURCE_INPUT,
+                self.INPUT_SOURCE,
                 self.tr('Source layer'),
                 types=[QgsProcessing.TypeVectorPoint]
                 )
             )
         self.addParameter(
             QgsProcessingParameterFeatureSource(
-                self.TARGET_INPUT,
+                self.INPUT_TARGET,
                 self.tr('Target layer'),
                 types=[QgsProcessing.TypeVectorPoint]
                 )
             )
         self.addParameter(
             QgsProcessingParameterFeatureSource(
-                self.ASSIGN_INPUT,
+                self.INPUT_ASSIGNMENTS,
                 self.tr('Edited assignment layer'),
                 types=[QgsProcessing.TypeVectorLine]
                 )
@@ -97,13 +97,13 @@ class UpdateAssignmentAlgorithm(WntProcessingAlgorithm):
         # ADD FEATURE SINKS
         self.addParameter(
             QgsProcessingParameterFeatureSink(
-                self.TARGET_OUTPUT,
+                self.OUTPUT_TARGETS,
                 self.tr('Updated target layer')
                 )
             )
         self.addParameter(
             QgsProcessingParameterFeatureSink(
-                self.ASSIGN_OUTPUT,
+                self.OUTPUT_ASSIGNMENTS,
                 self.tr('Updated assignment layer')
                 )
             )
@@ -114,9 +114,9 @@ class UpdateAssignmentAlgorithm(WntProcessingAlgorithm):
         RUN PROCESS
         """
         # INPUT
-        slayer = self.parameterAsSource(parameters, self.SOURCE_INPUT, context)
-        tlayer = self.parameterAsSource(parameters, self.TARGET_INPUT, context)
-        alayer = self.parameterAsSource(parameters, self.ASSIGN_INPUT, context)
+        slayer = self.parameterAsSource(parameters, self.INPUT_SOURCE, context)
+        tlayer = self.parameterAsSource(parameters, self.INPUT_TARGET, context)
+        alayer = self.parameterAsSource(parameters, self.INPUT_ASSIGNMENTS, context)
 
         # CHECK CRS
         crs = slayer.sourceCrs()
@@ -132,7 +132,7 @@ class UpdateAssignmentAlgorithm(WntProcessingAlgorithm):
         # OUTPUT LAYERS
         (assign_sink, assign_id) = self.parameterAsSink(
             parameters,
-            self.ASSIGN_OUTPUT,
+            self.OUTPUT_ASSIGNMENTS,
             context,
             alayer.fields(),
             QgsWkbTypes.LineString,
@@ -140,7 +140,7 @@ class UpdateAssignmentAlgorithm(WntProcessingAlgorithm):
             )
         (target_sink, target_id) = self.parameterAsSink(
             parameters,
-            self.TARGET_OUTPUT,
+            self.OUTPUT_TARGETS,
             context,
             tlayer.fields(),
             QgsWkbTypes.Point,
@@ -223,5 +223,5 @@ class UpdateAssignmentAlgorithm(WntProcessingAlgorithm):
             return {}
 
         # OUTPUT
-        return {self.ASSIGN_OUTPUT: assign_id, self.TARGET_OUTPUT: target_id}
+        return {self.OUTPUT_ASSIGNMENTS: assign_id, self.OUTPUT_TARGETS: target_id}
 

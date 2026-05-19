@@ -1,4 +1,4 @@
-﻿"""Configure the EPANET toolkit library path."""
+"""Configure the EPANET toolkit library path."""
 
 import configparser
 from pathlib import Path
@@ -10,7 +10,7 @@ from .messages import finish, info, start
 
 class ConfigToolkitAlgorithm(WntProcessingAlgorithm):
     """
-    Set epanet lib path in tookit.ini file.
+    Set EPANET lib path in tookit.ini file.
     """
 
     # DEFINE CONSTANTS
@@ -34,7 +34,7 @@ class ConfigToolkitAlgorithm(WntProcessingAlgorithm):
         Returns the translated algorithm name, which should be used for any
         user-visible display of the algorithm name.
         """
-        return 'Configure epanet lib'
+        return 'Configure EPANET lib'
 
     def group(self):
         """
@@ -68,7 +68,7 @@ class ConfigToolkitAlgorithm(WntProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterFile(
                 self.INPUT,
-                self.tr('Epanet lib')
+                self.tr('EPANET lib')
                 )
             )
 

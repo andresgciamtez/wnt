@@ -1,4 +1,4 @@
-﻿"""Export PPNO sizing input from network layers."""
+"""Export PPNO sizing input from network layers."""
 
 from qgis.core import (QgsProcessing,
                        QgsProcessingParameterFeatureSource,
@@ -16,11 +16,11 @@ class PpnoFromNetworkAlgorithm(WntProcessingAlgorithm):
 
     # DEFINE CONSTANTS
     INPUT_NODES = 'INPUT_NODES'
-    PRESS_FIELD = 'PRESS_FIELD'
+    FIELD_PRESSURE = 'FIELD_PRESSURE'
     INPUT_LINES = 'INPUT_LINES'
-    SERIES_FIELD = 'SERIES_FIELD'
-    EPANET = 'EPANET'
-    TEMPLATE = 'TEMPLATE'
+    FIELD_SERIES = 'FIELD_SERIES'
+    INPUT_EPANET = 'INPUT_EPANET'
+    INPUT_TEMPLATE = 'INPUT_TEMPLATE'
     OUTPUT = 'OUTPUT'
 
 
@@ -83,7 +83,7 @@ class PpnoFromNetworkAlgorithm(WntProcessingAlgorithm):
             )
         self.addParameter(
             QgsProcessingParameterField(
-                self.PRESS_FIELD,
+                self.FIELD_PRESSURE,
                 self.tr('Required pressure field'),
                 'Required pressure',
                 self.INPUT_NODES,
@@ -100,7 +100,7 @@ class PpnoFromNetworkAlgorithm(WntProcessingAlgorithm):
             )
         self.addParameter(
             QgsProcessingParameterField(
-                self.SERIES_FIELD,
+                self.FIELD_SERIES,
                 self.tr('Pipe series field'),
                 'Pipe series',
                 self.INPUT_LINES,
@@ -110,15 +110,15 @@ class PpnoFromNetworkAlgorithm(WntProcessingAlgorithm):
             )
         self.addParameter(
             QgsProcessingParameterFile(
-                self.EPANET,
-                self.tr('Epanet file'),
+                self.INPUT_EPANET,
+                self.tr('EPANET file'),
                 extension='inp'
                 )
             )
         self.addParameter(
             QgsProcessingParameterFile(
-                self.TEMPLATE,
-                self.tr('ppno template file'),
+                self.INPUT_TEMPLATE,
+                self.tr('PPNO template file'),
                 extension='ext'
                 )
             )
@@ -138,13 +138,13 @@ class PpnoFromNetworkAlgorithm(WntProcessingAlgorithm):
 
         # INPUT
         nodes = self.parameterAsSource(parameters, self.INPUT_NODES, context)
-        pfield = self.parameterAsFields(parameters, self.PRESS_FIELD, context)
+        pfield = self.parameterAsFields(parameters, self.FIELD_PRESSURE, context)
         pfield = pfield[0]
         links = self.parameterAsSource(parameters, self.INPUT_LINES, context)
-        sfield = self.parameterAsFields(parameters, self.SERIES_FIELD, context)
+        sfield = self.parameterAsFields(parameters, self.FIELD_SERIES, context)
         sfield = sfield[0]
-        epanet = self.parameterAsFile(parameters, self.EPANET, context)
-        template = self.parameterAsFile(parameters, self.TEMPLATE, context)
+        epanet_file = self.parameterAsFile(parameters, self.INPUT_EPANET, context)
+        template_file = self.parameterAsFile(parameters, self.INPUT_TEMPLATE, context)
 
         # OUTPUT
         extfile = self.parameterAsFileOutput(
@@ -160,14 +160,14 @@ class PpnoFromNetworkAlgorithm(WntProcessingAlgorithm):
 
         # TEMPLATE
         ppnof = parser.SectionedText()
-        ppnof.read(template)
+        ppnof.read(template_file)
 
         # TITLE SECTION
         msg = '; File generated automatically by Water Network Tools \n'
         ppnof.sections['TITLE'].append(msg)
 
         # INP SECTION
-        ppnof.sections['INP'] = [epanet]
+        ppnof.sections['INP'] = [epanet_file]
 
         # PRESSURES SECTION
         ncnt = 0

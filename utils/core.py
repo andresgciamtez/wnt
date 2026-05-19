@@ -393,7 +393,7 @@ class WntNetwork:
         return self._link_map.get(linkid)
 
     def from_lines(self, linestrings, **kwargs):
-        """Build a network from lines trings.
+        """Build a network from line strings.
 
         Parameters
         ----------

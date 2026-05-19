@@ -1,4 +1,4 @@
-﻿"""Import hydraulic results from EPANET toolkit runs."""
+"""Import hydraulic results from EPANET toolkit runs."""
 
 import configparser
 import ctypes
@@ -32,7 +32,7 @@ NOSAVE = 0
 
 class ResultsFromEpanetAlgorithm(WntProcessingAlgorithm):
     """
-    Import epanet result from epanet toolkit.
+    Import EPANET result from EPANET toolkit.
     """
 
     # DEFINE CONSTANTS
@@ -57,7 +57,7 @@ class ResultsFromEpanetAlgorithm(WntProcessingAlgorithm):
         """
         Returns the translated algorithm name.
         """
-        return 'Results from epanet'
+        return 'Results from EPANET'
 
     def group(self):
         """
@@ -92,7 +92,7 @@ class ResultsFromEpanetAlgorithm(WntProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterFile(
                 self.INPUT,
-                self.tr('Epanet file'),
+                self.tr('EPANET file'),
                 extension='inp'
             )
         )
@@ -122,7 +122,7 @@ class ResultsFromEpanetAlgorithm(WntProcessingAlgorithm):
         # DEFINE NODE LAYER
         newfields = QgsFields()
         newfields.append(QgsField("time", QMetaType.QTime))
-        newfields.append(QgsField("id", QMetaType.QChar, len=MAX_LABEL_LEN))
+        newfields.append(QgsField("id", QMetaType.QString, len=MAX_LABEL_LEN))
         newfields.append(QgsField("demand", QMetaType.Double))
         newfields.append(QgsField("head", QMetaType.Double))
         newfields.append(QgsField("pressure", QMetaType.Double))
@@ -138,11 +138,11 @@ class ResultsFromEpanetAlgorithm(WntProcessingAlgorithm):
         # DEFINE LINK LAYER
         newfields = QgsFields()
         newfields.append(QgsField("time", QMetaType.QTime))
-        newfields.append(QgsField("id", QMetaType.QChar, len=MAX_LABEL_LEN))
+        newfields.append(QgsField("id", QMetaType.QString, len=MAX_LABEL_LEN))
         newfields.append(QgsField("flow", QMetaType.Double))
         newfields.append(QgsField("velocity", QMetaType.Double))
         newfields.append(QgsField("headloss", QMetaType.Double))
-        newfields.append(QgsField("status", QMetaType.QChar, len=6))
+        newfields.append(QgsField("status", QMetaType.QString, len=6))
         newfields.append(QgsField("setting", QMetaType.Double))
         newfields.append(QgsField("energy", QMetaType.Double))
         (link_sink, links_id) = self.parameterAsSink(
@@ -219,7 +219,7 @@ class ResultsFromEpanetAlgorithm(WntProcessingAlgorithm):
                 if err:
                     error(feedback, f"EPANET toolkit error {err}")
                     return {}
-                node_result = [time, str(id_, encoding='utf-8')]
+                node_result = [time, id_.value.decode('utf-8')]
                 for parameter in [EN_DEMAND, EN_HEAD, EN_PRESSURE]:
                     err = epanet_lib.ENgetnodevalue(index,
                                                     parameter,
@@ -239,7 +239,7 @@ class ResultsFromEpanetAlgorithm(WntProcessingAlgorithm):
                 if err:
                     error(feedback, f"EPANET toolkit error {err}")
                     return {}
-                link_result = [time, str(id_, encoding='utf-8')]
+                link_result = [time, id_.value.decode('utf-8')]
                 for parameter in [EN_FLOW, EN_VELOCITY, EN_HEADLOSS]:
                     err = epanet_lib.ENgetlinkvalue(index,
                                                     parameter,

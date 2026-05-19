@@ -1,4 +1,4 @@
-﻿"""Build network node and link layers from line features."""
+"""Build network node and link layers from line features."""
 
 from math import dist
 from qgis.PyQt.QtCore import QMetaType
@@ -30,12 +30,12 @@ class NetworkFromLinesAlgorithm(WntProcessingAlgorithm):
     # DEFINE CONSTANTS
     INPUT = 'INPUT'
     TOLERANCE = 'TOLERANCE'
-    NODE_MASK = 'NODE_MASK'
-    NODE_INI = 'NODE_INI'
-    NODE_INC = 'NODE_INC'
-    LINK_MASK = 'LINK_MASK'
-    LINK_INI = 'LINK_INI'
-    LINK_INC = 'LINK_INC'
+    MASK_NODE = 'MASK_NODE'
+    INITIAL_NODE = 'INITIAL_NODE'
+    INCREMENT_NODE = 'INCREMENT_NODE'
+    MASK_LINK = 'MASK_LINK'
+    INITIAL_LINK = 'INITIAL_LINK'
+    INCREMENT_LINK = 'INCREMENT_LINK'
     OUTPUT_NODES = 'OUTPUT_NODES'
     OUTPUT_LINES = 'OUTPUT_LINES'
 
@@ -108,14 +108,14 @@ class NetworkFromLinesAlgorithm(WntProcessingAlgorithm):
             )
         self.addParameter(
             QgsProcessingParameterString(
-                self.NODE_MASK,
+                self.MASK_NODE,
                 self.tr('Node mask (P-$$-S generates P-01-S)'),
                 defaultValue='$'
                 )
             )
         self.addParameter(
             QgsProcessingParameterNumber(
-                self.NODE_INI,
+                self.INITIAL_NODE,
                 self.tr('Number of the first node'),
                 type=QgsProcessingParameterNumber.Integer,
                 defaultValue=1
@@ -123,7 +123,7 @@ class NetworkFromLinesAlgorithm(WntProcessingAlgorithm):
             )
         self.addParameter(
             QgsProcessingParameterNumber(
-                self.NODE_INC,
+                self.INCREMENT_NODE,
                 self.tr('Node increment'),
                 type=QgsProcessingParameterNumber.Integer,
                 defaultValue=1
@@ -131,14 +131,14 @@ class NetworkFromLinesAlgorithm(WntProcessingAlgorithm):
             )
         self.addParameter(
             QgsProcessingParameterString(
-                self.LINK_MASK,
+                self.MASK_LINK,
                 self.tr('Link mask (P-$$-S generates P-01-S)'),
                 defaultValue='$'
                 )
             )
         self.addParameter(
             QgsProcessingParameterNumber(
-                self.LINK_INI,
+                self.INITIAL_LINK,
                 self.tr('Number of first link'),
                 type=QgsProcessingParameterNumber.Integer,
                 defaultValue=1
@@ -146,7 +146,7 @@ class NetworkFromLinesAlgorithm(WntProcessingAlgorithm):
             )
         self.addParameter(
             QgsProcessingParameterNumber(
-                self.LINK_INC,
+                self.INCREMENT_LINK,
                 self.tr('Link increment'),
                 type=QgsProcessingParameterNumber.Integer,
                 defaultValue=1
@@ -174,12 +174,12 @@ class NetworkFromLinesAlgorithm(WntProcessingAlgorithm):
         # INPUT
         linelayer = self.parameterAsSource(parameters, self.INPUT, context)
         tol = self.parameterAsDouble(parameters, self.TOLERANCE, context)
-        nmask = self.parameterAsString(parameters, self.NODE_MASK, context)
-        nini = self.parameterAsInt(parameters, self.NODE_INI, context)
-        ninc = self.parameterAsInt(parameters, self.NODE_INC, context)
-        lmask = self.parameterAsString(parameters, self.LINK_MASK, context)
-        lini = self.parameterAsInt(parameters, self.LINK_INI, context)
-        linc = self.parameterAsInt(parameters, self.LINK_INC, context)
+        nmask = self.parameterAsString(parameters, self.MASK_NODE, context)
+        nini = self.parameterAsInt(parameters, self.INITIAL_NODE, context)
+        ninc = self.parameterAsInt(parameters, self.INCREMENT_NODE, context)
+        lmask = self.parameterAsString(parameters, self.MASK_LINK, context)
+        lini = self.parameterAsInt(parameters, self.INITIAL_LINK, context)
+        linc = self.parameterAsInt(parameters, self.INCREMENT_LINK, context)
 
         # SEND INFORMATION TO THE USER
         log_start(feedback, self.displayName())

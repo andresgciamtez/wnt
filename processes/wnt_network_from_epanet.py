@@ -1,4 +1,4 @@
-﻿"""Import network layers from an EPANET input file."""
+"""Import network layers from an EPANET input file."""
 
 from qgis.PyQt.QtCore import QMetaType
 from qgis.core import (                       QgsFields,
@@ -17,7 +17,7 @@ from .messages import finish, info, start
 
 class NetworkFromEpanetAlgorithm(WntProcessingAlgorithm):
     """
-    Built a network from an epanet file.
+    Built a network from an EPANET file.
     """
 
     # DEFINE CONSTANTS
@@ -44,7 +44,7 @@ class NetworkFromEpanetAlgorithm(WntProcessingAlgorithm):
         """
         Returns the translated algorithm name.
         """
-        return 'Network from epanet file'
+        return 'Network from EPANET file'
 
     def group(self):
         """
@@ -80,7 +80,7 @@ class NetworkFromEpanetAlgorithm(WntProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterFile(
                 self.INPUT,
-                self.tr('Epanet file'),
+                self.tr('EPANET file'),
                 extension='inp'
                 )
             )
@@ -94,13 +94,13 @@ class NetworkFromEpanetAlgorithm(WntProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterFeatureSink(
                 self.OUTPUT_NODES,
-                self.tr('Epanet nodes')
+                self.tr('EPANET nodes')
                 )
             )
         self.addParameter(
             QgsProcessingParameterFeatureSink(
                 self.OUTPUT_LINES,
-                self.tr('Epanet links'),
+                self.tr('EPANET links'),
                 )
             )
 
@@ -150,7 +150,7 @@ class NetworkFromEpanetAlgorithm(WntProcessingAlgorithm):
             node_sink.addFeature(f)
 
             # SHOW PROGRESS
-            if ncnt % 100 == 0:
+            if ntot > 0 and ncnt % 100 == 0:
                 feedback.setProgress(50*ncnt/ntot) # Update the progress bar
 
         # GENERATE LINKS LAYER
@@ -202,7 +202,7 @@ class NetworkFromEpanetAlgorithm(WntProcessingAlgorithm):
             link_sink.addFeature(f)
 
             # SHOW PROGRESS
-            if lcnt % 100 == 0:
+            if ltot > 0 and lcnt % 100 == 0:
                 feedback.setProgress(50+50*lcnt/ltot) # Update the progress bar
 
         # SHOW INFO
