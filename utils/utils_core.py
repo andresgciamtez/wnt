@@ -149,6 +149,7 @@ class WntNode:
         self._y = None
         self._elevation = None
         self._type = None
+        self.epanet = {}
 
     def name(self):
         """Return name (epanet ID)."""
@@ -387,6 +388,8 @@ class WntNetwork:
             junction = WntNode(tmp[0])
             junction.set_type('JUNCTION')
             junction.set_elevation(tmp[1])
+            junction.epanet['demand'] = tmp[2] if len(tmp) > 2 else None
+            junction.epanet['pattern'] = tmp[3] if len(tmp) > 3 else None
             self.add_node(junction)
 
         # INPUT RESERVOIRS # ID Head Pattern
@@ -395,6 +398,8 @@ class WntNetwork:
             reservoir = WntNode(tmp[0])
             reservoir.set_type('RESERVOIR')
             reservoir.set_elevation(tmp[1])
+            reservoir.epanet['head'] = tmp[1]
+            reservoir.epanet['pattern'] = tmp[2] if len(tmp) > 2 else None
             self.add_node(reservoir)
 
         # INPUT TANKS # ID Elevation InitLevel MinLevel MaxLevel
@@ -404,6 +409,12 @@ class WntNetwork:
             tank = WntNode(tmp[0])
             tank.set_type('TANK')
             tank.set_elevation(tmp[1])
+            tank.epanet['init_level'] = tmp[2] if len(tmp) > 2 else None
+            tank.epanet['min_level'] = tmp[3] if len(tmp) > 3 else None
+            tank.epanet['max_level'] = tmp[4] if len(tmp) > 4 else None
+            tank.epanet['diameter'] = tmp[5] if len(tmp) > 5 else None
+            tank.epanet['min_volume'] = tmp[6] if len(tmp) > 6 else None
+            tank.epanet['volume_curve'] = tmp[7] if len(tmp) > 7 else None
             self.add_node(tank)
 
         # COORDINATES
@@ -428,6 +439,8 @@ class WntNetwork:
             pipe.epanet['length'] = tmp[3]
             pipe.epanet['diameter'] = tmp[4]
             pipe.epanet['roughness'] = tmp[5]
+            pipe.epanet['minor_loss'] = tmp[6] if len(tmp) > 6 else None
+            pipe.epanet['status'] = tmp[7] if len(tmp) > 7 else None
             self.add_link(pipe)
 
         # INPUT PUMPS #  # ID Node1 Node2 Parameters
@@ -436,6 +449,17 @@ class WntNetwork:
             lid, n1, n2 = tmp[0:3]
             pump = WntLink(lid, n1, n2)
             pump.set_type('PUMP')
+            pump.epanet['parameters'] = ' '.join(tmp[3:])
+            for key, value in zip(tmp[3::2], tmp[4::2]):
+                key = key.lower()
+                if key == 'power':
+                    pump.epanet['pump_power'] = value
+                elif key == 'head':
+                    pump.epanet['pump_head'] = value
+                elif key == 'speed':
+                    pump.epanet['pump_speed'] = value
+                elif key == 'pattern':
+                    pump.epanet['pump_pattern'] = value
             self.add_link(pump)
 
         # INPUT VALVES # ID Node1 Node2 Diameter Type Setting MinorLoss
@@ -445,6 +469,9 @@ class WntNetwork:
             t = tmp[4]
             valve = WntLink(lid, n1, n2)
             valve.set_type(t)
+            valve.epanet['diameter'] = tmp[3]
+            valve.epanet['setting'] = tmp[5] if len(tmp) > 5 else None
+            valve.epanet['minor_loss'] = tmp[6] if len(tmp) > 6 else None
             self.add_link(valve)
 
         # VERTICES

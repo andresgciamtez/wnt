@@ -1,5 +1,6 @@
 """Import network layers from an EPANET input file."""
 
+from pathlib import Path
 from qgis.PyQt.QtCore import QMetaType
 from qgis.core import (                       QgsFields,
                        QgsField,
@@ -14,6 +15,43 @@ from .base import WntProcessingAlgorithm
 from ..utils import utils_core as tools
 from .messages import crs as log_crs
 from .messages import finish, info, start
+
+
+NODE_EXTRA_FIELDS = (
+    ("demand", QMetaType.Double),
+    ("pattern", QMetaType.QString),
+    ("head", QMetaType.Double),
+    ("init_level", QMetaType.Double),
+    ("min_level", QMetaType.Double),
+    ("max_level", QMetaType.Double),
+    ("diameter", QMetaType.Double),
+    ("min_volume", QMetaType.Double),
+    ("volume_curve", QMetaType.QString),
+)
+
+
+LINK_EXTRA_FIELDS = (
+    ("minor_loss", QMetaType.Double),
+    ("status", QMetaType.QString),
+    ("setting", QMetaType.QString),
+    ("pump_power", QMetaType.Double),
+    ("pump_head", QMetaType.QString),
+    ("pump_speed", QMetaType.Double),
+    ("pump_pattern", QMetaType.QString),
+    ("parameters", QMetaType.QString),
+)
+
+
+def set_output_layer_name(context, layer_id, name):
+    """Set the display name for a generated Processing output layer."""
+    if context is None or not layer_id:
+        return
+    try:
+        details = context.layerToLoadOnCompletionDetails(layer_id)
+        details.name = name
+    except AttributeError:
+        pass
+
 
 class NetworkFromEpanetAlgorithm(WntProcessingAlgorithm):
     """
@@ -64,8 +102,8 @@ class NetworkFromEpanetAlgorithm(WntProcessingAlgorithm):
         """
         return self.tr('''<p>Imports an EPANET <code>.inp</code> file and creates node and link layers.</p>
 <ul>
-<li>Node attributes: <code>id</code>, <code>type</code>, <code>elevation</code>.</li>
-<li>Link attributes: <code>id</code>, <code>start</code>, <code>end</code>, <code>type</code>, <code>length</code>, <code>diameter</code>, <code>roughness</code>.</li>
+<li>Node attributes include the EPANET input properties for junctions, reservoirs and tanks.</li>
+<li>Link attributes include the EPANET input properties for pipes, pumps and valves.</li>
 <li>Supported node sections: <code>JUNCTIONS</code>, <code>RESERVOIRS</code>, <code>TANKS</code>.</li>
 <li>Supported link sections: <code>PIPES</code>, <code>PUMPS</code>, <code>VALVES</code>.</li>
 </ul>
@@ -111,6 +149,7 @@ class NetworkFromEpanetAlgorithm(WntProcessingAlgorithm):
         # INPUT
         epanetf = self.parameterAsFile(parameters, self.INPUT, context)
         crs = self.parameterAsCrs(parameters, self.CRS, context)
+        output_name = Path(epanetf).stem
 
         # SHOW INFO
         start(feedback, self.displayName())
@@ -127,6 +166,8 @@ class NetworkFromEpanetAlgorithm(WntProcessingAlgorithm):
         newfields.append(QgsField("id", QMetaType.QString))
         newfields.append(QgsField("type", QMetaType.QString))
         newfields.append(QgsField("elevation", QMetaType.Double))
+        for name, qtype in NODE_EXTRA_FIELDS:
+            newfields.append(QgsField(name, qtype))
         (node_sink, node_id) = self.parameterAsSink(
             parameters,
             self.OUTPUT_NODES,
@@ -135,6 +176,7 @@ class NetworkFromEpanetAlgorithm(WntProcessingAlgorithm):
             QgsWkbTypes.Point,
             crs
             )
+        set_output_layer_name(context, node_id, f"{output_name}_nodes")
 
         # ADD NODES
         ncnt = 0
@@ -144,7 +186,10 @@ class NetworkFromEpanetAlgorithm(WntProcessingAlgorithm):
             ncnt += 1
             f = QgsFeature()
             f.setGeometry(QgsGeometry.fromWkt(node.to_wkt()))
-            f.setAttributes([node.name(), node.get_type(), node.get_elevation()])
+            f.setAttributes(
+                [node.name(), node.get_type(), node.get_elevation()]
+                + [node.epanet.get(name) for name, _ in NODE_EXTRA_FIELDS]
+            )
 
             # ADD NODE
             node_sink.addFeature(f)
@@ -162,6 +207,8 @@ class NetworkFromEpanetAlgorithm(WntProcessingAlgorithm):
         newfields.append(QgsField("length", QMetaType.Double))
         newfields.append(QgsField("diameter", QMetaType.Double))
         newfields.append(QgsField("roughness", QMetaType.Double))
+        for name, qtype in LINK_EXTRA_FIELDS:
+            newfields.append(QgsField(name, qtype))
         (link_sink, link_id) = self.parameterAsSink(
             parameters,
             self.OUTPUT_LINES,
@@ -170,6 +217,7 @@ class NetworkFromEpanetAlgorithm(WntProcessingAlgorithm):
             QgsWkbTypes.LineString,
             crs
             )
+        set_output_layer_name(context, link_id, f"{output_name}_links")
 
         # ADD LINKS
         lcnt = 0
@@ -178,25 +226,18 @@ class NetworkFromEpanetAlgorithm(WntProcessingAlgorithm):
             lcnt += 1
             f = QgsFeature()
             f.setGeometry(QgsGeometry.fromWkt(link.to_wkt()))
-            if link.get_type() in ['PIPE', 'CVPIPE']:
-                f.setAttributes([link.name(),
-                                link.start(),
-                                link.end(),
-                                link.get_type(),
-                                link.epanet['length'],
-                                link.epanet['diameter'],
-                                link.epanet['roughness']]
-                                )
-            else:
-                f.setAttributes(
-                    [link.name(),
-                     link.start(),
-                     link.end(),
-                     link.get_type(),
-                     None,
-                     None,
-                     None]
-                    )
+            f.setAttributes(
+                [
+                    link.name(),
+                    link.start(),
+                    link.end(),
+                    link.get_type(),
+                    link.epanet.get('length'),
+                    link.epanet.get('diameter'),
+                    link.epanet.get('roughness'),
+                ]
+                + [link.epanet.get(name) for name, _ in LINK_EXTRA_FIELDS]
+            )
 
             # ADD LINK
             link_sink.addFeature(f)

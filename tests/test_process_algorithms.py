@@ -27,6 +27,12 @@ from wnt.processes.wnt_scn_from_pipe_properties import ScnFromPipePropertiesAlgo
 from wnt.processes.wnt_split_lines_at_points import SplitLinesAtPointsAlgorithm
 from wnt.processes.wnt_update_assignment import UpdateAssignmentAlgorithm
 from wnt.processes.wnt_validate import ValidateAlgorithm
+from wnt.utils.utils_epanet_api import (
+    constants_for_version,
+    EpanetConfigurationError,
+    EpanetToolkit,
+    ToolkitInfo,
+)
 
 from .utilities import get_qgis_app
 
@@ -131,6 +137,19 @@ class FakeSink:
 
     def addFeatures(self, features, *args):
         self.features.extend(features)
+
+
+class FakeLayerDetails:
+    def __init__(self):
+        self.name = None
+
+
+class FakeProcessingContext:
+    def __init__(self):
+        self.layer_details = {}
+
+    def layerToLoadOnCompletionDetails(self, layer_id):
+        return self.layer_details.setdefault(layer_id, FakeLayerDetails())
 
 
 class FakeOutputFeature:
@@ -627,17 +646,27 @@ def test_epanet_from_network_exports_file_and_rejects_crs(monkeypatch, tmp_path)
 
 def test_network_from_epanet_imports_node_and_link_features(monkeypatch, tmp_path):
     algorithm = NetworkFromEpanetAlgorithm()
-    inp = tmp_path / "model.inp"
+    inp = tmp_path / "example.inp"
     inp.write_text(
         """
         [JUNCTIONS]
-        J1 1
+        J1 1 5 PAT_J
         J2 2
+        [RESERVOIRS]
+        R1 100 PAT_R
+        [TANKS]
+        T1 10 1 0 5 15 0 VC1
         [COORDINATES]
         J1 0 0
         J2 1 0
+        R1 2 0
+        T1 3 0
         [PIPES]
         P1 J1 J2 1.0 100 120 0 Open
+        [PUMPS]
+        PU1 J2 R1 POWER 10 SPEED 1.2 PATTERN PAT_P
+        [VALVES]
+        V1 R1 T1 50 PRV 20 0.1
         [END]
         """,
         encoding="latin-1",
@@ -649,14 +678,66 @@ def test_network_from_epanet_imports_node_and_link_features(monkeypatch, tmp_pat
         files={algorithm.INPUT: inp},
     )
 
-    result = algorithm.processAlgorithm({}, None, FakeFeedback())
+    context = FakeProcessingContext()
+    result = algorithm.processAlgorithm({}, context, FakeFeedback())
 
     assert result == {
         algorithm.OUTPUT_NODES: f"{algorithm.OUTPUT_NODES}_id",
         algorithm.OUTPUT_LINES: f"{algorithm.OUTPUT_LINES}_id",
     }
-    assert [feature.attributes()[0] for feature in sinks[algorithm.OUTPUT_NODES].features] == ["J1", "J2"]
-    assert sinks[algorithm.OUTPUT_LINES].features[0].attributes() == [
+    assert context.layer_details[f"{algorithm.OUTPUT_NODES}_id"].name == "example_nodes"
+    assert context.layer_details[f"{algorithm.OUTPUT_LINES}_id"].name == "example_links"
+    nodes = {
+        feature.attributes()[0]: feature.attributes()
+        for feature in sinks[algorithm.OUTPUT_NODES].features
+    }
+    links = {
+        feature.attributes()[0]: feature.attributes()
+        for feature in sinks[algorithm.OUTPUT_LINES].features
+    }
+    assert nodes["J1"] == [
+        "J1",
+        "JUNCTION",
+        1.0,
+        "5",
+        "PAT_J",
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    ]
+    assert nodes["R1"] == [
+        "R1",
+        "RESERVOIR",
+        100.0,
+        None,
+        "PAT_R",
+        "100",
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    ]
+    assert nodes["T1"] == [
+        "T1",
+        "TANK",
+        10.0,
+        None,
+        None,
+        None,
+        "1",
+        "0",
+        "5",
+        "15",
+        "0",
+        "VC1",
+    ]
+    assert links["P1"] == [
         "P1",
         "J1",
         "J2",
@@ -664,6 +745,48 @@ def test_network_from_epanet_imports_node_and_link_features(monkeypatch, tmp_pat
         "1.0",
         "100",
         "120",
+        "0",
+        "Open",
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    ]
+    assert links["PU1"] == [
+        "PU1",
+        "J2",
+        "R1",
+        "PUMP",
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        "10",
+        None,
+        "1.2",
+        "PAT_P",
+        "POWER 10 SPEED 1.2 PATTERN PAT_P",
+    ]
+    assert links["V1"] == [
+        "V1",
+        "R1",
+        "T1",
+        "PRV",
+        None,
+        "50",
+        None,
+        "0.1",
+        None,
+        "20",
+        None,
+        None,
+        None,
+        None,
+        None,
     ]
     assert algorithm.processAlgorithm({}, None, FakeFeedback(canceled=True)) == {}
 
@@ -1058,7 +1181,8 @@ def test_network_from_lines_splits_multipart_and_uses_z_elevations(monkeypatch):
         },
     )
 
-    result = algorithm.processAlgorithm({}, None, FakeFeedback())
+    context = FakeProcessingContext()
+    result = algorithm.processAlgorithm({}, context, FakeFeedback())
 
     assert result == {
         algorithm.OUTPUT_NODES: f"{algorithm.OUTPUT_NODES}_id",
@@ -1189,7 +1313,22 @@ class FakeEpanetLibrary:
             return 77
         return 0
 
-    def ENopen(self, inp, rpt):
+    def ENgetversion(self, out):
+        err = self._err("ENgetversion")
+        if err:
+            return err
+        out._obj.value = 20200
+        return 0
+
+    def ENgeterror(self, code, out, max_len):
+        value = f"EPANET toolkit error {code}".encode()
+        if hasattr(out, "_obj"):
+            out._obj.value = value
+        else:
+            out.value = value
+        return 0
+
+    def ENopen(self, inp, rpt, out=None):
         return self._err("ENopen")
 
     def ENgetcount(self, code, out):
@@ -1216,7 +1355,10 @@ class FakeEpanetLibrary:
         err = self._err("ENgetnodeid")
         if err:
             return err
-        out._obj.value = b"N1"
+        if hasattr(out, "_obj"):
+            out._obj.value = b"N1"
+        else:
+            out.value = b"N1"
         return 0
 
     def ENgetnodevalue(self, index, parameter, out):
@@ -1230,7 +1372,10 @@ class FakeEpanetLibrary:
         err = self._err("ENgetlinkid")
         if err:
             return err
-        out._obj.value = b"L1"
+        if hasattr(out, "_obj"):
+            out._obj.value = b"L1"
+        else:
+            out.value = b"L1"
         return 0
 
     def ENgetlinkvalue(self, index, parameter, out):
@@ -1267,13 +1412,18 @@ class FakeToolkitConfig:
 
 def patch_results_algorithm(monkeypatch, library=None, has_lib=True):
     patch_lightweight_qgis_feature_classes(monkeypatch, "wnt.processes.wnt_results_from_epanet")
-    monkeypatch.setattr(
-        "wnt.processes.wnt_results_from_epanet.configparser.ConfigParser",
-        lambda: FakeToolkitConfig(has_lib),
-    )
-    loader = type("Loader", (), {"LoadLibrary": lambda self, path: library or FakeEpanetLibrary()})()
-    monkeypatch.setattr("wnt.processes.wnt_results_from_epanet.ctypes.windll", loader, raising=False)
-    monkeypatch.setattr("wnt.processes.wnt_results_from_epanet.ctypes.cdll", loader)
+    if has_lib:
+        monkeypatch.setattr(
+            "wnt.processes.wnt_results_from_epanet.EpanetToolkit.from_config",
+            lambda: EpanetToolkit(library or FakeEpanetLibrary(), "fake-epanet"),
+        )
+    else:
+        monkeypatch.setattr(
+            "wnt.processes.wnt_results_from_epanet.EpanetToolkit.from_config",
+            lambda: (_ for _ in ()).throw(
+                EpanetConfigurationError("Configure EPANET toolkit library")
+            ),
+        )
 
 
 def test_results_from_epanet_loads_node_and_link_results(monkeypatch, tmp_path):
@@ -1312,25 +1462,19 @@ def test_results_from_epanet_loads_node_and_link_results(monkeypatch, tmp_path):
     ]
 
 
+def test_epanet_constants_are_resolved_by_toolkit_version():
+    assert constants_for_version(20012).max_label_len == 15
+    assert constants_for_version(20200).max_label_len == 31
+    assert constants_for_version(20200).node_count == 0
+    assert constants_for_version(20200).energy == 13
+
+
 def test_results_from_epanet_loads_posix_library_and_closed_status(monkeypatch, tmp_path):
     algorithm = ResultsFromEpanetAlgorithm()
     inp = tmp_path / "model.inp"
     inp.write_text("[END]\n", encoding="utf-8")
 
-    class FakeModulePath:
-        def __init__(self, value):
-            self.value = value
-
-        def resolve(self):
-            return self
-
-        @property
-        def parents(self):
-            return [tmp_path / "processes", tmp_path]
-
     patch_results_algorithm(monkeypatch, FakeEpanetLibrary(link_status=0.0))
-    monkeypatch.setattr("wnt.processes.wnt_results_from_epanet.Path", FakeModulePath)
-    monkeypatch.setattr("wnt.processes.wnt_results_from_epanet.os.name", "posix")
     sinks = bind_common_parameters(monkeypatch, algorithm, files={algorithm.INPUT: inp})
 
     result = algorithm.processAlgorithm({}, None, FakeFeedback())
@@ -1404,22 +1548,31 @@ def test_config_toolkit_writes_ini(monkeypatch, tmp_path):
     algorithm = ConfigToolkitAlgorithm()
     ini = tmp_path / "toolkit.ini"
 
-    class FakeModulePath:
-        def __init__(self, value):
-            self.value = value
+    class FakeConfiguredToolkit:
+        def check_available(self):
+            return True
 
-        def resolve(self):
-            return self
+        def info(self):
+            return ToolkitInfo(
+                library_path=str(tmp_path / "epanet.dll"),
+                platform="Windows",
+                architecture="AMD64",
+                version="2.2.0",
+                api="legacy",
+            )
 
-        @property
-        def parents(self):
-            return [tmp_path / "processes", tmp_path]
-
-    monkeypatch.setattr("wnt.processes.wnt_config_toolkit.Path", FakeModulePath)
+    monkeypatch.setattr("wnt.processes.wnt_config_toolkit.toolkit_config_path", lambda: ini)
+    monkeypatch.setattr(
+        "wnt.processes.wnt_config_toolkit.EpanetToolkit.from_library_path",
+        lambda lib_file: FakeConfiguredToolkit(),
+    )
     bind_common_parameters(monkeypatch, algorithm, files={algorithm.INPUT: tmp_path / "epanet.dll"})
 
-    assert algorithm.processAlgorithm({}, None, FakeFeedback()) == {}
+    feedback = FakeFeedback()
+    assert algorithm.processAlgorithm({}, None, feedback) == {}
     assert "epanet.dll" in ini.read_text(encoding="utf-8")
+    assert "Platform: Windows AMD64" in feedback.info
+    assert "EPANET toolkit version: 2.2.0" in feedback.info
 
 
 def test_validate_reports_all_problem_types(monkeypatch):

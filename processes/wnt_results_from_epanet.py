@@ -1,10 +1,5 @@
 """Import hydraulic results from EPANET toolkit runs."""
 
-import configparser
-import ctypes
-import os
-from pathlib import Path
-from time import gmtime, strftime
 from qgis.PyQt.QtCore import QMetaType
 from qgis.core import (QgsFeature,
                        QgsField,
@@ -13,22 +8,12 @@ from qgis.core import (QgsFeature,
                        QgsProcessingParameterFile)
 from .base import WntProcessingAlgorithm
 from .messages import error, finish, info, message, start
+from ..utils.utils_epanet_api import (
+    EpanetConfigurationError,
+    EpanetError,
+    EpanetToolkit,
+)
 
-
-# EPANET TOOLKIT CONSTANTS
-EN_NODECOUNT = 0
-EN_LINKCOUNT = 2
-EN_DEMAND = 9
-EN_HEAD = 10
-EN_PRESSURE = 11
-EN_FLOW = 8
-EN_VELOCITY = 9
-EN_HEADLOSS = 10
-EN_STATUS = 11
-EN_SETTING = 12
-EN_ENERGY = 13
-MAX_LABEL_LEN = 16
-NOSAVE = 0
 
 class ResultsFromEpanetAlgorithm(WntProcessingAlgorithm):
     """
@@ -39,7 +24,6 @@ class ResultsFromEpanetAlgorithm(WntProcessingAlgorithm):
     INPUT = 'INPUT'
     OUTPUT_NODES = 'OUTPUT_NODES'
     OUTPUT_LINES = 'OUTPUT_LINES'
-
 
     def createInstance(self):
         """
@@ -119,15 +103,27 @@ class ResultsFromEpanetAlgorithm(WntProcessingAlgorithm):
         # INPUT
         epanet_file = self.parameterAsFile(parameters, self.INPUT, context)
 
+        start(feedback, self.displayName())
+
+        # LOAD EPANET TOOLKIT
+        try:
+            toolkit = EpanetToolkit.from_config()
+            toolkit_info = toolkit.info()
+            max_label_len = toolkit.constants.max_label_len
+        except EpanetConfigurationError as exc:
+            error(feedback, str(exc))
+            return {}
+        except EpanetError as exc:
+            error(feedback, exc.message)
+            return {}
+
         # DEFINE NODE LAYER
         newfields = QgsFields()
         newfields.append(QgsField("time", QMetaType.QTime))
-        newfields.append(QgsField("id", QMetaType.QString, len=MAX_LABEL_LEN))
+        newfields.append(QgsField("id", QMetaType.QString, len=max_label_len))
         newfields.append(QgsField("demand", QMetaType.Double))
         newfields.append(QgsField("head", QMetaType.Double))
         newfields.append(QgsField("pressure", QMetaType.Double))
-        #newfields.append(QgsField("quality", QMetaType.Double))
-        #newfields.append(QgsField("sourcemass", QMetaType.Double))
         (node_sink, nodes_id) = self.parameterAsSink(
             parameters,
             self.OUTPUT_NODES,
@@ -138,7 +134,7 @@ class ResultsFromEpanetAlgorithm(WntProcessingAlgorithm):
         # DEFINE LINK LAYER
         newfields = QgsFields()
         newfields.append(QgsField("time", QMetaType.QTime))
-        newfields.append(QgsField("id", QMetaType.QString, len=MAX_LABEL_LEN))
+        newfields.append(QgsField("id", QMetaType.QString, len=max_label_len))
         newfields.append(QgsField("flow", QMetaType.Double))
         newfields.append(QgsField("velocity", QMetaType.Double))
         newfields.append(QgsField("headloss", QMetaType.Double))
@@ -152,146 +148,35 @@ class ResultsFromEpanetAlgorithm(WntProcessingAlgorithm):
             newfields
             )
 
-        # SEND INFORMATION TO THE USER
-        start(feedback, self.displayName())
-
-        # LOAD EPANET LIB SELECTING OS AND PLATFORM
-        try:
-            config = configparser.ConfigParser()
-            ini_file = Path(__file__).resolve().parents[1] / 'toolkit.ini'
-            config.read(ini_file)
-            lib_file = config['EPANET']['lib']
-            info(feedback, "EPANET toolkit library", lib_file)
-            if os.name in ['nt', 'dos']:
-                info(feedback, "Operating system", os.name)
-                epanet_lib = ctypes.windll.LoadLibrary(lib_file)
-            else:
-                info(feedback, "Operating system", os.name)
-                epanet_lib = ctypes.cdll.LoadLibrary(lib_file)
-        except:
-            error(feedback, "Configure EPANET toolkit library")
-            return {}
-
-        # OPEN EPANET MODEL
+        # SHOW TOOLKIT INFORMATION
+        info(feedback, "EPANET toolkit library", toolkit_info.library_path)
+        info(feedback, "Platform", f"{toolkit_info.platform} {toolkit_info.architecture}")
+        info(feedback, "EPANET toolkit version", toolkit_info.version)
+        info(feedback, "EPANET toolkit API", toolkit_info.api)
         info(feedback, "Input file", epanet_file)
-        report_file = epanet_file[:-4] + '.rpt'
-        err = epanet_lib.ENopen(ctypes.c_char_p(epanet_file.encode()),
-                                ctypes.c_char_p(report_file.encode())
-                                )
-        if err:
-            error(feedback, f"EPANET toolkit error {err}")
-            return {}
 
         # GET AND WRITE RESULTS
-        step_count = 0
-        count = ctypes.c_int()
-        err = epanet_lib.ENgetcount(EN_NODECOUNT, ctypes.byref(count))
-        if err:
-            error(feedback, f"EPANET toolkit error {err}")
+        try:
+            results = toolkit.read_hydraulic_results(epanet_file)
+        except EpanetError as exc:
+            error(feedback, exc.message)
             return {}
-        node_count = count.value
-        err = epanet_lib.ENgetcount(EN_LINKCOUNT, ctypes.byref(count))
-        if err:
-            error(feedback, f"EPANET toolkit error {err}")
-            return {}
-        link_count = count.value
-        err = epanet_lib.ENopenH()
-        if err:
-            error(feedback, f"EPANET toolkit error {err}")
-            return {}
-        err = epanet_lib.ENinitH(ctypes.c_int(NOSAVE))
-        if err:
-            error(feedback, f"EPANET toolkit error {err}")
-            return {}
-        while True:
 
-            # RUN A TIME SETP
-            step_count += 1
-            current_time = ctypes.c_long()
-            err = epanet_lib.ENrunH(ctypes.byref(current_time))
-            time = strftime('%H:%M:%S', gmtime(current_time.value))
-            id_ = ctypes.create_string_buffer(MAX_LABEL_LEN)
-            variable = ctypes.c_float()
+        for node_result in results.node_rows:
+            f = QgsFeature()
+            f.setAttributes(node_result)
+            node_sink.addFeature(f)
 
-            # NODE RESULT
-            for index in range(1, node_count + 1):
-                err = epanet_lib.ENgetnodeid(index, ctypes.byref(id_))
-                if err:
-                    error(feedback, f"EPANET toolkit error {err}")
-                    return {}
-                node_result = [time, id_.value.decode('utf-8')]
-                for parameter in [EN_DEMAND, EN_HEAD, EN_PRESSURE]:
-                    err = epanet_lib.ENgetnodevalue(index,
-                                                    parameter,
-                                                    ctypes.byref(variable)
-                                                    )
-                    if err:
-                        error(feedback, f"EPANET toolkit error {err}")
-                        return {}
-                    node_result.append(variable.value)
-                f = QgsFeature()
-                f.setAttributes(node_result)
-                node_sink.addFeature(f)
+        for link_result in results.link_rows:
+            f = QgsFeature()
+            f.setAttributes(link_result)
+            link_sink.addFeature(f)
 
-            # LINK RESULT
-            for index in range(1, link_count + 1):
-                err = epanet_lib.ENgetlinkid(index, ctypes.byref(id_))
-                if err:
-                    error(feedback, f"EPANET toolkit error {err}")
-                    return {}
-                link_result = [time, id_.value.decode('utf-8')]
-                for parameter in [EN_FLOW, EN_VELOCITY, EN_HEADLOSS]:
-                    err = epanet_lib.ENgetlinkvalue(index,
-                                                    parameter,
-                                                    ctypes.byref(variable)
-                                                    )
-                    if err:
-                        error(feedback, f"EPANET toolkit error {err}")
-                        return {}
-                    link_result.append(variable.value)
-                err = epanet_lib.ENgetlinkvalue(index,
-                                                EN_STATUS,
-                                                ctypes.byref(variable)
-                                                )
-                if err:
-                    error(feedback, f"EPANET toolkit error {err}")
-                    return {}
-                if variable.value:
-                    link_result.append('OPEN')
-                else:
-                    link_result.append('CLOSED')
-                for parameter in [EN_SETTING, EN_ENERGY]:
-                    err = epanet_lib.ENgetlinkvalue(index,
-                                                    parameter,
-                                                    ctypes.byref(variable)
-                                                    )
-                    if err:
-                        error(feedback, f"EPANET toolkit error {err}")
-                        return {}
-                    link_result.append(variable.value)
-                f = QgsFeature()
-                f.setAttributes(link_result)
-                link_sink.addFeature(f)
-
-            # END OF SIMULATON
-            next_time = ctypes.c_long()
-            err = epanet_lib.ENnextH(ctypes.byref(next_time))
-            if err:
-                error(feedback, f"EPANET toolkit error {err}")
-                return {}
-            if next_time.value == 0:
-                break
-
-        # CLOSE MODEL
-        err = epanet_lib.ENclose()
-        if err:
-            error(feedback, f"EPANET toolkit error {err}")
-            return {}
         # SHOW NODES AND LINKS PROCESSED
         message(feedback, "Results loaded successfully")
-        info(feedback, "Hydraulic time steps", step_count)
-        info(feedback, "Nodes", node_count)
-        info(feedback, "Links", link_count)
+        info(feedback, "Hydraulic time steps", results.step_count)
+        info(feedback, "Nodes", results.node_count)
+        info(feedback, "Links", results.link_count)
         finish(feedback)
 
         # PROCCES CANCELED
@@ -300,4 +185,3 @@ class ResultsFromEpanetAlgorithm(WntProcessingAlgorithm):
 
         # OUTPUT
         return {self.OUTPUT_NODES: nodes_id, self.OUTPUT_LINES: links_id}
-
