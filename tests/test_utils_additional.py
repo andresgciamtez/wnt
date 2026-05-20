@@ -4,7 +4,7 @@ import textwrap
 
 import pytest
 
-from wnt.utils.core import (
+from wnt.utils.utils_core import (
     WntLink,
     WntNetwork,
     WntNode,
@@ -13,7 +13,7 @@ from wnt.utils.core import (
     polyline_length,
     xy,
 )
-from wnt.utils.graph import (
+from wnt.utils.utils_graph import (
     Graph,
     graph_from_network,
     graph_from_records,
@@ -22,8 +22,8 @@ from wnt.utils.graph import (
     validate,
     validate_records,
 )
-from wnt.utils.landxml import network_from_xml
-from wnt.utils.tin import TIN, Triangle
+from wnt.utils.utils_landxml import network_from_xml
+from wnt.utils.utils_tin import TIN, Triangle
 
 
 def test_xy_accepts_indexed_and_qgis_like_points():

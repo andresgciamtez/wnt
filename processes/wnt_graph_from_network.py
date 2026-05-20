@@ -1,11 +1,11 @@
-﻿"""Export network topology to Trivial Graph Format."""
+"""Export network topology to Trivial Graph Format."""
 
 from qgis.core import (QgsProcessing,
                        QgsProcessingParameterFeatureSource,
                        QgsProcessingParameterFileDestination
                        )
 from .base import WntProcessingAlgorithm
-from ..utils import graph
+from ..utils import utils_graph as graph
 from .messages import finish, info, start
 
 class GraphFromNetworkAlgorithm(WntProcessingAlgorithm):

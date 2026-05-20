@@ -1,4 +1,4 @@
-﻿"""Classify network links into branched and meshed areas."""
+"""Classify network links into branched and meshed areas."""
 
 from qgis.PyQt.QtCore import QMetaType
 from qgis.core import (QgsField,
@@ -8,7 +8,7 @@ from qgis.core import (QgsField,
                        QgsWkbTypes
                        )
 from .base import WntProcessingAlgorithm
-from ..utils import graph as gr
+from ..utils import utils_graph as gr
 from .messages import finish, info, start
 
 class ClassifyAlgorithm(WntProcessingAlgorithm):

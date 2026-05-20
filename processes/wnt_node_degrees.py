@@ -1,4 +1,4 @@
-﻿"""Calculate node degrees for a network graph."""
+"""Calculate node degrees for a network graph."""
 
 from qgis.PyQt.QtCore import QMetaType
 from qgis.core import (QgsField,
@@ -8,7 +8,7 @@ from qgis.core import (QgsField,
                        QgsWkbTypes
                        )
 from .base import WntProcessingAlgorithm
-from ..utils import graph
+from ..utils import utils_graph as graph
 from .messages import finish, info, start
 
 class NodeDegreesAlgorithm(WntProcessingAlgorithm):

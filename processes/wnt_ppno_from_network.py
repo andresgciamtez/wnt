@@ -6,7 +6,7 @@ from qgis.core import (QgsProcessing,
                        QgsProcessingParameterFile,
                        QgsProcessingParameterFileDestination)
 from .base import WntProcessingAlgorithm
-from ..utils import parser
+from ..utils import utils_parser as parser
 from .messages import error, finish, info, start
 
 class PpnoFromNetworkAlgorithm(WntProcessingAlgorithm):

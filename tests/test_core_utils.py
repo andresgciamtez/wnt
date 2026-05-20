@@ -2,8 +2,8 @@
 
 import pytest
 
-from wnt.utils.core import WntLink, WntNetwork, WntNode, net_from_linestrings
-from wnt.utils.graph import node_degrees
+from wnt.utils.utils_core import WntLink, WntNetwork, WntNode, net_from_linestrings
+from wnt.utils.utils_graph import node_degrees
 
 
 def test_node_wkt_allows_zero_coordinates():

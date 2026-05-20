@@ -18,7 +18,7 @@ from qgis.core import (QgsFeature,
                        QgsPointXY
                        )
 from .base import WntProcessingAlgorithm
-from ..utils import core as tools
+from ..utils import utils_core as tools
 from .messages import crs as log_crs
 from .messages import error, finish, info
 from .messages import start as log_start

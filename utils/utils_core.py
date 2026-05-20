@@ -3,7 +3,7 @@
 from collections import defaultdict
 from itertools import pairwise
 from math import dist, floor
-from .parser import SectionedText, format_tokens, parse_tokens
+from .utils_parser import SectionedText, format_tokens, parse_tokens
 
 
 def xy(point):

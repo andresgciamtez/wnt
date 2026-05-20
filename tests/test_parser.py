@@ -1,6 +1,6 @@
 """Tests for sectioned text parsing utilities."""
 
-from wnt.utils.parser import SectionedText, format_tokens, parse_tokens
+from wnt.utils.utils_parser import SectionedText, format_tokens, parse_tokens
 
 
 def test_parse_and_format_tokens():

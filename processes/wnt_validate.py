@@ -1,4 +1,4 @@
-﻿"""Validate basic network topology."""
+"""Validate basic network topology."""
 
 from qgis.PyQt.QtCore import QMetaType
 from qgis.core import (QgsField,
@@ -9,7 +9,7 @@ from qgis.core import (QgsField,
 
                        )
 from .base import WntProcessingAlgorithm
-from ..utils import graph
+from ..utils import utils_graph as graph
 from .messages import finish, info, message, start
 
 class ValidateAlgorithm(WntProcessingAlgorithm):

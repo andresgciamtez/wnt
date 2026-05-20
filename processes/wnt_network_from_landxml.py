@@ -14,7 +14,7 @@ from qgis.core import (QgsCoordinateReferenceSystem,
                        QgsWkbTypes
                        )
 from .base import WntProcessingAlgorithm
-from ..utils import landxml
+from ..utils import utils_landxml as landxml
 from .messages import crs as log_crs
 from .messages import finish, info, start
 

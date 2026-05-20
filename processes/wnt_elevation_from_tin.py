@@ -8,7 +8,7 @@ from qgis.core import (QgsProcessing,
                        QgsProcessingParameterString
                       )
 from .base import WntProcessingAlgorithm
-from ..utils.tin import TIN
+from ..utils.utils_tin import TIN
 from .messages import crs as log_crs
 from .messages import finish, info, start
 
