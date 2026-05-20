@@ -5,7 +5,7 @@ from qgis.core import (QgsProcessing,
                        QgsProcessingParameterFileDestination
                        )
 from .base import WntProcessingAlgorithm
-from ..utils import core as tools
+from ..utils import graph
 from .messages import finish, info, start
 
 class GraphFromNetworkAlgorithm(WntProcessingAlgorithm):
@@ -103,15 +103,13 @@ class GraphFromNetworkAlgorithm(WntProcessingAlgorithm):
         # OUTPUT
         graphfile = self.parameterAsFileOutput(parameters, self.OUTPUT, context)
 
-        # GENERATE NETWORK
-        net = tools.WntNetwork()
-        for f in nodes.getFeatures():
-            net.add_node(tools.WntNode(f['id']))
-        for f in links.getFeatures():
-            net.add_link(tools.WntLink(f['id'], f['start'], f['end']))
-
         # GENERATE GRAPH
-        net.to_tgf(graphfile)
+        node_ids = [feature['id'] for feature in nodes.getFeatures()]
+        link_records = [
+            (feature['id'], feature['start'], feature['end'])
+            for feature in links.getFeatures()
+        ]
+        graph.graph_from_records(node_ids, link_records, graphfile)
 
         # SHOW INFO
         start(feedback, self.displayName())

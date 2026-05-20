@@ -150,9 +150,6 @@ class WntNode:
         self._elevation = None
         self._type = None
 
-    def __str__(self):
-        return 'WntNode: {}.'.format(self._name)
-
     def name(self):
         """Return name (epanet ID)."""
         return self._name
@@ -234,10 +231,6 @@ class WntLink:
         self._type = None
         self.epanet = {}
 
-    def __str__(self):
-        ERR_MSG = 'WntLink: {}. {} -> {}.'
-        return ERR_MSG.format(self._name, self._start, self._end)
-
     def name(self):
         """Return name (epanet ID)."""
         return self._name
@@ -271,16 +264,6 @@ class WntLink:
     def get_geometry(self):
         """Return link geometry as a list of coordinate tuples [(x, y) ...]."""
         return self._linestring
-
-    def get_startpoint(self):
-        """Return the initial point coordinates."""
-        if self._linestring:
-            return self._linestring[0]
-
-    def get_endpoint(self):
-        """Return the final point coordinates."""
-        if self._linestring:
-            return self._linestring[-1]
 
     def get_vertices(self):
         """Return the middle vertices."""
@@ -334,11 +317,6 @@ class WntLink:
             txt += str(point[0]) + ' ' + str(point[1]) + ')'
             return txt
 
-    def length(self):
-        """Return the link length."""
-        return polyline_length(self._linestring)
-
-
 class WntNetwork:
     """WntNetwork class."""
     def __init__(self):
@@ -346,9 +324,6 @@ class WntNetwork:
         self._links = []
         self._node_map = {} # name -> index
         self._link_map = {} # name -> index
-
-    def __str__(self):
-        return 'WntNetwork.'
 
     def nodes(self):
         """Return the network nodes"""
@@ -367,10 +342,6 @@ class WntNetwork:
             self._node_map[node.name()] = len(self._nodes)
         self._nodes.append(node)
 
-    def node(self, index):
-        """Return the node."""
-        return self._nodes[index]
-
     def add_link(self, link):
         """Add a link to the network."""
         ERR_MSG = 'Bad type. Must be Node.'
@@ -380,10 +351,6 @@ class WntNetwork:
             self._link_map[link.name()] = len(self._links)
         self._links.append(link)
 
-    def link(self, index):
-        """Return the link."""
-        return self._links[index]
-
     def get_nodeindex(self, nodeid):
         """Return the index of the labeled node: nodeid, None  if not exists."""
         return self._node_map.get(nodeid)
@@ -391,55 +358,6 @@ class WntNetwork:
     def get_linkindex(self, linkid):
         """Return the index of the labeled link: linkid, None if not exists."""
         return self._link_map.get(linkid)
-
-    def from_lines(self, linestrings, **kwargs):
-        """Build a network from line strings.
-
-        Parameters
-        ----------
-        linestring: listrings, [(x, y), ..]. A list of (x, y) points
-
-        **kwargs
-        tol: float, fusion distance, default 0.0
-        nmask: str, mask of nodes ID prefix$$$suffix, default = ''
-        nini: int, node numbering start, default = 0
-        ninc: int, node numbering increment, default = 1
-        lmask: str, mask of link ID prefix$$$suffix, default = ''
-        lini: int, link numbering start, default = 0
-        linc: int, link numbering increment, , default = 1
-        """
-
-        # CLEAR
-        self._nodes = []
-        self._links = []
-        self._node_map = {}
-        self._link_map = {}
-
-        # CONFIG
-        f = lambda k, d: kwargs[k] if k in kwargs else d
-
-        tol = f('tol', 0.0)
-
-        def node_id(index):
-            return format_id(f('nini', 0) + index*f('ninc', 1), f('nmask', ''))
-
-        def link_id(index):
-            return format_id(f('lini', 0) + index*f('linc', 1), f('lmask', ''))
-
-        # CALCULATE NETWORK
-        nodes, links = net_from_linestrings(linestrings, tol)
-
-        # ADD NODES
-        for index, coordinates in enumerate(nodes):
-            node = WntNode(node_id(index))
-            node.set_geometry(coordinates)
-            self.add_node(node)
-
-        # ADD LINKS
-        for index, (start, end, linestring) in enumerate(links):
-            link = WntLink(link_id(index), node_id(start), node_id(end))
-            link.set_geometry(linestring)
-            self.add_link(link)
 
     def from_epanet(self, epanetf):
         """Make a network from a epanet file, reading:
@@ -679,90 +597,3 @@ class WntNetwork:
         ERR_MSG = '; File generated automatically by Water Network Tools \n'
         sections['TITLE'].append(ERR_MSG)
         htext.write(inpf)
-
-    def to_tgf(self, fn):
-        """Export network topology to Trivial Graph Format (TGF)"""
-
-        # OPEN AND SAVE NODES
-        with open(fn, 'w', encoding='utf-8') as tgffile:
-            for index, node in enumerate(self.nodes()):
-                tgffile.write('{} {} \n'.format(index, node.name()))
-            tgffile.write('# \n')
-
-            # SAVE EDGES AND CLOSE
-            for link in self.links():
-                txt = '{} {} {} \n'
-                sindex = self.get_nodeindex(link.start())
-                eindex = self.get_nodeindex(link.end())
-                txt = txt.format(sindex, eindex, link.name())
-                tgffile.write(txt)
-
-    def degree(self):
-        """Return a dictionary, where: key: node id and value: node degree.
-        """
-        degrees = {}
-
-        # CALCULATE DEGREE
-        for node in self.nodes():
-            degrees[node.name()] = 0
-        for link in self.links():
-            for linkend in [link.start(), link.end()]:
-                if linkend not in degrees:
-                    degrees[linkend] = 0
-                degrees[linkend] += 1
-        return degrees
-
-    def validate(self):
-        """Return the problems detected in the network.
-
-        Analyse the network graph and retrieve a dictionary:
-        where key, value are:
-            'orphan nodes': set, orphan node IDs
-            'duplicate nodes': set, duplicated node IDs
-            'undefined node links': set, undefined node link IDs
-            'duplicate links': set duplicate link IDs
-            'loops': set, looped link IDs
-        """
-        problems = {
-            'orphan nodes': set(),
-            'duplicate nodes': set(),
-            'undefined node links': set(),
-            'duplicate links': set(),
-            'loops': set()
-        }
-
-        # NODE CHECKS
-        seen_nodes = set()
-        for node in self.nodes():
-            name = node.name()
-            if name in seen_nodes:
-                problems['duplicate nodes'].add(name)
-            seen_nodes.add(name)
-            problems['orphan nodes'].add(name)
-
-        # LINK CHECKS
-        seen_links = set()
-        for link in self.links():
-            name = link.name()
-            # Duplicate ID
-            if name in seen_links:
-                problems['duplicate links'].add(name)
-            seen_links.add(name)
-
-            # Orphan/Undefined
-            start_name = link.start()
-            end_name = link.end()
-
-            problems['orphan nodes'].discard(start_name)
-            problems['orphan nodes'].discard(end_name)
-
-            if start_name not in seen_nodes:
-                problems['undefined node links'].add(name)
-            elif end_name not in seen_nodes:
-                problems['undefined node links'].add(name)
-
-            # Loops
-            if start_name == end_name:
-                problems['loops'].add(name)
-
-        return problems

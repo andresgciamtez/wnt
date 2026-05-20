@@ -9,7 +9,7 @@ from qgis.core import (QgsField,
 
                        )
 from .base import WntProcessingAlgorithm
-from ..utils import core as tools
+from ..utils import graph
 from .messages import finish, info, message, start
 
 class ValidateAlgorithm(WntProcessingAlgorithm):
@@ -135,31 +135,30 @@ class ValidateAlgorithm(WntProcessingAlgorithm):
             linklay.sourceCrs()
             )
 
-        # DEFINE NETWORK
-        net = tools.WntNetwork()
-
         # LOAD NODES
+        node_ids = []
         ncnt = 0
         for f in nodelay.getFeatures():
             ncnt += 1
-            net.add_node(tools.WntNode(f['id']))
+            node_ids.append(f['id'])
 
             # SHOW PROGRESS
             if ncnt % 100 == 0:
                 feedback.setProgress(25*ncnt/nodelay.featureCount())
 
         # lOAD LINKS
+        links = []
         lcnt = 0
         for f in linklay.getFeatures():
             lcnt += 1
-            net.add_link(tools.WntLink(f['id'], f['start'], f['end']))
+            links.append((f['id'], f['start'], f['end']))
 
             # SHOW POROGRESS
             if lcnt % 100 == 0:
                 feedback.setProgress(25+25*lcnt/linklay.featureCount())
 
         # VALIDATE
-        problems = net.validate()
+        problems = graph.validate_records(node_ids, links)
 
         # WRITE OUTPUT
         start(feedback, self.displayName())

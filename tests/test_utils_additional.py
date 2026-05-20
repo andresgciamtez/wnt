@@ -13,7 +13,15 @@ from wnt.utils.core import (
     polyline_length,
     xy,
 )
-from wnt.utils.graph import Graph
+from wnt.utils.graph import (
+    Graph,
+    graph_from_network,
+    graph_from_records,
+    node_degrees,
+    node_degrees_from_records,
+    validate,
+    validate_records,
+)
 from wnt.utils.landxml import network_from_xml
 from wnt.utils.tin import TIN, Triangle
 
@@ -65,7 +73,7 @@ def test_net_from_linestrings_error_and_union_branches():
 def test_node_validation_and_wkt_parsing():
     node = WntNode("J1")
 
-    assert str(node) == "WntNode: J1."
+    assert node.name() == "J1"
     node.from_wkt('Point Z (1 2 3)')
     node.set_elevation("12.5")
     node.set_type("junction")
@@ -89,18 +97,17 @@ def test_node_validation_and_wkt_parsing():
 def test_link_validation_wkt_and_accessors():
     link = WntLink("P1", "J1", "J2")
 
-    assert str(link) == "WntLink: P1. J1 -> J2."
     assert link.name() == "P1"
     assert link.start() == "J1"
     assert link.end() == "J2"
     link.from_wkt('LineString Z (0 0 0, 1 0 0, 1 1 0)')
     link.set_type("pipe")
 
-    assert link.get_startpoint() == (0.0, 0.0)
-    assert link.get_endpoint() == (1.0, 1.0)
+    assert link.get_geometry()[0] == (0.0, 0.0)
+    assert link.get_geometry()[-1] == (1.0, 1.0)
     assert link.get_vertices() == [(1.0, 0.0)]
     assert link.to_wkt() == "LineString(0.0 0.0,1.0 0.0,1.0 1.0)"
-    assert link.length() == pytest.approx(2.0)
+    assert polyline_length(link.get_geometry()) == pytest.approx(2.0)
     assert link.get_type() == "PIPE"
 
     with pytest.raises(Exception, match="at least 2 points"):
@@ -123,7 +130,6 @@ def test_link_validation_wkt_and_accessors():
 
 def test_network_validation_and_exports(tmp_path):
     network = WntNetwork()
-    assert str(network) == "WntNetwork."
     j1 = WntNode("J1")
     j1.set_type("JUNCTION")
     j1.set_elevation(0)
@@ -159,14 +165,14 @@ def test_network_validation_and_exports(tmp_path):
     network.add_link(valve)
     network.add_link(missing)
 
-    assert network.node(0) is j1
-    assert network.link(0) is pipe
+    assert network.nodes()[0] is j1
+    assert network.links()[0] is pipe
     with pytest.raises(Exception, match="Bad type"):
         network.add_node(object())
     with pytest.raises(Exception, match="Bad type"):
         network.add_link(object())
 
-    assert network.validate() == {
+    assert validate(network) == {
         "orphan nodes": set(),
         "duplicate nodes": {"J2"},
         "undefined node links": {"P1"},
@@ -175,7 +181,7 @@ def test_network_validation_and_exports(tmp_path):
     }
 
     tgf = tmp_path / "network.tgf"
-    network.to_tgf(tgf)
+    graph_from_network(network, tgf)
     assert "0 J1" in tgf.read_text(encoding="utf-8")
 
     template = tmp_path / "template.inp"
@@ -207,6 +213,55 @@ def test_network_validation_and_exports(tmp_path):
     assert "PU1    J2    J3" in text
     assert "V1    J3    J3" in text
     assert "DIMENSIONS" in text
+
+
+def test_graph_module_network_helpers(tmp_path):
+    network = WntNetwork()
+    network.add_node(WntNode("N1"))
+    network.add_node(WntNode("N2"))
+    network.add_node(WntNode("ORPHAN"))
+    network.add_node(WntNode("N1"))
+    network.add_link(WntLink("L1", "N1", "N2"))
+    network.add_link(WntLink("L1", "N2", "MISSING"))
+    network.add_link(WntLink("LOOP", "N1", "N1"))
+
+    assert node_degrees(network) == {"N1": 3, "N2": 2, "ORPHAN": 0, "MISSING": 1}
+    assert validate(network) == {
+        "orphan nodes": {"ORPHAN"},
+        "duplicate nodes": {"N1"},
+        "undefined node links": {"L1"},
+        "duplicate links": {"L1"},
+        "loops": {"LOOP"},
+    }
+
+    tgf = tmp_path / "network.tgf"
+    graph_from_network(network, tgf)
+    assert tgf.read_text(encoding="utf-8").splitlines() == [
+        "0 N1 ",
+        "1 N2 ",
+        "2 ORPHAN ",
+        "3 N1 ",
+        "# ",
+        "0 1 L1 ",
+        "1 None L1 ",
+        "0 0 LOOP ",
+    ]
+
+    records_tgf = tmp_path / "records.tgf"
+    graph_from_records(
+        ["N1", "N2", "ORPHAN", "N1"],
+        [("L1", "N1", "N2"), ("L1", "N2", "MISSING"), ("LOOP", "N1", "N1")],
+        records_tgf,
+    )
+    assert records_tgf.read_text(encoding="utf-8") == tgf.read_text(encoding="utf-8")
+    assert node_degrees_from_records(
+        ["N1", "N2", "ORPHAN", "N1"],
+        [("L1", "N1", "N2"), ("L1", "N2", "MISSING"), ("LOOP", "N1", "N1")],
+    ) == node_degrees(network)
+    assert validate_records(
+        ["N1", "N2", "ORPHAN", "N1"],
+        [("L1", "N1", "N2"), ("L1", "N2", "MISSING"), ("LOOP", "N1", "N1")],
+    ) == validate(network)
 
 
 def test_epanet_import_covers_all_supported_sections(tmp_path):
@@ -344,7 +399,7 @@ def test_validate_reports_link_with_undefined_start_node():
     link.set_geometry([(1, 0), (0, 0)])
     network.add_link(link)
 
-    assert network.validate()["undefined node links"] == {"P1"}
+    assert validate(network)["undefined node links"] == {"P1"}
 
 
 def test_graph_classifies_tree_and_mesh_edges():

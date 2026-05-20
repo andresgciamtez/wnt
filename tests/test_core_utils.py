@@ -3,6 +3,7 @@
 import pytest
 
 from wnt.utils.core import WntLink, WntNetwork, WntNode, net_from_linestrings
+from wnt.utils.graph import node_degrees
 
 
 def test_node_wkt_allows_zero_coordinates():
@@ -65,21 +66,6 @@ def test_from_epanet_allows_missing_optional_sections(tmp_path):
     assert network.nodes()[0].get_geometry() == (0.0, 0.0)
 
 
-def test_from_lines_builds_nodes_and_links():
-    """from_lines creates a usable in-memory network."""
-    network = WntNetwork()
-
-    network.from_lines(
-        [[(0, 0), (1, 0)], [(1, 0), (2, 0)]],
-        nmask="N$",
-        lmask="L$",
-    )
-
-    assert [node.name() for node in network.nodes()] == ["N0", "N1", "N2"]
-    assert [link.name() for link in network.links()] == ["L0", "L1"]
-    assert network.links()[0].get_geometry() == [(0.0, 0.0), (1.0, 0.0)]
-
-
 def test_label_indexes_preserve_first_duplicate():
     """Label lookups preserve the previous first-match behavior."""
     network = WntNetwork()
@@ -104,7 +90,7 @@ def test_degree_tolerates_undefined_link_nodes():
     network.add_node(WntNode("N1"))
     network.add_link(WntLink("L1", "N1", "MISSING"))
 
-    assert network.degree() == {"N1": 1, "MISSING": 1}
+    assert node_degrees(network) == {"N1": 1, "MISSING": 1}
 
 
 def test_net_from_linestrings_merges_connected_endpoints_with_tolerance():

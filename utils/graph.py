@@ -1,5 +1,105 @@
 """Graph utilities for network topology analysis."""
 
+
+def _node_name(node):
+    return node.name() if hasattr(node, 'name') else node
+
+
+def _link_values(link):
+    if hasattr(link, 'name') and hasattr(link, 'start') and hasattr(link, 'end'):
+        return link.name(), link.start(), link.end()
+    return link
+
+
+def graph_from_network(network, path):
+    """Export network topology to Trivial Graph Format (TGF)."""
+    graph_from_records(
+        [_node_name(node) for node in network.nodes()],
+        [_link_values(link) for link in network.links()],
+        path,
+    )
+
+
+def graph_from_records(node_ids, links, path):
+    """Export topology records to Trivial Graph Format (TGF)."""
+    node_index = {}
+    with open(path, 'w', encoding='utf-8') as graph_file:
+        for index, node_id in enumerate(node_ids):
+            node_index.setdefault(node_id, index)
+            graph_file.write('{} {} \n'.format(index, node_id))
+        graph_file.write('# \n')
+
+        for link_id, start_id, end_id in links:
+            start_index = node_index.get(start_id)
+            end_index = node_index.get(end_id)
+            graph_file.write('{} {} {} \n'.format(start_index, end_index, link_id))
+
+
+def node_degrees(network):
+    """Return a dictionary mapping node IDs to node degree."""
+    return node_degrees_from_records(
+        [_node_name(node) for node in network.nodes()],
+        [_link_values(link) for link in network.links()],
+    )
+
+
+def node_degrees_from_records(node_ids, links):
+    """Return node degrees from node IDs and link records."""
+    degrees = {}
+
+    for node_id in node_ids:
+        degrees[node_id] = 0
+    for _, start_id, end_id in links:
+        for link_end in (start_id, end_id):
+            if link_end not in degrees:
+                degrees[link_end] = 0
+            degrees[link_end] += 1
+    return degrees
+
+
+def validate(network):
+    """Return topology problems detected in the network."""
+    return validate_records(
+        [_node_name(node) for node in network.nodes()],
+        [_link_values(link) for link in network.links()],
+    )
+
+
+def validate_records(node_ids, links):
+    """Return topology problems from node IDs and link records."""
+    problems = {
+        'orphan nodes': set(),
+        'duplicate nodes': set(),
+        'undefined node links': set(),
+        'duplicate links': set(),
+        'loops': set()
+    }
+
+    seen_nodes = set()
+    for node_id in node_ids:
+        if node_id in seen_nodes:
+            problems['duplicate nodes'].add(node_id)
+        seen_nodes.add(node_id)
+        problems['orphan nodes'].add(node_id)
+
+    seen_links = set()
+    for link_id, start_name, end_name in links:
+        if link_id in seen_links:
+            problems['duplicate links'].add(link_id)
+        seen_links.add(link_id)
+
+        problems['orphan nodes'].discard(start_name)
+        problems['orphan nodes'].discard(end_name)
+
+        if start_name not in seen_nodes or end_name not in seen_nodes:
+            problems['undefined node links'].add(link_id)
+
+        if start_name == end_name:
+            problems['loops'].add(link_id)
+
+    return problems
+
+
 class Graph():
     """Define a graph as a dictionary of edges, {label: (start, end)}.
     """
