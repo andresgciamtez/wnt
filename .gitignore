@@ -9,8 +9,7 @@ __pycache__/
 .vscode/
 
 # Plugin Builder / local deployment artifacts
-dist/*
-!dist/.gitkeep
+dist/
 zip_build/
 wnt.zip
 

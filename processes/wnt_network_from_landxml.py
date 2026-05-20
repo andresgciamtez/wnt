@@ -8,15 +8,109 @@ from qgis.core import (QgsCoordinateReferenceSystem,
                        QgsLineString,
                        QgsPoint,
                        QgsPointXY,
+                       QgsProject,
                        QgsProcessingParameterFile,
                        QgsProcessingParameterFeatureSink,
                        QgsGeometry,
+                       QgsVectorLayer,
                        QgsWkbTypes
                        )
 from .base import WntProcessingAlgorithm
 from ..utils import utils_landxml as landxml
 from .messages import crs as log_crs
 from .messages import finish, info, start
+
+
+NODE_FIELD_TYPES = {
+    "elevation": QMetaType.Double,
+    "demand": QMetaType.Double,
+    "init_lvl": QMetaType.Double,
+    "min_lvl": QMetaType.Double,
+    "max_lvl": QMetaType.Double,
+    "invert_elv": QMetaType.Double,
+    "rim_elv": QMetaType.Double,
+    "max_depth": QMetaType.Double,
+}
+
+
+LINK_FIELD_TYPES = {
+    "length": QMetaType.Double,
+    "diameter": QMetaType.Double,
+    "roughness": QMetaType.Double,
+    "loss_coeff": QMetaType.Double,
+    "geom_dim1": QMetaType.Double,
+    "geom_dim2": QMetaType.Double,
+    "inv_start": QMetaType.Double,
+    "inv_end": QMetaType.Double,
+    "slope": QMetaType.Double,
+    "start_os": QMetaType.Double,
+    "end_os": QMetaType.Double,
+}
+
+
+def qfield(name, field_types):
+    """Build a field with the unified LandXML schema type."""
+    return QgsField(name, field_types.get(name, QMetaType.QString))
+
+
+def qfields(field_names, field_types):
+    """Build a QgsFields collection from field names."""
+    fields = QgsFields()
+    for field in field_names:
+        fields.append(qfield(field, field_types))
+    return fields
+
+
+def set_output_layer_name(context, layer_id, name):
+    """Set the display name for a generated Processing output layer."""
+    if context is None or not layer_id:
+        return
+    try:
+        details = context.layerToLoadOnCompletionDetails(layer_id)
+        details.name = name
+    except AttributeError:
+        pass
+
+
+def layer_name(network, suffix):
+    """Return the QGIS layer name for one imported LandXML network."""
+    return f"{network['layer_base']}_{suffix}"
+
+
+def node_feature(node, fields):
+    """Build one node feature from a parsed LandXML node record."""
+    feature = QgsFeature()
+    point = QgsPointXY(node['x'], node['y'])
+    feature.setGeometry(QgsGeometry.fromPointXY(point))
+    feature.setAttributes([node.get(field) for field in fields])
+    return feature
+
+
+def link_feature(network, link, fields):
+    """Build one link feature from a parsed LandXML link record."""
+    feature = QgsFeature()
+    start = network['nodes'][link['start']]
+    end = network['nodes'][link['end']]
+    spoint = QgsPoint(start['x'], start['y'])
+    epoint = QgsPoint(end['x'], end['y'])
+    feature.setGeometry(QgsGeometry(QgsLineString([spoint, epoint])))
+    feature.setAttributes([link.get(field) for field in fields])
+    return feature
+
+
+def add_memory_layer(name, geometry, fields, crs, features):
+    """Add an additional per-network memory layer to the current QGIS project."""
+    uri = geometry
+    if crs and crs.isValid():
+        uri = f"{uri}?crs={crs.authid()}"
+    layer = QgsVectorLayer(uri, name, "memory")
+    provider = layer.dataProvider()
+    provider.addAttributes(list(fields))
+    layer.updateFields()
+    provider.addFeatures(features)
+    QgsProject.instance().addMapLayer(layer)
+    return layer
+
 
 class NetworkFromLandXMLAlgorithm(WntProcessingAlgorithm):
     """
@@ -66,7 +160,8 @@ class NetworkFromLandXMLAlgorithm(WntProcessingAlgorithm):
         """
         return self.tr('''<p>Imports pipe networks from a LandXML 1.2 file.</p>
 <ul>
-<li>Creates node and link layers from the LandXML pipe network definitions.</li>
+<li>Creates unified <code>nodes</code> and <code>links</code> layers from all LandXML pipe network definitions.</li>
+<li>Classifies networks as <code>water</code>, <code>sanitary</code> or <code>storm</code>.</li>
 <li>Uses the CRS information stored in the LandXML file when available.</li>
 </ul>
         ''')
@@ -122,14 +217,14 @@ class NetworkFromLandXMLAlgorithm(WntProcessingAlgorithm):
         start(feedback, self.displayName())
         log_crs(feedback, crs)
 
+        first_network = next(iter(networks.values()), None)
+        if first_network is None:
+            return {}
+
         # GENERATE SINK LAYER
-        newfields = QgsFields()
-        newfields.append(QgsField("network", QMetaType.QString))
-        newfields.append(QgsField("network_type", QMetaType.QString))
-        newfields.append(QgsField("id", QMetaType.QString))
-        newfields.append(QgsField("elev_sump", QMetaType.Double))
-        newfields.append(QgsField("elev_rim", QMetaType.Double))
-        newfields.append(QgsField("depth", QMetaType.Double))
+        node_fields = first_network["node_fields"]
+        link_fields = first_network["link_fields"]
+        newfields = qfields(node_fields, NODE_FIELD_TYPES)
         (node_sink, node_id) = self.parameterAsSink(
             parameters,
             self.OUTPUT_NODES,
@@ -138,23 +233,9 @@ class NetworkFromLandXMLAlgorithm(WntProcessingAlgorithm):
             QgsWkbTypes.Point,
             crs
             )
+        set_output_layer_name(context, node_id, layer_name(first_network, "nodes"))
 
-        newfields = QgsFields()
-        newfields.append(QgsField("network", QMetaType.QString))
-        newfields.append(QgsField("network_type", QMetaType.QString))
-        newfields.append(QgsField("id", QMetaType.QString))
-        newfields.append(QgsField("start", QMetaType.QString))
-        newfields.append(QgsField("end", QMetaType.QString))
-        newfields.append(QgsField("start_elv", QMetaType.Double))
-        newfields.append(QgsField("start_offset", QMetaType.Double))
-        newfields.append(QgsField("start_depth", QMetaType.Double))
-        newfields.append(QgsField("end_elv", QMetaType.Double))
-        newfields.append(QgsField("end_offset", QMetaType.Double))
-        newfields.append(QgsField("end_depth", QMetaType.Double))
-        newfields.append(QgsField("length", QMetaType.Double))
-        newfields.append(QgsField("slope", QMetaType.Double))
-        newfields.append(QgsField("sect_type", QMetaType.QString))
-        newfields.append(QgsField("section", QMetaType.QString))
+        newfields = qfields(link_fields, LINK_FIELD_TYPES)
         (link_sink, link_id) = self.parameterAsSink(
             parameters,
             self.OUTPUT_LINES,
@@ -163,54 +244,46 @@ class NetworkFromLandXMLAlgorithm(WntProcessingAlgorithm):
             QgsWkbTypes.LineString,
             crs
             )
+        set_output_layer_name(context, link_id, layer_name(first_network, "links"))
 
         netcnt = nodcnt = lnkcnt = 0
         # ADD NETWORK
-        for netname, network in networks.items():
+        for index, network in enumerate(networks.values()):
             netcnt += 1
-            net_type = network['net_type']
+            node_fields = network["node_fields"]
+            link_fields = network["link_fields"]
+            node_features = [
+                node_feature(node, node_fields)
+                for node in network['nodes'].values()
+            ]
+            link_features = [
+                link_feature(network, link, link_fields)
+                for link in network['links'].values()
+            ]
+            nodcnt += len(node_features)
+            lnkcnt += len(link_features)
+            if index > 0:
+                add_memory_layer(
+                    layer_name(network, "nodes"),
+                    "Point",
+                    qfields(node_fields, NODE_FIELD_TYPES),
+                    crs,
+                    node_features,
+                )
+                add_memory_layer(
+                    layer_name(network, "links"),
+                    "LineString",
+                    qfields(link_fields, LINK_FIELD_TYPES),
+                    crs,
+                    link_features,
+                )
+                continue
             # ADD NODES
-            for nodename, node in network['nodes'].items():
-                nodcnt += 1
-                f = QgsFeature()
-                point = QgsPointXY(node['x'], node['y'])
-                f.setGeometry(QgsGeometry.fromPointXY(point))
-                f.setAttributes([netname,
-                                 net_type,
-                                 nodename,
-                                 node['elev_sump'],
-                                 node['elev_rim'],
-                                 node['depth']
-                                 ])
+            for f in node_features:
                 node_sink.addFeature(f)
 
             # ADD LINKS
-            for linkname, link in network['links'].items():
-                lnkcnt += 1
-                g = QgsFeature()
-                x = network['nodes'][link['start']]['x']
-                y = network['nodes'][link['start']]['y']
-                spoint = QgsPoint(x, y)
-                x = network['nodes'][link['end']]['x']
-                y = network['nodes'][link['end']]['y']
-                epoint = QgsPoint(x, y)
-                g.setGeometry(QgsGeometry(QgsLineString([spoint, epoint])))
-                g.setAttributes([netname,
-                                 net_type,
-                                 linkname,
-                                 link['start'],
-                                 link['end'],
-                                 link['start_elev'],
-                                 link['start_offset'],
-                                 link['start_depth'],
-                                 link['end_elev'],
-                                 link['end_offset'],
-                                 link['end_depth'],
-                                 link['length'],
-                                 link['slope'],
-                                 link['sect_type'],
-                                 link['section']
-                                 ])
+            for g in link_features:
                 link_sink.addFeature(g)
 
         # SHOW PROGRESS

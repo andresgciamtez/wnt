@@ -599,16 +599,16 @@ def test_landxml_pipe_network_parser(tmp_path):
               <CoordinateSystem epsgCode="EPSG:25830" />
               <PipeNetworks>
                 <PipeNetwork name="Storm" pipeNetType="storm">
-                  <Struct name="S1" desc="Inlet" elevSump="1" elevRim="3">
+                  <Struct name="S 1 (Storm)" desc="Inlet" elevSump="1" elevRim="3">
                     <Center>10 20</Center>
-                    <Invert refPipe="P1" elev="1.5" />
+                    <Invert refPipe="P 1 (Storm)" elev="1.5" />
                   </Struct>
                   <Struct name="S2" desc="Outlet" elevSump="2" elevRim="5">
                     <Center>11 21</Center>
-                    <Invert refPipe="P1" elev="2.5" />
+                    <Invert refPipe="P 1 (Storm)" elev="2.5" />
                   </Struct>
                   <Struct name="D1" desc="Dummy Null Structure for LandXML purposes" elevSump="0" elevRim="0" />
-                  <Pipe name="P1" refStart="S1" refEnd="S2" length="12.3456" slope="0.012345">
+                  <Pipe name="P 1 (Storm)" refStart="S 1 (Storm)" refEnd="S2" length="12.3456" slope="0.012345">
                     <CircPipe diameter="300" />
                   </Pipe>
                 </PipeNetwork>
@@ -623,11 +623,34 @@ def test_landxml_pipe_network_parser(tmp_path):
     storm = data["networks"]["Storm"]
 
     assert data["epsg_code"] == "EPSG:25830"
-    assert storm["nodes"]["S1"]["x"] == 20
-    assert storm["nodes"]["S1"]["depth"] == 2
-    assert storm["links"]["P1"]["length"] == 12.346
-    assert storm["links"]["P1"]["slope"] == 0.0123
-    assert storm["links"]["P1"]["section"] == "300"
+    assert data["node_fields"][:2] == ("origin", "net_type")
+    assert data["link_fields"][:2] == ("origin", "net_type")
+    assert storm["node_fields"] == (
+        "origin",
+        "net_type",
+        "id",
+        "type",
+        "invert_elv",
+        "rim_elv",
+        "max_depth",
+    )
+    assert "diameter" not in storm["link_fields"]
+    assert "status" not in storm["link_fields"]
+    assert set(storm["nodes"]) == {"S_1", "S2"}
+    assert set(storm["links"]) == {"P_1"}
+    assert storm["nodes"]["S_1"]["id"] == "S_1"
+    assert storm["nodes"]["S_1"]["x"] == 10
+    assert storm["nodes"]["S_1"]["max_depth"] == 2
+    assert storm["nodes"]["S_1"]["type"] == "manhole"
+    assert storm["links"]["P_1"]["start"] == "S_1"
+    assert storm["links"]["P_1"]["end"] == "S2"
+    assert storm["links"]["P_1"]["length"] == 12.346
+    assert storm["links"]["P_1"]["geom_shape"] == "circular"
+    assert storm["links"]["P_1"]["geom_dim1"] == 0.3
+    assert storm["links"]["P_1"]["inv_start"] == 1.5
+    assert storm["links"]["P_1"]["start_os"] == 0.5
+    assert storm["links"]["P_1"]["end_os"] == 0.5
+    assert storm["links"]["P_1"]["slope"] == pytest.approx(-8.0998)
 
     xml.write_text(
         textwrap.dedent(
@@ -655,19 +678,44 @@ def test_landxml_pipe_network_parser(tmp_path):
 
     data = network_from_xml(xml)
     assert data["wkt_crs"] == "LOCAL_CS[]"
-    assert data["networks"]["Storm"]["links"]["P1"]["section"] == "2X3"
+    assert data["networks"]["Storm"]["links"]["P1"]["geom_shape"] == "box"
+    assert data["networks"]["Storm"]["links"]["P1"]["geom_dim1"] == 3.0
+    assert data["networks"]["Storm"]["links"]["P1"]["geom_dim2"] == 2.0
 
     xml.write_text(
         """
         <LandXML xmlns="http://www.landxml.org/schema/LandXML-1.2">
           <CoordinateSystem ogcWktCode="LOCAL_CS[]" />
-          <PipeNetwork name="Pressure" pipeNetType="pressure" />
+          <PipeNetwork name="Agua potable">
+            <Struct name="N1" elevSump="1"><Center>0 0</Center></Struct>
+            <Struct name="N2" elevSump="2"><Center>1 0</Center></Struct>
+            <Pipe name="P1" refStart="N1" refEnd="N2" length="10">
+              <CircPipe diameter="0.3" />
+            </Pipe>
+          </PipeNetwork>
         </LandXML>
         """,
         encoding="utf-8",
     )
-    with pytest.raises(NotImplementedError, match="Pressurized"):
-        network_from_xml(xml)
+    data = network_from_xml(xml)
+    pressure = data["networks"]["Agua potable"]
+    assert pressure["net_type"] == "water"
+    assert pressure["node_fields"] == (
+        "origin",
+        "net_type",
+        "id",
+        "type",
+        "elevation",
+        "demand",
+        "pattern",
+        "init_lvl",
+        "min_lvl",
+        "max_lvl",
+    )
+    assert pressure["nodes"]["N1"]["type"] == "junction"
+    assert pressure["nodes"]["N1"]["demand"] == 0.0
+    assert pressure["links"]["P1"]["diameter"] == 300.0
+    assert pressure["links"]["P1"]["status"] == "open"
 
 
 def test_landxml_parser_handles_optional_crs_desc_and_inverts(tmp_path):
@@ -708,4 +756,4 @@ def test_landxml_parser_handles_optional_crs_desc_and_inverts(tmp_path):
     assert "wkt_crs" not in data
     assert set(storm["nodes"]) == {"S1", "S2", "S3"}
     assert set(storm["links"]) == {"P1"}
-    assert storm["links"]["P1"]["slope"] == 0
+    assert storm["links"]["P1"]["roughness"] == 0.013

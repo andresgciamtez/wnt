@@ -793,22 +793,40 @@ def test_network_from_epanet_imports_node_and_link_features(monkeypatch, tmp_pat
 
 def test_network_from_landxml_imports_features(monkeypatch, tmp_path):
     algorithm = NetworkFromLandXMLAlgorithm()
+    extra_layers = {}
+    monkeypatch.setattr(
+        "wnt.processes.wnt_network_from_landxml.add_memory_layer",
+        lambda name, geometry, fields, crs, features: extra_layers.setdefault(
+            name, [geometry, fields, features]
+        ),
+    )
     xml = tmp_path / "network.xml"
     xml.write_text(
         """
         <LandXML xmlns="http://www.landxml.org/schema/LandXML-1.2">
           <CoordinateSystem epsgCode="25830" />
           <PipeNetwork name="Storm" pipeNetType="storm">
-            <Struct name="S1" desc="Inlet" elevSump="1" elevRim="3">
+            <Struct name=" S 1 (Storm) " desc="Inlet" elevSump="1" elevRim="3">
               <Center>10 20</Center>
-              <Invert refPipe="P1" elev="1.5" />
+              <Invert refPipe="P 1 (Storm)" elev="1.5" />
             </Struct>
             <Struct name="S2" desc="Outlet" elevSump="2" elevRim="5">
               <Center>11 21</Center>
-              <Invert refPipe="P1" elev="2.5" />
+              <Invert refPipe="P 1 (Storm)" elev="2.5" />
             </Struct>
-            <Pipe name="P1" refStart="S1" refEnd="S2" length="12" slope="0.01">
+            <Pipe name=" P 1 (Storm) " refStart=" S 1 (Storm) " refEnd=" S2 " length="12" slope="0.01">
               <CircPipe diameter="300" />
+            </Pipe>
+          </PipeNetwork>
+          <PipeNetwork name="Agua potable">
+            <Struct name="N1" elevSump="10">
+              <Center>0 0</Center>
+            </Struct>
+            <Struct name="N2" elevSump="12">
+              <Center>1 0</Center>
+            </Struct>
+            <Pipe name="WP1" refStart="N1" refEnd="N2" length="20" material="PVC">
+              <CircPipe diameter="0.25" />
             </Pipe>
           </PipeNetwork>
         </LandXML>
@@ -817,14 +835,67 @@ def test_network_from_landxml_imports_features(monkeypatch, tmp_path):
     )
     sinks = bind_common_parameters(monkeypatch, algorithm, files={algorithm.INPUT: xml})
 
-    result = algorithm.processAlgorithm({}, None, FakeFeedback())
+    context = FakeProcessingContext()
+    result = algorithm.processAlgorithm({}, context, FakeFeedback())
 
     assert result == {
         algorithm.OUTPUT_NODES: f"{algorithm.OUTPUT_NODES}_id",
         algorithm.OUTPUT_LINES: f"{algorithm.OUTPUT_LINES}_id",
     }
+    assert context.layer_details[f"{algorithm.OUTPUT_NODES}_id"].name == "Storm_nodes"
+    assert context.layer_details[f"{algorithm.OUTPUT_LINES}_id"].name == "Storm_links"
+    assert sorted(extra_layers) == ["Agua_potable_links", "Agua_potable_nodes"]
     assert len(sinks[algorithm.OUTPUT_NODES].features) == 2
-    assert sinks[algorithm.OUTPUT_LINES].features[0].attributes()[2:5] == ["P1", "S1", "S2"]
+    node_attrs = {
+        feature.attributes()[2]: feature.attributes()
+        for feature in sinks[algorithm.OUTPUT_NODES].features
+    }
+    link_attrs = {
+        feature.attributes()[2]: feature.attributes()
+        for feature in sinks[algorithm.OUTPUT_LINES].features
+    }
+    assert node_attrs["S_1"][:7] == [
+        "Storm",
+        "storm",
+        "S_1",
+        "manhole",
+        1.0,
+        3.0,
+        2.0,
+    ]
+    assert link_attrs["P_1"] == [
+        "Storm",
+        "storm",
+        "P_1",
+        "conduit",
+        "S_1",
+        "S2",
+        12.0,
+        "circular",
+        0.3,
+        0.0,
+        0.013,
+        1.5,
+        2.5,
+        -8.3333,
+        0.5,
+        0.5,
+    ]
+    water_link_attrs = extra_layers["Agua_potable_links"][2][0].attributes()
+    assert water_link_attrs[:12] == [
+        "Agua potable",
+        "water",
+        "WP1",
+        "pipe",
+        "N1",
+        "N2",
+        20.0,
+        250.0,
+        140.0,
+        0.0,
+        "open",
+        "pvc",
+    ]
     assert sinks[algorithm.OUTPUT_NODES].features[0].geometry().asWkt().startswith("Point")
     assert sinks[algorithm.OUTPUT_LINES].features[0].geometry().asWkt().startswith("LineString")
     assert algorithm.processAlgorithm({}, None, FakeFeedback(canceled=True)) == {}
