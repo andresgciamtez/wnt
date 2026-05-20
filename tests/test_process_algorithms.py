@@ -1,5 +1,6 @@
 """Execution tests for selected Processing algorithms."""
 
+import json
 import textwrap
 
 import pytest
@@ -652,10 +653,35 @@ def test_network_from_epanet_imports_node_and_link_features(monkeypatch, tmp_pat
         [JUNCTIONS]
         J1 1 5 PAT_J
         J2 2
+        [DEMANDS]
+        J1 7 PAT_ALT irrigation
+        [EMITTERS]
+        J2 0.25
         [RESERVOIRS]
         R1 100 PAT_R
         [TANKS]
         T1 10 1 0 5 15 0 VC1
+        [QUALITY]
+        J1 0.2
+        T1 0.8
+        [SOURCES]
+        R1 CONCEN 1.5 PAT_SRC
+        [MIXING]
+        T1 MIXED 0.75
+        [REACTIONS]
+        BULK P1 -0.1
+        WALL P1 -0.2
+        TANK T1 -0.3
+        [STATUS]
+        P1 Closed
+        PU1 Open
+        [ENERGY]
+        PUMP PU1 PRICE 0.15
+        PUMP PU1 PATTERN ENERGY_PAT
+        PUMP PU1 EFFIC EFF_CURVE
+        [TAGS]
+        NODE J1 DMA-A
+        LINK P1 trunk main
         [COORDINATES]
         J1 0 0
         J2 1 0
@@ -695,100 +721,190 @@ def test_network_from_epanet_imports_node_and_link_features(monkeypatch, tmp_pat
         feature.attributes()[0]: feature.attributes()
         for feature in sinks[algorithm.OUTPUT_LINES].features
     }
-    assert nodes["J1"] == [
-        "J1",
-        "JUNCTION",
-        1.0,
-        "5",
-        "PAT_J",
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-    ]
-    assert nodes["R1"] == [
-        "R1",
-        "RESERVOIR",
-        100.0,
-        None,
-        "PAT_R",
-        "100",
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-    ]
-    assert nodes["T1"] == [
-        "T1",
-        "TANK",
-        10.0,
-        None,
-        None,
-        None,
-        "1",
-        "0",
-        "5",
-        "15",
-        "0",
-        "VC1",
-    ]
-    assert links["P1"] == [
-        "P1",
-        "J1",
-        "J2",
-        "PIPE",
-        "1.0",
-        "100",
-        "120",
-        "0",
-        "Open",
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-    ]
-    assert links["PU1"] == [
-        "PU1",
-        "J2",
-        "R1",
-        "PUMP",
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        "10",
-        None,
-        "1.2",
-        "PAT_P",
-        "POWER 10 SPEED 1.2 PATTERN PAT_P",
-    ]
-    assert links["V1"] == [
-        "V1",
-        "R1",
-        "T1",
-        "PRV",
-        None,
-        "50",
-        None,
-        "0.1",
-        None,
-        "20",
-        None,
-        None,
-        None,
-        None,
-        None,
-    ]
+    assert nodes["J1"][:3] == ["J1", "JUNCTION", 1.0]
+    assert json.loads(nodes["J1"][3]) == {
+        "base_demand": "5",
+        "demand_pattern": "PAT_J",
+        "demands": [{"base_demand": "7", "demand_pattern": "PAT_ALT", "category": "irrigation"}],
+        "emitter_coefficient": None,
+        "initial_quality": "0.2",
+        "source_pattern": None,
+        "source_quality": None,
+        "source_type": None,
+        "tag": "DMA-A",
+    }
+    assert nodes["R1"][:3] == ["R1", "RESERVOIR", 100.0]
+    assert json.loads(nodes["R1"][3]) == {
+        "head_pattern": "PAT_R",
+        "source_pattern": "PAT_SRC",
+        "source_quality": "1.5",
+        "source_type": "CONCEN",
+        "initial_quality": None,
+        "tag": None,
+        "total_head": "100",
+    }
+    assert nodes["T1"][:3] == ["T1", "TANK", 10.0]
+    assert json.loads(nodes["T1"][3]) == {
+        "initial_level": "1",
+        "initial_quality": "0.8",
+        "max_level": "5",
+        "min_level": "0",
+        "min_volume": "0",
+        "mixing_fraction": "0.75",
+        "mixing_model": "MIXED",
+        "diameter": "15",
+        "source_pattern": None,
+        "source_quality": None,
+        "source_type": None,
+        "tag": None,
+        "tank_reaction_coeff": "-0.3",
+        "volume_curve": "VC1",
+    }
+    assert links["P1"][:4] == ["P1", "J1", "J2", "PIPE"]
+    assert json.loads(links["P1"][4]) == {
+        "bulk_reaction_coeff": "-0.1",
+        "diameter": "100",
+        "initial_status": "Closed",
+        "length": "1.0",
+        "minor_loss": "0",
+        "roughness": "120",
+        "tag": "trunk main",
+        "wall_reaction_coeff": "-0.2",
+    }
+    assert links["PU1"][:4] == ["PU1", "J2", "R1", "PUMP"]
+    assert json.loads(links["PU1"][4]) == {
+        "energy_pattern": "ENERGY_PAT",
+        "energy_price": "0.15",
+        "efficiency_curve": "EFF_CURVE",
+        "head_curve": None,
+        "initial_status": "Open",
+        "pump_parameters": "POWER 10 SPEED 1.2 PATTERN PAT_P",
+        "pump_pattern": "PAT_P",
+        "pump_power": "10",
+        "pump_speed": "1.2",
+        "tag": None,
+    }
+    assert links["V1"][:4] == ["V1", "R1", "T1", "PRV"]
+    assert json.loads(links["V1"][4]) == {
+        "diameter": "50",
+        "initial_status": None,
+        "minor_loss": "0.1",
+        "tag": None,
+        "valve_setting": "20",
+        "valve_type": "PRV",
+    }
     assert algorithm.processAlgorithm({}, None, FakeFeedback(canceled=True)) == {}
+
+
+def test_network_from_epanet_keeps_missing_version_dependent_json_keys_editable(monkeypatch, tmp_path):
+    algorithm = NetworkFromEpanetAlgorithm()
+    inp = tmp_path / "minimal.inp"
+    inp.write_text(
+        """
+        [JUNCTIONS]
+        J1 1
+        [RESERVOIRS]
+        R1 100
+        [TANKS]
+        T1 10
+        [COORDINATES]
+        J1 0 0
+        R1 1 0
+        T1 2 0
+        [PIPES]
+        P1 J1 R1 1.0 100 120
+        [PUMPS]
+        PU1 R1 T1 HEAD HC1
+        [VALVES]
+        V1 T1 J1 50 PRV
+        [END]
+        """,
+        encoding="latin-1",
+    )
+    sinks = bind_common_parameters(
+        monkeypatch,
+        algorithm,
+        fields={algorithm.CRS: FakeCrs()},
+        files={algorithm.INPUT: inp},
+    )
+
+    algorithm.processAlgorithm({}, FakeProcessingContext(), FakeFeedback())
+
+    nodes = {
+        feature.attributes()[0]: json.loads(feature.attributes()[3])
+        for feature in sinks[algorithm.OUTPUT_NODES].features
+    }
+    links = {
+        feature.attributes()[0]: json.loads(feature.attributes()[4])
+        for feature in sinks[algorithm.OUTPUT_LINES].features
+    }
+
+    assert nodes["J1"] == {
+        "base_demand": None,
+        "demand_pattern": None,
+        "demands": None,
+        "emitter_coefficient": None,
+        "initial_quality": None,
+        "source_pattern": None,
+        "source_quality": None,
+        "source_type": None,
+        "tag": None,
+    }
+    assert nodes["R1"] == {
+        "head_pattern": None,
+        "initial_quality": None,
+        "source_pattern": None,
+        "source_quality": None,
+        "source_type": None,
+        "tag": None,
+        "total_head": "100",
+    }
+    assert nodes["T1"] == {
+        "diameter": None,
+        "initial_level": None,
+        "initial_quality": None,
+        "max_level": None,
+        "min_level": None,
+        "min_volume": None,
+        "mixing_fraction": None,
+        "mixing_model": None,
+        "source_pattern": None,
+        "source_quality": None,
+        "source_type": None,
+        "tag": None,
+        "tank_reaction_coeff": None,
+        "volume_curve": None,
+    }
+    assert links["P1"] == {
+        "bulk_reaction_coeff": None,
+        "diameter": "100",
+        "initial_status": None,
+        "length": "1.0",
+        "minor_loss": None,
+        "roughness": "120",
+        "tag": None,
+        "wall_reaction_coeff": None,
+    }
+    assert links["PU1"] == {
+        "efficiency_curve": None,
+        "energy_pattern": None,
+        "energy_price": None,
+        "head_curve": "HC1",
+        "initial_status": None,
+        "pump_parameters": "HEAD HC1",
+        "pump_pattern": None,
+        "pump_power": None,
+        "pump_speed": None,
+        "tag": None,
+    }
+    assert links["V1"] == {
+        "diameter": "50",
+        "initial_status": None,
+        "minor_loss": None,
+        "tag": None,
+        "valve_setting": None,
+        "valve_type": "PRV",
+    }
 
 
 def test_network_from_landxml_imports_features(monkeypatch, tmp_path):
