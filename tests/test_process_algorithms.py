@@ -192,11 +192,11 @@ class FakeFeedback:
         return self.canceled
 
 
-def bind_common_parameters(monkeypatch, algorithm, sources=None, fields=None, files=None):
+def bind_common_parameters(monkeypatch, algorithm, sources=None, fields=None, files=None, enums=None):
     sources = sources or {}
     fields = fields or {}
     files = files or {}
-    numbers = {}
+    enums = enums or {}
     sinks = {}
 
     monkeypatch.setattr(
@@ -235,6 +235,11 @@ def bind_common_parameters(monkeypatch, algorithm, sources=None, fields=None, fi
         algorithm,
         "parameterAsBool",
         lambda parameters, name, context: fields.get(name, False),
+    )
+    monkeypatch.setattr(
+        algorithm,
+        "parameterAsEnums",
+        lambda parameters, name, context: enums.get(name, []),
     )
     monkeypatch.setattr(
         algorithm,
@@ -1804,11 +1809,17 @@ def test_ppno_from_network_writes_ext_and_rejects_crs(monkeypatch, tmp_path):
     INPUT_TEMPLATE = tmp_path / "template.ext"
     output = tmp_path / "output.ext"
     INPUT_EPANET = tmp_path / "model.inp"
+    input_catalog = tmp_path / "template.cat"
+    input_catalog.write_text("S1    100.0    0.1    10.0\n", encoding="latin-1")
     INPUT_TEMPLATE.write_text(
         textwrap.dedent(
             """
             [TITLE]
             [INP]
+            [OPTIONS]
+            Algorithm DA
+            [PIPE_CATALOG]
+            template.cat
             [PRESSURES]
             [PIPES]
             [END]
@@ -1817,34 +1828,56 @@ def test_ppno_from_network_writes_ext_and_rejects_crs(monkeypatch, tmp_path):
         encoding="latin-1",
     )
     nodes = FakeSource([FakeFeature({"id": "N1", "pressure": 20}), FakeFeature({"id": "N2", "pressure": 0})])
-    links = FakeSource([FakeFeature({"id": "L1", "series": "S1"}), FakeFeature({"id": "L2", "series": ""})])
+    links = FakeSource([FakeFeature({"id": "L1", "group": "S1"}), FakeFeature({"id": "L2", "group": ""})])
     bind_common_parameters(
         monkeypatch,
         algorithm,
         sources={algorithm.INPUT_NODES: nodes, algorithm.INPUT_LINES: links},
-        fields={algorithm.FIELD_PRESSURE: "pressure", algorithm.FIELD_SERIES: "series"},
+        fields={algorithm.FIELD_PRESSURE: "pressure", algorithm.FIELD_SERIES: "group"},
         files={algorithm.INPUT_EPANET: INPUT_EPANET, algorithm.INPUT_TEMPLATE: INPUT_TEMPLATE, algorithm.OUTPUT: output},
+        enums={algorithm.INPUT_ALGORITHMS: [0, 2]},
     )
 
     result = algorithm.processAlgorithm({}, None, FakeFeedback())
 
     assert result == {algorithm.OUTPUT: str(output)}
     text = output.read_text(encoding="latin-1")
+    output_catalog = output.with_suffix(".cat")
+    assert "[PIPE_CATALOG]" in text
+    assert "output.cat" in text
+    assert "[PIPE_SIZES]" not in text
+    assert "Algorithm    DE    NSGA2" in text
     assert "N1    20" in text
     assert "L1    S1" in text
+    assert output_catalog.read_text(encoding="latin-1") == "S1    100.0    0.1    10.0\n"
 
     bad_links = FakeSource([], crs=FakeCrs("EPSG:4326"))
     bind_common_parameters(
         monkeypatch,
         algorithm,
         sources={algorithm.INPUT_NODES: nodes, algorithm.INPUT_LINES: bad_links},
-        fields={algorithm.FIELD_PRESSURE: "pressure", algorithm.FIELD_SERIES: "series"},
+        fields={algorithm.FIELD_PRESSURE: "pressure", algorithm.FIELD_SERIES: "group"},
         files={algorithm.INPUT_EPANET: INPUT_EPANET, algorithm.INPUT_TEMPLATE: INPUT_TEMPLATE, algorithm.OUTPUT: output},
+        enums={algorithm.INPUT_ALGORITHMS: [0, 2]},
     )
     feedback = FakeFeedback()
 
     assert algorithm.processAlgorithm({}, None, feedback) == {}
     assert feedback.errors == ["ERROR: Layers have different CRS"]
+
+    INPUT_TEMPLATE.write_text("[TITLE]\n[INP]\n[OPTIONS]\n[PRESSURES]\n[PIPES]\n[END]", encoding="latin-1")
+    bind_common_parameters(
+        monkeypatch,
+        algorithm,
+        sources={algorithm.INPUT_NODES: nodes, algorithm.INPUT_LINES: links},
+        fields={algorithm.FIELD_PRESSURE: "pressure", algorithm.FIELD_SERIES: "group"},
+        files={algorithm.INPUT_EPANET: INPUT_EPANET, algorithm.INPUT_TEMPLATE: INPUT_TEMPLATE, algorithm.OUTPUT: output},
+        enums={algorithm.INPUT_ALGORITHMS: [0, 2]},
+    )
+    feedback = FakeFeedback()
+
+    assert algorithm.processAlgorithm({}, None, feedback) == {}
+    assert feedback.errors == ["ERROR: PPNO template missing sections: PIPE_CATALOG"]
 
 
 def test_scn_from_demands_writes_selected_junction_demands(monkeypatch, tmp_path):
@@ -1909,3 +1942,5 @@ def test_scn_from_pipe_properties_writes_only_pipes(monkeypatch, tmp_path):
     assert "P1    100" in text
     assert "P2    150" in text
     assert "V1" not in text
+
+

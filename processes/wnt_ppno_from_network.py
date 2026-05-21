@@ -1,7 +1,10 @@
 """Export PPNO sizing input from network layers."""
 
+from pathlib import Path
+
 from qgis.core import (QgsProcessing,
                        QgsProcessingParameterFeatureSource,
+                       QgsProcessingParameterEnum,
                        QgsProcessingParameterField,
                        QgsProcessingParameterFile,
                        QgsProcessingParameterFileDestination)
@@ -19,9 +22,11 @@ class PpnoFromNetworkAlgorithm(WntProcessingAlgorithm):
     FIELD_PRESSURE = 'FIELD_PRESSURE'
     INPUT_LINES = 'INPUT_LINES'
     FIELD_SERIES = 'FIELD_SERIES'
+    INPUT_ALGORITHMS = 'INPUT_ALGORITHMS'
     INPUT_EPANET = 'INPUT_EPANET'
     INPUT_TEMPLATE = 'INPUT_TEMPLATE'
     OUTPUT = 'OUTPUT'
+    ALGORITHMS = ('DE', 'DA', 'NSGA2', 'MOEAD', 'MACO', 'PSO')
 
 
     def createInstance(self):
@@ -30,6 +35,40 @@ class PpnoFromNetworkAlgorithm(WntProcessingAlgorithm):
         """
         return PpnoFromNetworkAlgorithm()
 
+    @staticmethod
+    def _options_with_algorithms(options, algorithms):
+        filtered_options = []
+        for line in options:
+            tokens = parser.parse_tokens(line)
+            if tokens and tokens[0].lower() in ('algorithm', 'algorithms'):
+                continue
+            filtered_options.append(line)
+
+        if algorithms:
+            filtered_options.append(parser.format_tokens(('Algorithm', *algorithms)))
+        return filtered_options
+
+    @staticmethod
+    def _resolve_template_path(template_file, raw_path):
+        path = Path(raw_path)
+        if path.is_absolute():
+            return path
+
+        template_dir = Path(template_file).parent
+        candidates = [path, template_dir / path, template_dir / path.name]
+        for candidate in candidates:
+            if candidate.exists():
+                return candidate
+        return candidates[-1]
+
+    @staticmethod
+    def _catalog_has_section_header(catalog_bytes):
+        text = catalog_bytes.decode('latin-1')
+        for line in text.splitlines():
+            clean_line = line.partition(';')[0].strip()
+            if clean_line.startswith('[') and clean_line.endswith(']'):
+                return True
+        return False
     def name(self):
         """
         Returns the unique algorithm name, used for identifying the algorithm.
@@ -62,9 +101,9 @@ class PpnoFromNetworkAlgorithm(WntProcessingAlgorithm):
         return self.tr('''<p>Creates a PPNO <code>.ext</code> data file for pipe sizing.</p>
 <ul>
 <li>The required pressure must be stored in a node layer field.</li>
-<li>The pipe series must be stored in a link layer field.</li>
+<li>The pipe group must be stored in a link layer field.</li>
 <li>The EPANET <code>.inp</code> file must contain the model to optimize.</li>
-<li>The PPNO template must contain the available pipe series.</li>
+<li>The PPNO template must reference a pipe catalog in <code>[PIPE_CATALOG]</code>.</li>
 </ul>
         ''')
 
@@ -101,11 +140,20 @@ class PpnoFromNetworkAlgorithm(WntProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterField(
                 self.FIELD_SERIES,
-                self.tr('Pipe series field'),
-                'Pipe series',
+                self.tr('Pipe group field'),
+                'Pipe group',
                 self.INPUT_LINES,
                 allowMultiple=False,
                 optional=False
+                )
+            )
+        self.addParameter(
+            QgsProcessingParameterEnum(
+                self.INPUT_ALGORITHMS,
+                self.tr('Algorithms'),
+                options=list(self.ALGORITHMS),
+                allowMultiple=True,
+                optional=True
                 )
             )
         self.addParameter(
@@ -143,6 +191,8 @@ class PpnoFromNetworkAlgorithm(WntProcessingAlgorithm):
         links = self.parameterAsSource(parameters, self.INPUT_LINES, context)
         sfield = self.parameterAsFields(parameters, self.FIELD_SERIES, context)
         sfield = sfield[0]
+        selected_algorithm_indexes = self.parameterAsEnums(parameters, self.INPUT_ALGORITHMS, context) or []
+        selected_algorithms = [self.ALGORITHMS[index] for index in selected_algorithm_indexes]
         epanet_file = self.parameterAsFile(parameters, self.INPUT_EPANET, context)
         template_file = self.parameterAsFile(parameters, self.INPUT_TEMPLATE, context)
 
@@ -162,12 +212,43 @@ class PpnoFromNetworkAlgorithm(WntProcessingAlgorithm):
         ppnof = parser.SectionedText()
         ppnof.read(template_file)
 
+        required_sections = ('TITLE', 'INP', 'OPTIONS', 'PIPE_CATALOG', 'PRESSURES', 'PIPES')
+        missing_sections = [section for section in required_sections if section not in ppnof.sections]
+        if missing_sections:
+            error(feedback, 'PPNO template missing sections: ' + ', '.join(missing_sections))
+            return {}
+
         # TITLE SECTION
         msg = '; File generated automatically by Water Network Tools \n'
         ppnof.sections['TITLE'].append(msg)
 
         # INP SECTION
         ppnof.sections['INP'] = [epanet_file]
+
+        # PIPE CATALOG SECTION
+        catalog_lines = ppnof.sections['PIPE_CATALOG']
+        if len(catalog_lines) != 1:
+            error(feedback, 'PPNO template [PIPE_CATALOG] must contain exactly one file path')
+            return {}
+
+        catalog_source = self._resolve_template_path(template_file, catalog_lines[0])
+        if not catalog_source.exists():
+            error(feedback, 'PPNO pipe catalog file not found: ' + catalog_lines[0])
+            return {}
+
+        catalog_bytes = catalog_source.read_bytes()
+        if self._catalog_has_section_header(catalog_bytes):
+            error(feedback, 'PPNO pipe catalog must not contain section headers')
+            return {}
+
+        catalog_file = Path(extfile).with_suffix('.cat')
+        catalog_file.write_bytes(catalog_bytes)
+        ppnof.sections['PIPE_CATALOG'] = [catalog_file.name]
+        # OPTIONS SECTION
+        ppnof.sections['OPTIONS'] = self._options_with_algorithms(
+            ppnof.sections['OPTIONS'],
+            selected_algorithms
+            )
 
         # PRESSURES SECTION
         ncnt = 0
@@ -192,6 +273,7 @@ class PpnoFromNetworkAlgorithm(WntProcessingAlgorithm):
         start(feedback, self.displayName())
         info(feedback, "Nodes with minimum pressure", ncnt)
         info(feedback, "Pipes to size", pcnt)
+        info(feedback, "Pipe catalog file", catalog_file)
         info(feedback, "Output file", extfile)
         finish(feedback)
         # PROCCES CANCELED
@@ -200,3 +282,7 @@ class PpnoFromNetworkAlgorithm(WntProcessingAlgorithm):
 
         # OUTPUT
         return {self.OUTPUT: extfile}
+
+
+
+
