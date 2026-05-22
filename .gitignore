@@ -3,14 +3,13 @@ __pycache__/
 *.py[cod]
 *$py.class
 .pytest_cache/
+.pytest-tmp/
 
 # Local tooling and IDE state
 .pylint.d/
 .vscode/
 
 # Plugin Builder / local deployment artifacts
-dist/
-zip_build/
 wnt.zip
 
 # Local QGIS/plugin auxiliary folders

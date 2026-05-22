@@ -1,33 +1,35 @@
 """Execution tests for selected Processing algorithms."""
 
 import json
-import textwrap
-
+import xml.etree.ElementTree as ET
 import pytest
 from qgis.core import QgsGeometry, QgsLineString, QgsMultiLineString, QgsPoint, QgsPointXY
 
 from wnt.processes import messages
 from wnt.processes.wnt_assign_demand import AssignDemandAlgorithm
 from wnt.processes.wnt_config_toolkit import ConfigToolkitAlgorithm
-from wnt.processes.wnt_graph_from_network import GraphFromNetworkAlgorithm
+from wnt.processes.wnt_network_to_graph import NetworkToGraphAlgorithm
 from wnt.processes.wnt_classify import ClassifyAlgorithm
 from wnt.processes.wnt_connect_by_distance import ConnectByDistanceAlgorithm
 from wnt.processes.wnt_elevation_from_raster import ElevationFromRasterAlgorithm
 from wnt.processes.wnt_elevation_from_tin import ElevationFromTINAlgorithm
-from wnt.processes.wnt_epanet_from_network import EpanetFromNetworkAlgorithm
+from wnt.processes.wnt_network_to_epanet import NetworkToEpanetAlgorithm
+from wnt.processes.wnt_network_to_xml import NetworkToXmlAlgorithm
 from wnt.processes.wnt_hydrant_pairs import HydrantPairsAlgorithm
+from wnt.processes.wnt_network_from_xml import NetworkFromXmlAlgorithm
 from wnt.processes.wnt_merge_networks import MergeNetworksAlgorithm, aligned_feature
 from wnt.processes.wnt_network_from_epanet import NetworkFromEpanetAlgorithm
-from wnt.processes.wnt_network_from_landxml import NetworkFromLandXMLAlgorithm
 from wnt.processes.wnt_network_from_lines import NetworkFromLinesAlgorithm
 from wnt.processes.wnt_node_degrees import NodeDegreesAlgorithm
-from wnt.processes.wnt_ppno_from_network import PpnoFromNetworkAlgorithm
+from wnt.processes.wnt_network_to_ppno import NetworkToPpnoAlgorithm
+from wnt.processes.wnt_network_to_pipesizing import NetworkToPipesizingAlgorithm
 from wnt.processes.wnt_results_from_epanet import ResultsFromEpanetAlgorithm
-from wnt.processes.wnt_scn_from_demands import ScnFromDemandsAlgorithm
-from wnt.processes.wnt_scn_from_pipe_properties import ScnFromPipePropertiesAlgorithm
+from wnt.processes.wnt_demand_to_epanet_scenario import DemandToEpanetScenarioAlgorithm
+from wnt.processes.wnt_pipe_propierties_to_epanet_scenario import PipePropiertiesToEpanetScenarioAlgorithm
 from wnt.processes.wnt_split_lines_at_points import SplitLinesAtPointsAlgorithm
 from wnt.processes.wnt_update_assignment import UpdateAssignmentAlgorithm
 from wnt.processes.wnt_validate import ValidateAlgorithm
+from wnt.utils.utils_core import WntLink, WntNetwork, WntNode
 from wnt.utils.utils_epanet_api import (
     constants_for_version,
     EpanetConfigurationError,
@@ -74,6 +76,10 @@ class FakeNamedField:
         return self._name
 
 
+def fake_fields(*names):
+    return FakeFields(FakeNamedField(name) for name in names)
+
+
 class FakeFeature:
     def __init__(self, attrs, geometry=None, fid=0):
         self._attrs = dict(attrs)
@@ -107,11 +113,15 @@ class FakeFeature:
 
 
 class FakeSource:
-    def __init__(self, features, fields=None, crs=None, wkb_type=1):
+    def __init__(self, features, fields=None, crs=None, wkb_type=1, name="example"):
         self._features = features
+        for index, feature in enumerate(self._features):
+            if getattr(feature, "_fid", None) == 0:
+                feature._fid = index
         self._fields = fields or FakeFields()
         self._crs = crs or FakeCrs()
         self._wkb_type = wkb_type
+        self._name = name
 
     def getFeatures(self, *args):
         return iter(self._features)
@@ -128,10 +138,18 @@ class FakeSource:
     def wkbType(self):
         return self._wkb_type
 
+    def sourceName(self):
+        return self._name
+
+    def name(self):
+        return self._name
+
 
 class FakeSink:
     def __init__(self):
         self.features = []
+        self.crs = None
+        self.fields = None
 
     def addFeature(self, feature, *args):
         self.features.append(feature)
@@ -207,7 +225,7 @@ def bind_common_parameters(monkeypatch, algorithm, sources=None, fields=None, fi
     monkeypatch.setattr(
         algorithm,
         "parameterAsRasterLayer",
-        lambda parameters, name, context: sources[name],
+        lambda parameters, name, context: sources.get(name),
     )
     monkeypatch.setattr(
         algorithm,
@@ -219,7 +237,7 @@ def bind_common_parameters(monkeypatch, algorithm, sources=None, fields=None, fi
     monkeypatch.setattr(
         algorithm,
         "parameterAsString",
-        lambda parameters, name, context: fields[name],
+        lambda parameters, name, context: fields.get(name, ""),
     )
     monkeypatch.setattr(
         algorithm,
@@ -238,13 +256,18 @@ def bind_common_parameters(monkeypatch, algorithm, sources=None, fields=None, fi
     )
     monkeypatch.setattr(
         algorithm,
+        "parameterAsEnum",
+        lambda parameters, name, context: enums.get(name, 0),
+    )
+    monkeypatch.setattr(
+        algorithm,
         "parameterAsEnums",
         lambda parameters, name, context: enums.get(name, []),
     )
     monkeypatch.setattr(
         algorithm,
         "parameterAsFile",
-        lambda parameters, name, context: str(files[name]),
+        lambda parameters, name, context: str(files[name]) if name in files else "",
     )
     monkeypatch.setattr(
         algorithm,
@@ -254,11 +277,13 @@ def bind_common_parameters(monkeypatch, algorithm, sources=None, fields=None, fi
     monkeypatch.setattr(
         algorithm,
         "parameterAsCrs",
-        lambda parameters, name, context: fields[name],
+        lambda parameters, name, context: fields.get(name, FakeCrs()),
     )
 
     def parameter_as_sink(parameters, name, context, *args, **kwargs):
         sink = FakeSink()
+        sink.crs = kwargs.get("crs") or (args[2] if len(args) > 2 else None)
+        sink.fields = args[0] if args else None
         sinks[name] = sink
         return sink, f"{name}_id"
 
@@ -315,6 +340,17 @@ class FakeGeometry:
     def distance(self, other):
         return self._point.distance(other.asPoint())
 
+    def transform(self, transform):
+        if self._polyline:
+            self._polyline = [transform.transform(point) for point in self._polyline]
+        if self._multipolyline:
+            self._multipolyline = [
+                [transform.transform(point) for point in part]
+                for part in self._multipolyline
+            ]
+        else:
+            self._point = transform.transform(self._point)
+
     def asWkt(self):
         return self._wkt or f"Point({self._point.x()} {self._point.y()})"
 
@@ -335,6 +371,15 @@ class FakeRaster:
 
     def dataProvider(self):
         return FakeRasterProvider()
+
+
+class FakeRasterWithProvider(FakeRaster):
+    def __init__(self, provider):
+        super().__init__()
+        self._provider = provider
+
+    def dataProvider(self):
+        return self._provider
 
 
 class FakeSpatialIndex:
@@ -381,10 +426,10 @@ def test_messages_cover_all_branches():
     assert feedback.errors == ["ERROR: broken"]
 
 
-def test_graph_from_network_writes_tgf_and_handles_cancel(monkeypatch, tmp_path):
-    algorithm = GraphFromNetworkAlgorithm()
-    nodes = FakeSource([FakeFeature({"id": "N1"}), FakeFeature({"id": "N2"})])
-    links = FakeSource([FakeFeature({"id": "L1", "start": "N1", "end": "N2"})])
+def test_network_to_graph_writes_tgf_and_handles_cancel(monkeypatch, tmp_path):
+    algorithm = NetworkToGraphAlgorithm()
+    nodes = FakeSource([FakeFeature({"id": "N1"}), FakeFeature({"id": "N2"})], fields=fake_fields("id"))
+    links = FakeSource([FakeFeature({"id": "L1", "start": "N1", "end": "N2"})], fields=fake_fields("id", "start", "end"))
     output = tmp_path / "network.tgf"
     bind_common_parameters(
         monkeypatch,
@@ -393,7 +438,8 @@ def test_graph_from_network_writes_tgf_and_handles_cancel(monkeypatch, tmp_path)
         files={algorithm.OUTPUT: output},
     )
 
-    result = algorithm.processAlgorithm({}, None, FakeFeedback())
+    context = FakeProcessingContext()
+    result = algorithm.processAlgorithm({}, context, FakeFeedback())
 
     assert result == {algorithm.OUTPUT: str(output)}
     assert "0 N1" in output.read_text(encoding="utf-8")
@@ -401,24 +447,47 @@ def test_graph_from_network_writes_tgf_and_handles_cancel(monkeypatch, tmp_path)
     assert algorithm.processAlgorithm({}, None, FakeFeedback(canceled=True)) == {}
 
 
+def test_network_to_graph_rejects_undefined_link_nodes(monkeypatch, tmp_path):
+    algorithm = NetworkToGraphAlgorithm()
+    nodes = FakeSource([FakeFeature({"id": "N1"})], fields=fake_fields("id"))
+    links = FakeSource(
+        [FakeFeature({"id": "L1", "start": "N1", "end": "N2"})],
+        fields=fake_fields("id", "start", "end"),
+    )
+    output = tmp_path / "invalid.tgf"
+    bind_common_parameters(
+        monkeypatch,
+        algorithm,
+        sources={algorithm.INPUT_NODES: nodes, algorithm.INPUT_LINES: links},
+        files={algorithm.OUTPUT: output},
+    )
+
+    feedback = FakeFeedback()
+
+    assert algorithm.processAlgorithm({}, None, feedback) == {}
+    assert feedback.errors == ["ERROR: undefined node links: L1"]
+    assert not output.exists()
+
+
 def test_node_degrees_writes_degree_field(monkeypatch):
     algorithm = NodeDegreesAlgorithm()
-    nodes = FakeSource([FakeFeature({"id": "N1"}), FakeFeature({"id": "N2"})])
-    links = FakeSource([FakeFeature({"id": "L1", "start": "N1", "end": "N2"})])
+    nodes = FakeSource([FakeFeature({"id": "N1"}), FakeFeature({"id": "N2"})], fields=fake_fields("id"))
+    links = FakeSource([FakeFeature({"id": "L1", "start": "N1", "end": "N2"})], fields=fake_fields("id", "start", "end"))
     sinks = bind_common_parameters(
         monkeypatch,
         algorithm,
         sources={algorithm.INPUT_NODES: nodes, algorithm.INPUT_LINES: links},
     )
 
-    result = algorithm.processAlgorithm({}, None, FakeFeedback())
+    context = FakeProcessingContext()
+    result = algorithm.processAlgorithm({}, context, FakeFeedback())
 
     assert result == {algorithm.OUTPUT_NODES: f"{algorithm.OUTPUT_NODES}_id"}
     assert [feature.attributes()[-1] for feature in sinks[algorithm.OUTPUT_NODES].features] == [1, 1]
     assert algorithm.processAlgorithm({}, None, FakeFeedback(canceled=True)) == {}
 
 
-def test_classify_writes_graph_type_and_subnetwork(monkeypatch):
+def test_classify_writes_topology_and_zones(monkeypatch):
     algorithm = ClassifyAlgorithm()
     links = FakeSource(
         [
@@ -427,7 +496,8 @@ def test_classify_writes_graph_type_and_subnetwork(monkeypatch):
             FakeFeature({"id": "M1", "start": "D", "end": "E"}),
             FakeFeature({"id": "M2", "start": "E", "end": "F"}),
             FakeFeature({"id": "M3", "start": "F", "end": "D"}),
-        ]
+        ],
+        fields=fake_fields("id", "start", "end"),
     )
     sinks = bind_common_parameters(
         monkeypatch,
@@ -435,12 +505,13 @@ def test_classify_writes_graph_type_and_subnetwork(monkeypatch):
         sources={algorithm.INPUT_LINES: links},
     )
 
-    result = algorithm.processAlgorithm({}, None, FakeFeedback())
+    context = FakeProcessingContext()
+    result = algorithm.processAlgorithm({}, context, FakeFeedback())
 
     assert result == {algorithm.OUTPUT_LINES: f"{algorithm.OUTPUT_LINES}_id"}
     classifications = [feature.attributes()[-2:] for feature in sinks[algorithm.OUTPUT_LINES].features]
-    assert ["BRANCHED", 1] in classifications
-    assert ["MESHED", 1] in classifications
+    assert ["branched", 1] in classifications
+    assert ["mesh", 1] in classifications
     assert algorithm.processAlgorithm({}, None, FakeFeedback(canceled=True)) == {}
 
 
@@ -451,14 +522,16 @@ def test_connect_by_distance_writes_nearest_connections_and_crs_error(monkeypatc
         [
             FakeFeature({"id": "S1"}, FakeGeometry(0, 0)),
             FakeFeature({"id": "S2"}, FakeGeometry(10, 0)),
-        ]
+        ],
+        fields=fake_fields("id"),
     )
     target = FakeSource(
         [
             FakeFeature({"id": "T1"}, FakeGeometry(1, 0)),
             FakeFeature({"id": "T2"}, FakeGeometry(3, 0)),
             FakeFeature({"id": "T3"}, FakeGeometry(20, 0)),
-        ]
+        ],
+        fields=fake_fields("id"),
     )
     sinks = bind_common_parameters(
         monkeypatch,
@@ -493,7 +566,8 @@ def test_elevation_from_raster_processes_and_skips_nodes(monkeypatch):
         [
             FakeFeature({"id": "N1", "elevation": 0}, FakeGeometry(1, 2)),
             FakeFeature({"id": "N2", "elevation": 0}, FakeGeometry(-1, 2)),
-        ]
+        ],
+        fields=fake_fields("id", "elevation"),
     )
     raster = FakeRaster()
     sinks = bind_common_parameters(
@@ -507,7 +581,8 @@ def test_elevation_from_raster_processes_and_skips_nodes(monkeypatch):
 
     assert result == {algorithm.OUTPUT: f"{algorithm.OUTPUT}_id"}
     assert sinks[algorithm.OUTPUT].features[0]["elevation"] == 3
-    assert len(sinks[algorithm.OUTPUT].features) == 1
+    assert sinks[algorithm.OUTPUT].features[1]["elevation"] == 0
+    assert len(sinks[algorithm.OUTPUT].features) == 2
     assert algorithm.processAlgorithm({}, None, FakeFeedback(canceled=True)) == {}
 
     bad_raster = FakeRaster(FakeCrs("EPSG:4326"))
@@ -556,7 +631,7 @@ def test_elevation_from_tin_interpolates_nodes(monkeypatch, tmp_path):
         monkeypatch,
         algorithm,
         sources={algorithm.INPUT_NODES: nodes},
-        fields={algorithm.FIELD_ELEVATION: "elevation", algorithm.SURFACE_NAME: "Ground"},
+        fields={algorithm.FIELD_ELEVATION: "elevation", algorithm.SURFACE_NAMES: "Ground"},
         files={algorithm.INPUT_TIN: xml},
     )
 
@@ -596,6 +671,223 @@ def test_hydrant_pairs_writes_pairs_within_distance(monkeypatch):
     assert algorithm.processAlgorithm({}, None, FakeFeedback(canceled=True)) == {}
 
 
+
+def test_network_to_xml_writes_wnt_xml_and_validates_inputs(monkeypatch, tmp_path):
+    algorithm = NetworkToXmlAlgorithm()
+    output = tmp_path / "network.xml"
+    node_fields = fake_fields("id", "type", "elevation", "swmm", "origin", "net_type")
+    link_fields = fake_fields("id", "start", "end", "type", "length", "epanet", "material", "diameter")
+    nodes = FakeSource(
+        [
+            FakeFeature(
+                {
+                    "id": "N1",
+                    "type": "junction",
+                    "elevation": 1.0,
+                    "swmm": '{"invert_elevation":0.2}',
+                    "origin": "StormNet",
+                    "net_type": "storm",
+                },
+                FakeGeometry(0, 0),
+            ),
+            FakeFeature(
+                {
+                    "id": "N2",
+                    "type": "outfall",
+                    "elevation": 0.0,
+                    "swmm": "{}",
+                    "origin": "StormNet",
+                    "net_type": "storm",
+                },
+                FakeGeometry(10, 0),
+            ),
+        ],
+        fields=node_fields,
+    )
+    links = FakeSource(
+        [
+            FakeFeature(
+                {
+                    "id": "C1",
+                    "start": "N1",
+                    "end": "N2",
+                    "type": "conduit",
+                    "length": 10.5,
+                    "epanet": '{"roughness":120}',
+                    "material": "concrete",
+                    "diameter": 600,
+                },
+                FakeGeometry(0, 0, "LineString(0 0, 10 0)"),
+            )
+        ],
+        fields=link_fields,
+    )
+    bind_common_parameters(
+        monkeypatch,
+        algorithm,
+        sources={algorithm.INPUT_NODES: nodes, algorithm.INPUT_LINES: links},
+        fields={algorithm.NETWORK_NAME: "storm"},
+        files={algorithm.OUTPUT: output},
+        enums={
+            algorithm.WNT_MODEL_TYPE: algorithm.WNT_MODEL_TYPES.index("swmm"),
+            algorithm.OUTPUT_FORMAT: algorithm.FORMAT_WNT,
+        },
+    )
+
+    result = algorithm.processAlgorithm({}, None, FakeFeedback())
+
+    assert result == {algorithm.OUTPUT: str(output)}
+    loaded = WntNetwork().from_xml(output)
+    assert loaded.xml_model_type == "swmm"
+    assert loaded.nodes()[0].get_properties("swmm") == {"invert_elevation": 0.2}
+    assert loaded.nodes()[0].get_properties("landxml")["origin"] == "StormNet"
+    assert loaded.links()[0].get_length() == pytest.approx(10.5)
+    assert loaded.links()[0].get_properties("epanet") == {"roughness": 120}
+    assert loaded.links()[0].get_properties("landxml")["material"] == "concrete"
+
+    bad_links = FakeSource([], fields=link_fields, crs=FakeCrs("EPSG:4326"))
+    bind_common_parameters(
+        monkeypatch,
+        algorithm,
+        sources={algorithm.INPUT_NODES: nodes, algorithm.INPUT_LINES: bad_links},
+        fields={algorithm.NETWORK_NAME: "storm"},
+        files={algorithm.OUTPUT: output},
+    )
+    feedback = FakeFeedback()
+    assert algorithm.processAlgorithm({}, None, feedback) == {}
+    assert feedback.errors == ["ERROR: Layers have different CRS"]
+
+    bad_nodes = FakeSource([], fields=fake_fields("id"))
+    bind_common_parameters(
+        monkeypatch,
+        algorithm,
+        sources={algorithm.INPUT_NODES: bad_nodes, algorithm.INPUT_LINES: links},
+        fields={algorithm.NETWORK_NAME: "storm"},
+        files={algorithm.OUTPUT: output},
+    )
+    feedback = FakeFeedback()
+    assert algorithm.processAlgorithm({}, None, feedback) == {}
+    assert feedback.errors == ["ERROR: Missing required fields: type"]
+
+
+def test_network_to_xml_writes_landxml(monkeypatch, tmp_path):
+    algorithm = NetworkToXmlAlgorithm()
+    output = tmp_path / "network_landxml.xml"
+    node_fields = fake_fields("id", "type", "elevation", "invert_elv", "rim_elv", "net_type")
+    link_fields = fake_fields("id", "start", "end", "type", "length", "diameter", "material", "inv_start", "inv_end")
+    nodes = FakeSource(
+        [
+            FakeFeature(
+                {"id": "N1", "type": "manhole", "elevation": 2.0, "invert_elv": 1.0, "rim_elv": 3.0, "net_type": "storm"},
+                FakeGeometry(0, 0),
+            ),
+            FakeFeature(
+                {"id": "N2", "type": "outlet", "elevation": 1.0, "invert_elv": 0.5, "rim_elv": 2.5, "net_type": "storm"},
+                FakeGeometry(10, 0),
+            ),
+        ],
+        fields=node_fields,
+    )
+    links = FakeSource(
+        [
+            FakeFeature(
+                {"id": "P1", "start": "N1", "end": "N2", "type": "conduit", "length": 10.0, "diameter": 300, "material": "PVC", "inv_start": 1.1, "inv_end": 0.7},
+                FakeGeometry(0, 0, "LineString(0 0, 10 0)"),
+            )
+        ],
+        fields=link_fields,
+    )
+    bind_common_parameters(
+        monkeypatch,
+        algorithm,
+        sources={algorithm.INPUT_NODES: nodes, algorithm.INPUT_LINES: links},
+        fields={algorithm.NETWORK_NAME: "Storm"},
+        files={algorithm.OUTPUT: output},
+        enums={
+            algorithm.WNT_MODEL_TYPE: algorithm.WNT_MODEL_TYPES.index("swmm"),
+            algorithm.OUTPUT_FORMAT: algorithm.FORMAT_LANDXML,
+            algorithm.LANDXML_NETWORK_TYPE: algorithm.LANDXML_NETWORK_TYPES.index("storm"),
+        },
+    )
+
+    result = algorithm.processAlgorithm({}, None, FakeFeedback())
+
+    assert result == {algorithm.OUTPUT: str(output)}
+    root = ET.parse(output).getroot()
+    namespace = {"lx": "http://www.landxml.org/schema/LandXML-1.2"}
+    assert root.tag.endswith("LandXML")
+    pipe_network = root.find(".//lx:PipeNetwork", namespace)
+    assert pipe_network is not None
+    assert pipe_network.get("name") == "Storm"
+    assert pipe_network.get("pipeNetworkType") == "storm"
+    assert root.find(".//lx:Struct[@name='N1']/lx:Center", namespace).text == "0 0"
+    pipe = root.find(".//lx:Pipe[@name='P1']", namespace)
+    assert pipe.get("material") == "PVC"
+    assert pipe.find("lx:CircPipe", namespace).get("diameter") == "300"
+    assert root.find(".//lx:Struct[@name='N1']/lx:Invert", namespace).get("elev") == "1.1"
+
+
+def test_network_from_xml_loads_selected_xml_version(monkeypatch, tmp_path):
+    xml_file = tmp_path / "network.xml"
+    network = WntNetwork()
+    node = WntNode("N1")
+    node.set_type("JUNCTION")
+    node.set_elevation(2.0)
+    node.set_geometry((0, 0))
+    node.get_properties("swmm")["invert_elevation"] = 0.5
+    network.add_node(node)
+    outfall = WntNode("N2")
+    outfall.set_type("OUTFALL")
+    outfall.set_geometry((1, 0))
+    network.add_node(outfall)
+    link = WntLink("C1", "N1", "N2")
+    link.set_type("CONDUIT")
+    link.set_length(1.0)
+    link.set_geometry([(0, 0), (1, 0)])
+    link.get_properties("landxml")["geom_shape"] = "circular"
+    network.add_link(link)
+    network.to_xml(xml_file, "v1", network_id="storm", model_type="swmm", crs="EPSG:25830")
+
+    later = WntNetwork()
+    later_node = WntNode("N3")
+    later_node.set_type("JUNCTION")
+    later_node.set_geometry((3, 0))
+    later.add_node(later_node)
+    later.to_xml(xml_file, "v2", network_id="storm", model_type="swmm", crs="EPSG:25830")
+
+    algorithm = NetworkFromXmlAlgorithm()
+    sinks = bind_common_parameters(
+        monkeypatch,
+        algorithm,
+        files={algorithm.INPUT: xml_file},
+        fields={algorithm.VERSION_ID: "v1"},
+    )
+    context = FakeProcessingContext()
+
+    result = algorithm.processAlgorithm({}, context, FakeFeedback())
+
+    assert result == {
+        algorithm.OUTPUT_NODES: f"{algorithm.OUTPUT_NODES}_id",
+        algorithm.OUTPUT_LINES: f"{algorithm.OUTPUT_LINES}_id",
+    }
+    node_fields = sinks[algorithm.OUTPUT_NODES].fields.names()
+    node_attrs = sinks[algorithm.OUTPUT_NODES].features[0].attributes()
+    link_fields = sinks[algorithm.OUTPUT_LINES].fields.names()
+    link_attrs = sinks[algorithm.OUTPUT_LINES].features[0].attributes()
+    assert node_attrs[:3] == ["N1", "JUNCTION", 2.0]
+    assert json.loads(node_attrs[node_fields.index("swmm")]) == {"invert_elevation": 0.5}
+    assert link_attrs[:5] == ["C1", "N1", "N2", "CONDUIT", 1.0]
+    assert json.loads(link_attrs[link_fields.index("landxml")]) == {"geom_shape": "circular"}
+    assert context.layer_details[f"{algorithm.OUTPUT_NODES}_id"].name == "storm_nodes"
+
+    sinks = bind_common_parameters(monkeypatch, algorithm, files={algorithm.INPUT: xml_file})
+    result = algorithm.processAlgorithm({}, None, FakeFeedback())
+    assert result == {
+        algorithm.OUTPUT_NODES: f"{algorithm.OUTPUT_NODES}_id",
+        algorithm.OUTPUT_LINES: f"{algorithm.OUTPUT_LINES}_id",
+    }
+    assert sinks[algorithm.OUTPUT_NODES].features[0].attributes()[0] == "N3"
+
 def epanet_template_text():
     return (
         "[TITLE]\n[JUNCTIONS]\n[RESERVOIRS]\n[TANKS]\n[PIPES]\n[PUMPS]\n"
@@ -603,8 +895,8 @@ def epanet_template_text():
     )
 
 
-def test_epanet_from_network_exports_file_and_rejects_crs(monkeypatch, tmp_path):
-    algorithm = EpanetFromNetworkAlgorithm()
+def test_network_to_epanet_exports_file_and_rejects_crs(monkeypatch, tmp_path):
+    algorithm = NetworkToEpanetAlgorithm()
     INPUT_TEMPLATE = tmp_path / "template.inp"
     output = tmp_path / "model.inp"
     INPUT_TEMPLATE.write_text(epanet_template_text(), encoding="latin-1")
@@ -649,6 +941,50 @@ def test_epanet_from_network_exports_file_and_rejects_crs(monkeypatch, tmp_path)
     assert algorithm.processAlgorithm({}, None, feedback) == {}
     assert feedback.errors == ["ERROR: Layers have different CRS"]
 
+
+def test_network_to_epanet_creates_file_from_scratch(monkeypatch, tmp_path):
+    algorithm = NetworkToEpanetAlgorithm()
+    output = tmp_path / "scratch.inp"
+    nodes = FakeSource(
+        [FakeFeature({"id": "J1", "type": "JUNCTION", "elevation": 1}, FakeGeometry(0, 0))]
+    )
+    links = FakeSource(
+        [
+            FakeFeature(
+                {"id": "P1", "start": "J1", "end": "J1", "type": "PIPE", "length": 1.0},
+                FakeGeometry(0, 0, "LineString(0 0, 1 0)"),
+            )
+        ]
+    )
+    bind_common_parameters(
+        monkeypatch,
+        algorithm,
+        sources={algorithm.INPUT_NODES: nodes, algorithm.INPUT_LINES: links},
+        files={algorithm.OUTPUT: output},
+        enums={
+            algorithm.WORKFLOW: algorithm.WORKFLOW_SCRATCH,
+            algorithm.EPANET_VERSION: 1,
+            algorithm.FLOW_UNITS: algorithm.FLOW_UNIT_OPTIONS.index("CMH"),
+        },
+    )
+
+    result = algorithm.processAlgorithm({}, None, FakeFeedback())
+
+    assert result == {algorithm.OUTPUT: str(output)}
+    text = output.read_text(encoding="latin-1")
+    assert "UNITS CMH" in text
+    assert "DEMAND MODEL DDA" in text
+    assert "J1    1.0    0.0" in text
+
+
+def test_epanet_minimal_templates_match_selected_versions():
+    old_template = NetworkToEpanetAlgorithm._minimal_template_text("2.00.12", "LPS")
+    new_template = NetworkToEpanetAlgorithm._minimal_template_text("2.2+", "GPM")
+
+    assert "UNITS LPS" in old_template
+    assert "DEMAND MODEL" not in old_template
+    assert "UNITS GPM" in new_template
+    assert "DEMAND MODEL DDA" in new_template
 
 def test_network_from_epanet_imports_node_and_link_features(monkeypatch, tmp_path):
     algorithm = NetworkFromEpanetAlgorithm()
@@ -912,11 +1248,26 @@ def test_network_from_epanet_keeps_missing_version_dependent_json_keys_editable(
     }
 
 
-def test_network_from_landxml_imports_features(monkeypatch, tmp_path):
-    algorithm = NetworkFromLandXMLAlgorithm()
+
+
+def test_network_from_xml_reports_missing_landxml_pipe_networks(monkeypatch, tmp_path):
+    algorithm = NetworkFromXmlAlgorithm()
+    xml = tmp_path / "empty_landxml.xml"
+    xml.write_text(
+        '<LandXML xmlns="http://www.landxml.org/schema/LandXML-1.2" />',
+        encoding="utf-8",
+    )
+    bind_common_parameters(monkeypatch, algorithm, files={algorithm.INPUT: xml})
+
+    feedback = FakeFeedback()
+    assert algorithm.processAlgorithm({}, None, feedback) == {}
+    assert feedback.errors == ["ERROR: No LandXML PipeNetwork definitions found"]
+
+def test_network_from_xml_imports_landxml_features(monkeypatch, tmp_path):
+    algorithm = NetworkFromXmlAlgorithm()
     extra_layers = {}
     monkeypatch.setattr(
-        "wnt.processes.wnt_network_from_landxml.add_memory_layer",
+        "wnt.processes.wnt_network_from_xml.add_memory_layer",
         lambda name, geometry, fields, crs, features: extra_layers.setdefault(
             name, [geometry, fields, features]
         ),
@@ -1197,33 +1548,44 @@ def test_split_lines_at_points_splits_and_keeps_original(monkeypatch):
     assert feedback.errors == ["ERROR: Layers have different CRS"]
 
 
-def test_merge_networks_aligns_fields_and_warns_for_offset_connections(monkeypatch):
+def test_merge_networks_merges_near_nodes_snaps_links_and_reports_counts(monkeypatch):
     algorithm = MergeNetworksAlgorithm()
     monkeypatch.setattr("wnt.processes.wnt_merge_networks.QgsFeature", FakeOutputFeature)
     node_fields_1 = FakeFields([FakeNamedField("id"), FakeNamedField("elevation")])
     node_fields_2 = FakeFields([FakeNamedField("id"), FakeNamedField("zone")])
     link_fields_1 = FakeFields([FakeNamedField("id"), FakeNamedField("start"), FakeNamedField("end")])
-    link_fields_2 = FakeFields([FakeNamedField("id"), FakeNamedField("diameter")])
+    link_fields_2 = FakeFields([FakeNamedField("id"), FakeNamedField("start"), FakeNamedField("end"), FakeNamedField("diameter")])
     n1 = FakeSource(
         [
-            FakeFeature({"id": "N1", "elevation": 1}, FakeGeometry(0, 0)),
-            FakeFeature({"id": "N2", "elevation": 2}, FakeGeometry(1, 0)),
+            FakeFeature({"id": "N1", "elevation": 1}, QgsGeometry.fromPointXY(QgsPointXY(0, 0))),
+            FakeFeature({"id": "N2", "elevation": 2}, QgsGeometry.fromPointXY(QgsPointXY(1, 0))),
         ],
         fields=node_fields_1,
     )
     n2 = FakeSource(
         [
-            FakeFeature({"id": "N2", "zone": "B"}, FakeGeometry(2, 0)),
-            FakeFeature({"id": "N3", "zone": "C"}, FakeGeometry(3, 0)),
+            FakeFeature({"id": "N2B", "zone": "B"}, QgsGeometry.fromPointXY(QgsPointXY(1.005, 0))),
+            FakeFeature({"id": "N3", "zone": "C"}, QgsGeometry.fromPointXY(QgsPointXY(3, 0))),
+            FakeFeature({"id": "N4", "zone": "near"}, QgsGeometry.fromPointXY(QgsPointXY(1.05, 0))),
         ],
         fields=node_fields_2,
     )
     l1 = FakeSource(
-        [FakeFeature({"id": "L1", "start": "N1", "end": "N2"}, FakeGeometry(0, 0))],
+        [
+            FakeFeature(
+                {"id": "L1", "start": "N1", "end": "N2"},
+                QgsGeometry.fromPolylineXY([QgsPointXY(0, 0), QgsPointXY(1, 0)]),
+            )
+        ],
         fields=link_fields_1,
     )
     l2 = FakeSource(
-        [FakeFeature({"id": "L2", "diameter": 100}, FakeGeometry(0, 0))],
+        [
+            FakeFeature(
+                {"id": "L2", "start": "N2B", "end": "N3", "diameter": 100},
+                QgsGeometry.fromPolylineXY([QgsPointXY(1.005, 0), QgsPointXY(3, 0)]),
+            )
+        ],
         fields=link_fields_2,
     )
     sinks = bind_common_parameters(
@@ -1235,6 +1597,7 @@ def test_merge_networks_aligns_fields_and_warns_for_offset_connections(monkeypat
             algorithm.INPUT_NODES_2: n2,
             algorithm.INPUT_LINES_2: l2,
         },
+        fields={algorithm.TOLERANCE: 0.01},
     )
     feedback = FakeFeedback()
 
@@ -1248,12 +1611,25 @@ def test_merge_networks_aligns_fields_and_warns_for_offset_connections(monkeypat
         ["N1", 1, None],
         ["N2", 2, None],
         ["N3", None, "C"],
+        ["N4", None, "near"],
     ]
     assert [feature.attributes_value for feature in sinks[algorithm.OUTPUT_LINES].features] == [
         ["L1", "N1", "N2", None],
-        ["L2", None, None, 100],
+        ["L2", "N2", "N3", 100],
     ]
-    assert any("Connection node N2 distance is 1.0" in line for line in feedback.info)
+    snapped = sinks[algorithm.OUTPUT_LINES].features[1].geometry_value.asPolyline()
+    assert snapped[0].x() == pytest.approx(1.0)
+    assert snapped[0].y() == pytest.approx(0.0)
+    assert snapped[-1].x() == pytest.approx(3.0)
+    assert "First network nodes: 2" in feedback.info
+    assert "Second network nodes: 3" in feedback.info
+    assert "Output nodes: 4" in feedback.info
+    assert "First network links: 1" in feedback.info
+    assert "Second network links: 1" in feedback.info
+    assert "Output links: 2" in feedback.info
+    assert "Connected nodes: 1" in feedback.info
+    assert "Near merge nodes: 1" in feedback.info
+    assert any("Closest near merge node N4 to N2 distance is" in line for line in feedback.info)
     assert algorithm.processAlgorithm({}, None, FakeFeedback(canceled=True)) == {}
 
     bad = FakeSource([], crs=FakeCrs("EPSG:4326"))
@@ -1266,11 +1642,99 @@ def test_merge_networks_aligns_fields_and_warns_for_offset_connections(monkeypat
             algorithm.INPUT_NODES_2: bad,
             algorithm.INPUT_LINES_2: l2,
         },
+        fields={algorithm.TOLERANCE: 0.01},
     )
     feedback = FakeFeedback()
     assert algorithm.processAlgorithm({}, None, feedback) == {}
     assert feedback.errors == ["ERROR: Layers have different CRS"]
 
+
+def test_merge_networks_rejects_second_link_duplicate_id(monkeypatch):
+    algorithm = MergeNetworksAlgorithm()
+    node_fields = fake_fields("id")
+    link_fields = fake_fields("id", "start", "end")
+    n1 = FakeSource(
+        [
+            FakeFeature({"id": "N1"}, QgsGeometry.fromPointXY(QgsPointXY(0, 0))),
+            FakeFeature({"id": "N2"}, QgsGeometry.fromPointXY(QgsPointXY(1, 0))),
+        ],
+        fields=node_fields,
+    )
+    n2 = FakeSource(
+        [
+            FakeFeature({"id": "N3"}, QgsGeometry.fromPointXY(QgsPointXY(2, 0))),
+            FakeFeature({"id": "N4"}, QgsGeometry.fromPointXY(QgsPointXY(3, 0))),
+        ],
+        fields=node_fields,
+    )
+    l1 = FakeSource(
+        [FakeFeature({"id": "L1", "start": "N1", "end": "N2"}, QgsGeometry.fromPolylineXY([QgsPointXY(0, 0), QgsPointXY(1, 0)]))],
+        fields=link_fields,
+    )
+    l2 = FakeSource(
+        [FakeFeature({"id": "L1", "start": "N3", "end": "N4"}, QgsGeometry.fromPolylineXY([QgsPointXY(2, 0), QgsPointXY(3, 0)]))],
+        fields=link_fields,
+    )
+    sinks = bind_common_parameters(
+        monkeypatch,
+        algorithm,
+        sources={
+            algorithm.INPUT_NODES_1: n1,
+            algorithm.INPUT_LINES_1: l1,
+            algorithm.INPUT_NODES_2: n2,
+            algorithm.INPUT_LINES_2: l2,
+        },
+        fields={algorithm.TOLERANCE: 0.01},
+    )
+    feedback = FakeFeedback()
+
+    assert algorithm.processAlgorithm({}, None, feedback) == {}
+    assert feedback.errors == ["ERROR: Second network link ids already exist in first network: L1"]
+    assert sinks == {}
+
+
+def test_merge_networks_rejects_second_link_endpoint_overlap_reversed(monkeypatch):
+    algorithm = MergeNetworksAlgorithm()
+    node_fields = fake_fields("id")
+    link_fields = fake_fields("id", "start", "end")
+    n1 = FakeSource(
+        [
+            FakeFeature({"id": "N1"}, QgsGeometry.fromPointXY(QgsPointXY(0, 0))),
+            FakeFeature({"id": "N2"}, QgsGeometry.fromPointXY(QgsPointXY(1, 0))),
+        ],
+        fields=node_fields,
+    )
+    n2 = FakeSource(
+        [
+            FakeFeature({"id": "N3"}, QgsGeometry.fromPointXY(QgsPointXY(1.005, 0))),
+            FakeFeature({"id": "N4"}, QgsGeometry.fromPointXY(QgsPointXY(0.005, 0))),
+        ],
+        fields=node_fields,
+    )
+    l1 = FakeSource(
+        [FakeFeature({"id": "L1", "start": "N1", "end": "N2"}, QgsGeometry.fromPolylineXY([QgsPointXY(0, 0), QgsPointXY(1, 0)]))],
+        fields=link_fields,
+    )
+    l2 = FakeSource(
+        [FakeFeature({"id": "L2", "start": "N3", "end": "N4"}, QgsGeometry.fromPolylineXY([QgsPointXY(1.005, 0), QgsPointXY(0.005, 0)]))],
+        fields=link_fields,
+    )
+    sinks = bind_common_parameters(
+        monkeypatch,
+        algorithm,
+        sources={
+            algorithm.INPUT_NODES_1: n1,
+            algorithm.INPUT_LINES_1: l1,
+            algorithm.INPUT_NODES_2: n2,
+            algorithm.INPUT_LINES_2: l2,
+        },
+        fields={algorithm.TOLERANCE: 0.01},
+    )
+    feedback = FakeFeedback()
+
+    assert algorithm.processAlgorithm({}, None, feedback) == {}
+    assert feedback.errors == ["ERROR: Second network links overlap first network links: L2 overlaps L1"]
+    assert sinks == {}
 
 def test_aligned_feature_fills_missing_fields(monkeypatch):
     monkeypatch.setattr("wnt.processes.wnt_merge_networks.QgsFeature", FakeOutputFeature)
@@ -1300,6 +1764,7 @@ def test_network_from_lines_builds_node_and_link_outputs(monkeypatch):
             ),
         ],
         fields=fields,
+        name="linestring_layer",
     )
     sinks = bind_common_parameters(
         monkeypatch,
@@ -1316,22 +1781,87 @@ def test_network_from_lines_builds_node_and_link_outputs(monkeypatch):
         },
     )
 
-    result = algorithm.processAlgorithm({}, None, FakeFeedback())
+    context = FakeProcessingContext()
+    result = algorithm.processAlgorithm({}, context, FakeFeedback())
 
     assert result == {
         algorithm.OUTPUT_NODES: f"{algorithm.OUTPUT_NODES}_id",
         algorithm.OUTPUT_LINES: f"{algorithm.OUTPUT_LINES}_id",
     }
     assert [feature.attributes_value for feature in sinks[algorithm.OUTPUT_NODES].features] == [
-        ["N1", "", 0.0],
-        ["N2", "", 0.0],
-        ["N3", "", 0.0],
+        ["N1", "JUNCTION", 0.0],
+        ["N2", "JUNCTION", 0.0],
+        ["N3", "JUNCTION", 0.0],
     ]
     assert [feature.attributes_value[:5] for feature in sinks[algorithm.OUTPUT_LINES].features] == [
         ["L1", "N1", "N2", "PIPE", 1.0],
         ["L2", "N2", "N3", "PIPE", 1.0],
     ]
+    assert context.layer_details[f"{algorithm.OUTPUT_NODES}_id"].name == "linestring_layer_nodes"
+    assert context.layer_details[f"{algorithm.OUTPUT_LINES}_id"].name == "linestring_layer_links"
     assert algorithm.processAlgorithm({}, None, FakeFeedback(canceled=True)) == {}
+
+
+def test_network_from_lines_rejects_zero_numbering_increments(monkeypatch):
+    algorithm = NetworkFromLinesAlgorithm()
+    monkeypatch.setattr(
+        algorithm,
+        "parameterAsInt",
+        lambda parameters, name, context: parameters[name],
+    )
+
+    valid = {
+        algorithm.INCREMENT_NODE: 1,
+        algorithm.INCREMENT_LINK: 1,
+    }
+
+    ok, message = algorithm.checkParameterValues(
+        {**valid, algorithm.INCREMENT_NODE: 0},
+        None,
+    )
+    assert not ok
+    assert message == "Node numbering increment must be an integer different from 0"
+
+    ok, message = algorithm.checkParameterValues(
+        {**valid, algorithm.INCREMENT_LINK: 0},
+        None,
+    )
+    assert not ok
+    assert message == "Link numbering increment must be an integer different from 0"
+
+
+def test_network_from_lines_reports_monotonic_progress(monkeypatch):
+    algorithm = NetworkFromLinesAlgorithm()
+    patch_lightweight_qgis_feature_classes(monkeypatch, "wnt.processes.wnt_network_from_lines")
+    monkeypatch.setattr("wnt.processes.wnt_network_from_lines.QgsPointXY", lambda x, y: FakePoint(x, y))
+    monkeypatch.setattr("wnt.processes.wnt_network_from_lines.QgsGeometry", FakeQgsGeometry)
+    lines = FakeSource(
+        [
+            FakeFeature({}, FakeGeometry(0, 0, polyline=[FakePoint(0, 0), FakePoint(1, 0)])),
+            FakeFeature({}, FakeGeometry(1, 0, polyline=[FakePoint(1, 0), FakePoint(2, 0)])),
+        ]
+    )
+    bind_common_parameters(
+        monkeypatch,
+        algorithm,
+        sources={algorithm.INPUT: lines},
+        fields={
+            algorithm.TOLERANCE: 0.001,
+            algorithm.MASK_NODE: "N$",
+            algorithm.INITIAL_NODE: 1,
+            algorithm.INCREMENT_NODE: 1,
+            algorithm.MASK_LINK: "L$",
+            algorithm.INITIAL_LINK: 1,
+            algorithm.INCREMENT_LINK: 1,
+        },
+    )
+
+    feedback = FakeFeedback()
+    algorithm.processAlgorithm({}, FakeProcessingContext(), feedback)
+
+    assert feedback.progress
+    assert feedback.progress == sorted(feedback.progress)
+    assert feedback.progress[-1] == 100
 
 
 def test_network_from_lines_splits_multipart_and_uses_z_elevations(monkeypatch):
@@ -1369,26 +1899,370 @@ def test_network_from_lines_splits_multipart_and_uses_z_elevations(monkeypatch):
             algorithm.MASK_LINK: "L$",
             algorithm.INITIAL_LINK: 1,
             algorithm.INCREMENT_LINK: 1,
-            algorithm.USE_LINE_ELEVATION: True,
         },
+        enums={algorithm.ELEVATION_SOURCE: 1},
     )
 
-    context = FakeProcessingContext()
-    result = algorithm.processAlgorithm({}, context, FakeFeedback())
+    result = algorithm.processAlgorithm({}, None, FakeFeedback())
 
     assert result == {
         algorithm.OUTPUT_NODES: f"{algorithm.OUTPUT_NODES}_id",
         algorithm.OUTPUT_LINES: f"{algorithm.OUTPUT_LINES}_id",
     }
     assert [feature.attributes_value for feature in sinks[algorithm.OUTPUT_NODES].features] == [
-        ["N1", "", 10.0],
-        ["N2", "", pytest.approx(11.0002)],
-        ["N3", "", 12.0],
+        ["N1", "JUNCTION", 10.0],
+        ["N2", "JUNCTION", pytest.approx(11.0002)],
+        ["N3", "JUNCTION", 12.0],
     ]
     assert [feature.attributes_value for feature in sinks[algorithm.OUTPUT_LINES].features] == [
         ["L1", "N1", "N2", "PIPE", 1.0, "PVC"],
         ["L2", "N2", "N3", "PIPE", 1.0, "PVC"],
     ]
+
+
+def test_network_from_lines_writes_link_type_degree_and_topology(monkeypatch):
+    algorithm = NetworkFromLinesAlgorithm()
+    patch_lightweight_qgis_feature_classes(monkeypatch, "wnt.processes.wnt_network_from_lines")
+    monkeypatch.setattr("wnt.processes.wnt_network_from_lines.QgsPointXY", lambda x, y: FakePoint(x, y))
+    monkeypatch.setattr("wnt.processes.wnt_network_from_lines.QgsGeometry", FakeQgsGeometry)
+    fields = FakeFields([FakeNamedField("link_type"), FakeNamedField("material")])
+    lines = FakeSource(
+        [
+            FakeFeature(
+                {"link_type": "VALVE", "material": "PVC"},
+                FakeGeometry(0, 0, polyline=[FakePoint(0, 0), FakePoint(1, 0)]),
+            ),
+            FakeFeature(
+                {"link_type": "PUMP", "material": "DI"},
+                FakeGeometry(1, 0, polyline=[FakePoint(1, 0), FakePoint(2, 0)]),
+            ),
+        ],
+        fields=fields,
+    )
+    sinks = bind_common_parameters(
+        monkeypatch,
+        algorithm,
+        sources={algorithm.INPUT: lines},
+        fields={
+            algorithm.TOLERANCE: 0.001,
+            algorithm.MASK_NODE: "N$",
+            algorithm.INITIAL_NODE: 1,
+            algorithm.INCREMENT_NODE: 1,
+            algorithm.MASK_LINK: "L$",
+            algorithm.INITIAL_LINK: 1,
+            algorithm.INCREMENT_LINK: 1,
+            algorithm.LINK_TYPE_FIELD: "link_type",
+            algorithm.ADD_NODE_DEGREE: True,
+            algorithm.ADD_LINK_TOPOLOGY: True,
+        },
+    )
+
+    feedback = FakeFeedback()
+    algorithm.processAlgorithm({}, FakeProcessingContext(), feedback)
+
+    assert [feature.attributes_value for feature in sinks[algorithm.OUTPUT_NODES].features] == [
+        ["N1", "JUNCTION", 0.0, 1],
+        ["N2", "JUNCTION", 0.0, 2],
+        ["N3", "JUNCTION", 0.0, 1],
+    ]
+    assert [feature.attributes_value[:7] for feature in sinks[algorithm.OUTPUT_LINES].features] == [
+        ["L1", "N1", "N2", "VALVE", 1.0, "branched", 1],
+        ["L2", "N2", "N3", "PUMP", 1.0, "branched", 1],
+    ]
+    link_field_names = sinks[algorithm.OUTPUT_LINES].fields.names()
+    assert "zone" in link_field_names
+    assert "zones" not in link_field_names
+    assert "Link type field: link_type" in feedback.info
+    assert "Add node_degree: True" in feedback.info
+    assert "Add topology/zone: True" in feedback.info
+
+
+def test_network_from_lines_reprojects_to_selected_crs(monkeypatch):
+    algorithm = NetworkFromLinesAlgorithm()
+    patch_lightweight_qgis_feature_classes(monkeypatch, "wnt.processes.wnt_network_from_lines")
+    monkeypatch.setattr("wnt.processes.wnt_network_from_lines.QgsPointXY", lambda x, y: FakePoint(x, y))
+    monkeypatch.setattr("wnt.processes.wnt_network_from_lines.QgsGeometry", FakeQgsGeometry)
+
+    class FakeTransform:
+        def __init__(self, source, target, project):
+            self.source = source
+            self.target = target
+            self.project = project
+
+        def transform(self, point):
+            z = point.z() if hasattr(point, "z") else None
+            return FakePoint(point.x() + 10, point.y() + 20, z)
+
+    class FakeProject:
+        @staticmethod
+        def instance():
+            return object()
+
+    monkeypatch.setattr("wnt.processes.wnt_network_from_lines.QgsCoordinateTransform", FakeTransform)
+    monkeypatch.setattr("wnt.processes.wnt_network_from_lines.QgsProject", FakeProject)
+    output_crs = FakeCrs("EPSG:4326")
+    lines = FakeSource(
+        [FakeFeature({}, FakeGeometry(0, 0, polyline=[FakePoint(0, 0), FakePoint(1, 0)]))],
+        crs=FakeCrs("EPSG:25830"),
+    )
+    sinks = bind_common_parameters(
+        monkeypatch,
+        algorithm,
+        sources={algorithm.INPUT: lines},
+        fields={
+            algorithm.CRS: output_crs,
+            algorithm.TOLERANCE: 0.001,
+            algorithm.MASK_NODE: "N$",
+            algorithm.INITIAL_NODE: 1,
+            algorithm.INCREMENT_NODE: 1,
+            algorithm.MASK_LINK: "L$",
+            algorithm.INITIAL_LINK: 1,
+            algorithm.INCREMENT_LINK: 1,
+        },
+    )
+
+    algorithm.processAlgorithm({}, FakeProcessingContext(), FakeFeedback())
+
+    assert sinks[algorithm.OUTPUT_NODES].crs == output_crs
+    assert sinks[algorithm.OUTPUT_LINES].crs == output_crs
+    assert [feature.geometry_value.asPoint().x() for feature in sinks[algorithm.OUTPUT_NODES].features] == [10, 11]
+    assert [feature.geometry_value.asPoint().y() for feature in sinks[algorithm.OUTPUT_NODES].features] == [20, 20]
+
+
+def test_network_from_lines_uses_dem_elevations(monkeypatch):
+    algorithm = NetworkFromLinesAlgorithm()
+    patch_lightweight_qgis_feature_classes(monkeypatch, "wnt.processes.wnt_network_from_lines")
+    monkeypatch.setattr("wnt.processes.wnt_network_from_lines.QgsPointXY", lambda x, y: FakePoint(x, y))
+    monkeypatch.setattr("wnt.processes.wnt_network_from_lines.QgsGeometry", FakeQgsGeometry)
+    lines = FakeSource(
+        [FakeFeature({}, FakeGeometry(0, 0, polyline=[FakePoint(1, 2), FakePoint(3, 4)]))]
+    )
+    sinks = bind_common_parameters(
+        monkeypatch,
+        algorithm,
+        sources={algorithm.INPUT: lines, algorithm.INPUT_DEM: FakeRaster()},
+        fields={
+            algorithm.TOLERANCE: 0.001,
+            algorithm.MASK_NODE: "N$",
+            algorithm.INITIAL_NODE: 1,
+            algorithm.INCREMENT_NODE: 1,
+            algorithm.MASK_LINK: "L$",
+            algorithm.INITIAL_LINK: 1,
+            algorithm.INCREMENT_LINK: 1,
+        },
+        enums={algorithm.ELEVATION_SOURCE: 2},
+    )
+
+    feedback = FakeFeedback()
+    algorithm.processAlgorithm({}, FakeProcessingContext(), feedback)
+
+    assert [feature.attributes_value[2] for feature in sinks[algorithm.OUTPUT_NODES].features] == [3, 7]
+    assert "Node elevation source: DEM raster" in feedback.info
+    assert "Node elevations added from DEM: 2" in feedback.info
+
+
+def test_network_from_lines_rejects_missing_dem(monkeypatch):
+    algorithm = NetworkFromLinesAlgorithm()
+    patch_lightweight_qgis_feature_classes(monkeypatch, "wnt.processes.wnt_network_from_lines")
+    monkeypatch.setattr("wnt.processes.wnt_network_from_lines.QgsPointXY", lambda x, y: FakePoint(x, y))
+    monkeypatch.setattr("wnt.processes.wnt_network_from_lines.QgsGeometry", FakeQgsGeometry)
+    lines = FakeSource(
+        [FakeFeature({}, FakeGeometry(0, 0, polyline=[FakePoint(1, 2), FakePoint(3, 4)]))]
+    )
+    sinks = bind_common_parameters(
+        monkeypatch,
+        algorithm,
+        sources={algorithm.INPUT: lines},
+        fields={
+            algorithm.TOLERANCE: 0.001,
+            algorithm.MASK_NODE: "N$",
+            algorithm.INITIAL_NODE: 1,
+            algorithm.INCREMENT_NODE: 1,
+            algorithm.MASK_LINK: "L$",
+            algorithm.INITIAL_LINK: 1,
+            algorithm.INCREMENT_LINK: 1,
+        },
+        enums={algorithm.ELEVATION_SOURCE: 2},
+    )
+
+    feedback = FakeFeedback()
+    assert algorithm.processAlgorithm({}, FakeProcessingContext(), feedback) == {}
+
+    assert feedback.errors == [
+        "ERROR: DEM raster layer is required for the selected elevation source"
+    ]
+    assert sinks == {}
+
+
+def test_network_from_lines_rejects_invalid_dem_elevations(monkeypatch):
+    algorithm = NetworkFromLinesAlgorithm()
+    patch_lightweight_qgis_feature_classes(monkeypatch, "wnt.processes.wnt_network_from_lines")
+    monkeypatch.setattr("wnt.processes.wnt_network_from_lines.QgsPointXY", lambda x, y: FakePoint(x, y))
+    monkeypatch.setattr("wnt.processes.wnt_network_from_lines.QgsGeometry", FakeQgsGeometry)
+
+    class InvalidProvider:
+        def __init__(self, values):
+            self.values = list(values)
+
+        def sample(self, point, band):
+            return self.values.pop(0)
+
+    for value in [(None, False), (None, True), (float("nan"), True), (float("inf"), True)]:
+        lines = FakeSource(
+            [FakeFeature({}, FakeGeometry(0, 0, polyline=[FakePoint(1, 2), FakePoint(3, 4)]))]
+        )
+        sinks = bind_common_parameters(
+            monkeypatch,
+            algorithm,
+            sources={
+                algorithm.INPUT: lines,
+                algorithm.INPUT_DEM: FakeRasterWithProvider(InvalidProvider([(3.0, True), value])),
+            },
+            fields={
+                algorithm.TOLERANCE: 0.001,
+                algorithm.MASK_NODE: "N$",
+                algorithm.INITIAL_NODE: 1,
+                algorithm.INCREMENT_NODE: 1,
+                algorithm.MASK_LINK: "L$",
+                algorithm.INITIAL_LINK: 1,
+                algorithm.INCREMENT_LINK: 1,
+            },
+            enums={algorithm.ELEVATION_SOURCE: 2},
+        )
+
+        feedback = FakeFeedback()
+        assert algorithm.processAlgorithm({}, FakeProcessingContext(), feedback) == {}
+
+        assert feedback.errors == [
+            "ERROR: DEM raster does not provide a valid elevation for all network nodes"
+        ]
+        assert sinks == {}
+
+
+def test_network_from_lines_uses_landxml_elevations(monkeypatch, tmp_path):
+    algorithm = NetworkFromLinesAlgorithm()
+    patch_lightweight_qgis_feature_classes(monkeypatch, "wnt.processes.wnt_network_from_lines")
+    monkeypatch.setattr("wnt.processes.wnt_network_from_lines.QgsPointXY", lambda x, y: FakePoint(x, y))
+    monkeypatch.setattr("wnt.processes.wnt_network_from_lines.QgsGeometry", FakeQgsGeometry)
+
+    class FakeTin:
+        def from_landxml(self, path, surface_name):
+            assert path.endswith("surface.xml")
+            assert surface_name == "ground"
+
+        def elevations(self, points):
+            return [10 + index for index, _ in enumerate(points)]
+
+    monkeypatch.setattr("wnt.processes.wnt_network_from_lines.TIN", FakeTin)
+    landxml = tmp_path / "surface.xml"
+    landxml.write_text("<LandXML />", encoding="utf-8")
+    lines = FakeSource(
+        [FakeFeature({}, FakeGeometry(0, 0, polyline=[FakePoint(1, 2), FakePoint(3, 4)]))]
+    )
+    sinks = bind_common_parameters(
+        monkeypatch,
+        algorithm,
+        sources={algorithm.INPUT: lines},
+        files={algorithm.INPUT_LANDXML: landxml},
+        fields={
+            algorithm.TOLERANCE: 0.001,
+            algorithm.MASK_NODE: "N$",
+            algorithm.INITIAL_NODE: 1,
+            algorithm.INCREMENT_NODE: 1,
+            algorithm.MASK_LINK: "L$",
+            algorithm.INITIAL_LINK: 1,
+            algorithm.INCREMENT_LINK: 1,
+            algorithm.SURFACE_NAME: "ground",
+        },
+        enums={algorithm.ELEVATION_SOURCE: 3},
+    )
+
+    feedback = FakeFeedback()
+    algorithm.processAlgorithm({}, FakeProcessingContext(), feedback)
+
+    assert [feature.attributes_value[2] for feature in sinks[algorithm.OUTPUT_NODES].features] == [10, 11]
+    assert "Node elevation source: LandXML TIN" in feedback.info
+    assert "LandXML surface used: ground" in feedback.info
+
+
+def test_network_from_lines_rejects_missing_landxml(monkeypatch):
+    algorithm = NetworkFromLinesAlgorithm()
+    patch_lightweight_qgis_feature_classes(monkeypatch, "wnt.processes.wnt_network_from_lines")
+    monkeypatch.setattr("wnt.processes.wnt_network_from_lines.QgsPointXY", lambda x, y: FakePoint(x, y))
+    monkeypatch.setattr("wnt.processes.wnt_network_from_lines.QgsGeometry", FakeQgsGeometry)
+    lines = FakeSource(
+        [FakeFeature({}, FakeGeometry(0, 0, polyline=[FakePoint(1, 2), FakePoint(3, 4)]))]
+    )
+    sinks = bind_common_parameters(
+        monkeypatch,
+        algorithm,
+        sources={algorithm.INPUT: lines},
+        fields={
+            algorithm.TOLERANCE: 0.001,
+            algorithm.MASK_NODE: "N$",
+            algorithm.INITIAL_NODE: 1,
+            algorithm.INCREMENT_NODE: 1,
+            algorithm.MASK_LINK: "L$",
+            algorithm.INITIAL_LINK: 1,
+            algorithm.INCREMENT_LINK: 1,
+        },
+        enums={algorithm.ELEVATION_SOURCE: 3},
+    )
+
+    feedback = FakeFeedback()
+    assert algorithm.processAlgorithm({}, FakeProcessingContext(), feedback) == {}
+
+    assert feedback.errors == [
+        "ERROR: LandXML file is required for the selected elevation source"
+    ]
+    assert sinks == {}
+
+
+def test_network_from_lines_rejects_invalid_landxml_elevations(monkeypatch, tmp_path):
+    algorithm = NetworkFromLinesAlgorithm()
+    patch_lightweight_qgis_feature_classes(monkeypatch, "wnt.processes.wnt_network_from_lines")
+    monkeypatch.setattr("wnt.processes.wnt_network_from_lines.QgsPointXY", lambda x, y: FakePoint(x, y))
+    monkeypatch.setattr("wnt.processes.wnt_network_from_lines.QgsGeometry", FakeQgsGeometry)
+
+    class FakeTin:
+        surface_name = "ground"
+
+        def from_landxml(self, path, surface_name):
+            pass
+
+        def elevations(self, points):
+            return [10.0, None]
+
+    monkeypatch.setattr("wnt.processes.wnt_network_from_lines.TIN", FakeTin)
+    landxml = tmp_path / "surface.xml"
+    landxml.write_text("<LandXML />", encoding="utf-8")
+    lines = FakeSource(
+        [FakeFeature({}, FakeGeometry(0, 0, polyline=[FakePoint(1, 2), FakePoint(3, 4)]))]
+    )
+    sinks = bind_common_parameters(
+        monkeypatch,
+        algorithm,
+        sources={algorithm.INPUT: lines},
+        files={algorithm.INPUT_LANDXML: landxml},
+        fields={
+            algorithm.TOLERANCE: 0.001,
+            algorithm.MASK_NODE: "N$",
+            algorithm.INITIAL_NODE: 1,
+            algorithm.INCREMENT_NODE: 1,
+            algorithm.MASK_LINK: "L$",
+            algorithm.INITIAL_LINK: 1,
+            algorithm.INCREMENT_LINK: 1,
+        },
+        enums={algorithm.ELEVATION_SOURCE: 3},
+    )
+
+    feedback = FakeFeedback()
+    assert algorithm.processAlgorithm({}, FakeProcessingContext(), feedback) == {}
+
+    assert feedback.errors == [
+        "ERROR: LandXML TIN does not provide a valid elevation for all network nodes"
+    ]
+    assert sinks == {}
 
 
 def test_network_from_lines_extracts_qgis_multiline_parts_with_z():
@@ -1430,14 +2304,48 @@ def test_network_from_lines_rejects_conflicting_z_elevations(monkeypatch):
             algorithm.MASK_LINK: "L$",
             algorithm.INITIAL_LINK: 1,
             algorithm.INCREMENT_LINK: 1,
-            algorithm.USE_LINE_ELEVATION: True,
         },
+        enums={algorithm.ELEVATION_SOURCE: 1},
     )
 
     feedback = FakeFeedback()
     assert algorithm.processAlgorithm({}, None, feedback) == {}
     assert feedback.errors == [
         "ERROR: Line endpoint elevations merged into a node differ more than tolerance"
+    ]
+
+
+def test_network_from_lines_rejects_missing_line_z_elevations(monkeypatch):
+    algorithm = NetworkFromLinesAlgorithm()
+    patch_lightweight_qgis_feature_classes(monkeypatch, "wnt.processes.wnt_network_from_lines")
+    lines = FakeSource(
+        [
+            FakeFeature(
+                {},
+                FakeGeometry(0, 0, polyline=[FakePoint(0, 0), FakePoint(1, 0, 11.0)]),
+            ),
+        ]
+    )
+    bind_common_parameters(
+        monkeypatch,
+        algorithm,
+        sources={algorithm.INPUT: lines},
+        fields={
+            algorithm.TOLERANCE: 0.001,
+            algorithm.MASK_NODE: "N$",
+            algorithm.INITIAL_NODE: 1,
+            algorithm.INCREMENT_NODE: 1,
+            algorithm.MASK_LINK: "L$",
+            algorithm.INITIAL_LINK: 1,
+            algorithm.INCREMENT_LINK: 1,
+        },
+        enums={algorithm.ELEVATION_SOURCE: 1},
+    )
+
+    feedback = FakeFeedback()
+    assert algorithm.processAlgorithm({}, None, feedback) == {}
+    assert feedback.errors == [
+        "ERROR: Line endpoint Z elevation source requires every input line endpoint to have a valid Z value"
     ]
 
 
@@ -1625,7 +2533,8 @@ def test_results_from_epanet_loads_node_and_link_results(monkeypatch, tmp_path):
     patch_results_algorithm(monkeypatch)
     sinks = bind_common_parameters(monkeypatch, algorithm, files={algorithm.INPUT: inp})
 
-    result = algorithm.processAlgorithm({}, None, FakeFeedback())
+    context = FakeProcessingContext()
+    result = algorithm.processAlgorithm({}, context, FakeFeedback())
 
     assert result == {
         algorithm.OUTPUT_NODES: f"{algorithm.OUTPUT_NODES}_id",
@@ -1669,7 +2578,8 @@ def test_results_from_epanet_loads_posix_library_and_closed_status(monkeypatch, 
     patch_results_algorithm(monkeypatch, FakeEpanetLibrary(link_status=0.0))
     sinks = bind_common_parameters(monkeypatch, algorithm, files={algorithm.INPUT: inp})
 
-    result = algorithm.processAlgorithm({}, None, FakeFeedback())
+    context = FakeProcessingContext()
+    result = algorithm.processAlgorithm({}, context, FakeFeedback())
 
     assert result == {
         algorithm.OUTPUT_NODES: f"{algorithm.OUTPUT_NODES}_id",
@@ -1774,13 +2684,15 @@ def test_validate_reports_all_problem_types(monkeypatch):
             FakeFeature({"id": "N1"}),
             FakeFeature({"id": "N1"}),
             FakeFeature({"id": "ORPHAN"}),
-        ]
+        ],
+        fields=fake_fields("id"),
     )
     links = FakeSource(
         [
             FakeFeature({"id": "L1", "start": "N1", "end": "MISSING"}),
             FakeFeature({"id": "L1", "start": "N1", "end": "N1"}),
-        ]
+        ],
+        fields=fake_fields("id", "start", "end"),
     )
     sinks = bind_common_parameters(
         monkeypatch,
@@ -1804,29 +2716,67 @@ def test_validate_reports_all_problem_types(monkeypatch):
     assert any("problems detected" in line for line in feedback.info)
 
 
-def test_ppno_from_network_writes_ext_and_rejects_crs(monkeypatch, tmp_path):
-    algorithm = PpnoFromNetworkAlgorithm()
-    INPUT_TEMPLATE = tmp_path / "template.ext"
+def test_network_to_pipesizing_writes_pro_with_external_catalog(monkeypatch, tmp_path):
+    algorithm = NetworkToPipesizingAlgorithm()
+    output = tmp_path / "sizing.pro"
+    epanet_file = tmp_path / "model.inp"
+    input_catalog = tmp_path / "template.cat"
+    epanet_file.write_text("[END]\n", encoding="utf-8")
+    input_catalog.write_text("S1    100.0    120.0\n", encoding="utf-8")
+    nodes = FakeSource(
+        [FakeFeature({"id": "N1", "pressure": 20}), FakeFeature({"id": "N2", "pressure": ""})],
+        fields=fake_fields("id", "pressure"),
+    )
+    links = FakeSource(
+        [FakeFeature({"id": "L1", "group": "S1"}), FakeFeature({"id": "L2", "group": ""})],
+        fields=fake_fields("id", "group"),
+    )
+    bind_common_parameters(
+        monkeypatch,
+        algorithm,
+        sources={algorithm.INPUT_NODES: nodes, algorithm.INPUT_LINES: links},
+        fields={algorithm.FIELD_PRESSURE: "pressure", algorithm.FIELD_SERIES: "group"},
+        files={algorithm.INPUT_EPANET: epanet_file, algorithm.INPUT_CATALOG: input_catalog, algorithm.OUTPUT: output},
+    )
+
+    result = algorithm.processAlgorithm({}, None, FakeFeedback())
+
+    assert result == {algorithm.OUTPUT: str(output)}
+    text = output.read_text(encoding="utf-8")
+    output_catalog = output.with_suffix(".cat")
+    assert "[NETWORK]" in text
+    assert "model.inp" in text
+    assert "[PIPE_CATALOG]" in text
+    assert "sizing.cat" in text
+    assert "[PRESSURES]" in text
+    assert "N1    20" in text
+    assert "[PIPES]" in text
+    assert "L1    S1" in text
+    assert "[SERIES]" not in text
+    assert output_catalog.read_text(encoding="utf-8") == "S1    100.0    120.0\n"
+
+    unknown_links = FakeSource(
+        [FakeFeature({"id": "L1", "group": "UNKNOWN"})],
+        fields=fake_fields("id", "group"),
+    )
+    bind_common_parameters(
+        monkeypatch,
+        algorithm,
+        sources={algorithm.INPUT_NODES: nodes, algorithm.INPUT_LINES: unknown_links},
+        fields={algorithm.FIELD_PRESSURE: "pressure", algorithm.FIELD_SERIES: "group"},
+        files={algorithm.INPUT_EPANET: epanet_file, algorithm.INPUT_CATALOG: input_catalog, algorithm.OUTPUT: output},
+    )
+    feedback = FakeFeedback()
+
+    assert algorithm.processAlgorithm({}, None, feedback) == {}
+    assert feedback.errors == ["ERROR: Pipes reference unknown series: UNKNOWN"]
+
+def test_network_to_ppno_writes_ext_from_catalog_and_rejects_crs(monkeypatch, tmp_path):
+    algorithm = NetworkToPpnoAlgorithm()
     output = tmp_path / "output.ext"
     INPUT_EPANET = tmp_path / "model.inp"
     input_catalog = tmp_path / "template.cat"
     input_catalog.write_text("S1    100.0    0.1    10.0\n", encoding="latin-1")
-    INPUT_TEMPLATE.write_text(
-        textwrap.dedent(
-            """
-            [TITLE]
-            [INP]
-            [OPTIONS]
-            Algorithm DA
-            [PIPE_CATALOG]
-            template.cat
-            [PRESSURES]
-            [PIPES]
-            [END]
-            """
-        ).strip(),
-        encoding="latin-1",
-    )
     nodes = FakeSource([FakeFeature({"id": "N1", "pressure": 20}), FakeFeature({"id": "N2", "pressure": 0})])
     links = FakeSource([FakeFeature({"id": "L1", "group": "S1"}), FakeFeature({"id": "L2", "group": ""})])
     bind_common_parameters(
@@ -1834,7 +2784,7 @@ def test_ppno_from_network_writes_ext_and_rejects_crs(monkeypatch, tmp_path):
         algorithm,
         sources={algorithm.INPUT_NODES: nodes, algorithm.INPUT_LINES: links},
         fields={algorithm.FIELD_PRESSURE: "pressure", algorithm.FIELD_SERIES: "group"},
-        files={algorithm.INPUT_EPANET: INPUT_EPANET, algorithm.INPUT_TEMPLATE: INPUT_TEMPLATE, algorithm.OUTPUT: output},
+        files={algorithm.INPUT_EPANET: INPUT_EPANET, algorithm.INPUT_CATALOG: input_catalog, algorithm.OUTPUT: output},
         enums={algorithm.INPUT_ALGORITHMS: [0, 2]},
     )
 
@@ -1845,7 +2795,6 @@ def test_ppno_from_network_writes_ext_and_rejects_crs(monkeypatch, tmp_path):
     output_catalog = output.with_suffix(".cat")
     assert "[PIPE_CATALOG]" in text
     assert "output.cat" in text
-    assert "[PIPE_SIZES]" not in text
     assert "Algorithm    DE    NSGA2" in text
     assert "N1    20" in text
     assert "L1    S1" in text
@@ -1857,7 +2806,7 @@ def test_ppno_from_network_writes_ext_and_rejects_crs(monkeypatch, tmp_path):
         algorithm,
         sources={algorithm.INPUT_NODES: nodes, algorithm.INPUT_LINES: bad_links},
         fields={algorithm.FIELD_PRESSURE: "pressure", algorithm.FIELD_SERIES: "group"},
-        files={algorithm.INPUT_EPANET: INPUT_EPANET, algorithm.INPUT_TEMPLATE: INPUT_TEMPLATE, algorithm.OUTPUT: output},
+        files={algorithm.INPUT_EPANET: INPUT_EPANET, algorithm.INPUT_CATALOG: input_catalog, algorithm.OUTPUT: output},
         enums={algorithm.INPUT_ALGORITHMS: [0, 2]},
     )
     feedback = FakeFeedback()
@@ -1865,23 +2814,23 @@ def test_ppno_from_network_writes_ext_and_rejects_crs(monkeypatch, tmp_path):
     assert algorithm.processAlgorithm({}, None, feedback) == {}
     assert feedback.errors == ["ERROR: Layers have different CRS"]
 
-    INPUT_TEMPLATE.write_text("[TITLE]\n[INP]\n[OPTIONS]\n[PRESSURES]\n[PIPES]\n[END]", encoding="latin-1")
+    catalog_with_header = tmp_path / "bad.cat"
+    catalog_with_header.write_text("[PIPE_CATALOG]\nS1 100 120 10\n", encoding="latin-1")
     bind_common_parameters(
         monkeypatch,
         algorithm,
         sources={algorithm.INPUT_NODES: nodes, algorithm.INPUT_LINES: links},
         fields={algorithm.FIELD_PRESSURE: "pressure", algorithm.FIELD_SERIES: "group"},
-        files={algorithm.INPUT_EPANET: INPUT_EPANET, algorithm.INPUT_TEMPLATE: INPUT_TEMPLATE, algorithm.OUTPUT: output},
+        files={algorithm.INPUT_EPANET: INPUT_EPANET, algorithm.INPUT_CATALOG: catalog_with_header, algorithm.OUTPUT: output},
         enums={algorithm.INPUT_ALGORITHMS: [0, 2]},
     )
     feedback = FakeFeedback()
 
     assert algorithm.processAlgorithm({}, None, feedback) == {}
-    assert feedback.errors == ["ERROR: PPNO template missing sections: PIPE_CATALOG"]
+    assert feedback.errors == ["ERROR: PPNO pipe catalog must not contain section headers"]
 
-
-def test_scn_from_demands_writes_selected_junction_demands(monkeypatch, tmp_path):
-    algorithm = ScnFromDemandsAlgorithm()
+def test_demand_to_epanet_scenario_writes_selected_junction_demands(monkeypatch, tmp_path):
+    algorithm = DemandToEpanetScenarioAlgorithm()
     output = tmp_path / "demands.scn"
     nodes = FakeSource(
         [
@@ -1914,11 +2863,14 @@ def test_scn_from_demands_writes_selected_junction_demands(monkeypatch, tmp_path
         fields={algorithm.FIELD_DEMAND: []},
         files={algorithm.OUTPUT: output},
     )
-    assert algorithm.processAlgorithm({}, None, FakeFeedback()) == {}
+    feedback = FakeFeedback()
+
+    assert algorithm.processAlgorithm({}, None, feedback) == {}
+    assert feedback.errors == ["ERROR: Field containing demand is required"]
 
 
-def test_scn_from_pipe_properties_writes_only_pipes(monkeypatch, tmp_path):
-    algorithm = ScnFromPipePropertiesAlgorithm()
+def test_pipe_propierties_to_epanet_scenario_writes_only_pipes(monkeypatch, tmp_path):
+    algorithm = PipePropiertiesToEpanetScenarioAlgorithm()
     output = tmp_path / "scenario.scn"
     links = FakeSource(
         [
@@ -1942,5 +2894,3 @@ def test_scn_from_pipe_properties_writes_only_pipes(monkeypatch, tmp_path):
     assert "P1    100" in text
     assert "P2    150" in text
     assert "V1" not in text
-
-

@@ -19,7 +19,7 @@ def test_metadata_required_fields():
         'author',
     }
 
-    file_path = Path(__file__).resolve().parents[1] / 'metadata.txt'
+    file_path = Path(__file__).resolve().parents[1] / 'wnt' / 'metadata.txt'
     LOGGER.info(file_path)
 
     parser = configparser.ConfigParser()
@@ -40,7 +40,7 @@ def test_metadata_required_fields():
 
 def test_metadata_icon_exists():
     """The icon declared in metadata points to a packaged resource."""
-    plugin_dir = Path(__file__).resolve().parents[1]
+    plugin_dir = Path(__file__).resolve().parents[1] / 'wnt'
 
     parser = configparser.ConfigParser()
     parser.read(plugin_dir / 'metadata.txt')

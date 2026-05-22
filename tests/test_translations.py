@@ -2,6 +2,7 @@
 
 import ast
 from pathlib import Path
+import xml.etree.ElementTree as ET
 import pytest
 
 from .utilities import get_qgis_app
@@ -19,7 +20,8 @@ def test_qgis_translations(monkeypatch):
     """Water Network Tools translations load from the compiled plugin catalog."""
     monkeypatch.delenv('LANG', raising=False)
 
-    file_path = Path(__file__).resolve().parents[1] / 'i18n' / 'wnt_es.qm'
+    plugin_dir = Path(__file__).resolve().parents[1] / 'wnt'
+    file_path = plugin_dir / 'i18n' / 'wnt_es.qm'
 
     if not file_path.is_file():
         pytest.skip(f'Compiled translation file not found: {file_path}')
@@ -28,7 +30,7 @@ def test_qgis_translations(monkeypatch):
 
     assert translator.load(str(file_path))
 
-    source_file = Path(__file__).resolve().parents[1] / 'processes' / 'wnt_validate.py'
+    source_file = plugin_dir / 'processes' / 'wnt_validate.py'
     tree = ast.parse(source_file.read_text(encoding='utf-8-sig'))
     help_source = next(
         node.args[0].value
@@ -45,6 +47,51 @@ def test_qgis_translations(monkeypatch):
 
     assert translated_help.startswith('<p>Analiza el grafo de la red')
     assert '<code>problems</code>' in translated_help
+
+
+def test_translation_catalog_matches_translatable_sources():
+    """Every current tr() string is present in the Spanish catalog."""
+    plugin_dir = Path(__file__).resolve().parents[1] / 'wnt'
+    catalog = ET.parse(plugin_dir / 'i18n' / 'wnt_es.ts')
+    catalog_sources = {
+        source.text.replace('\r\n', '\n').replace('\r', '\n')
+        for source in catalog.findall('.//source')
+        if source.text
+    }
+    code_sources = set()
+
+    for source_file in plugin_dir.rglob('*.py'):
+        tree = ast.parse(source_file.read_text(encoding='utf-8-sig'))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call) or not node.args:
+                continue
+
+            function = node.func
+            is_translation_call = (
+                isinstance(function, ast.Attribute) and function.attr == 'tr'
+            ) or (
+                isinstance(function, ast.Name) and function.id == 'tr'
+            )
+            if not is_translation_call:
+                continue
+
+            argument = node.args[0]
+            if isinstance(argument, ast.Constant) and isinstance(argument.value, str):
+                code_sources.add(
+                    argument.value.replace('\r\n', '\n').replace('\r', '\n')
+                )
+
+    assert code_sources <= catalog_sources
+
+
+
+def test_spanish_catalog_has_no_mojibake_markers():
+    """Spanish translations should keep UTF-8 accents readable."""
+    plugin_dir = Path(__file__).resolve().parents[1] / 'wnt'
+    text = (plugin_dir / 'i18n' / 'wnt_es.ts').read_text(encoding='utf-8')
+
+    for marker in ('\u00c3', '\u00c2', '\ufffd', '\u00e2', '\u00c6', '\u0192', '\u2122'):
+        assert marker not in text
 
 
 def test_processing_toolbox_entries_are_not_translated():

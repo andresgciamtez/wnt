@@ -1,0 +1,197 @@
+"""Classify network links into branched and meshed areas."""
+
+from qgis.PyQt.QtCore import QMetaType
+from qgis.core import (QgsProcessing,
+                       QgsProcessingParameterEnum,
+                       QgsProcessingParameterFeatureSource,
+                       QgsProcessingParameterFeatureSink,
+                       QgsWkbTypes
+                       )
+from .base import (OUTPUT_MODE_NEW, OUTPUT_MODE_UPDATE, OUTPUT_MODE_OPTIONS,
+                   WntProcessingAlgorithm, add_missing_fields, feature_copy,
+                   field_index, qfield, update_layer_attributes)
+from ..utils import utils_graph as gr
+from .messages import error, finish, info, start
+
+class ClassifyAlgorithm(WntProcessingAlgorithm):
+    """
+    Build an epanet model file from node and link layers.
+    """
+
+    # DEFINE CONSTANTS
+    INPUT_LINES = 'INPUT_LINES'
+    OUTPUT_MODE = 'OUTPUT_MODE'
+    OUTPUT_LINES = 'OUTPUT_LINES'
+
+
+
+    def createInstance(self):
+        """
+        Create a instance and return a new copy of algorithm.
+        """
+        return ClassifyAlgorithm()
+
+    def name(self):
+        """
+        Returns the unique algorithm name, used for identifying the algorithm.
+        """
+        return 'classify'
+
+    def displayName(self):
+        """
+        Returns the translated algorithm name, which should be used for any
+        user-visible display of the algorithm name.
+        """
+        return 'Classify'
+
+    def group(self):
+        """
+         Returns the name of the group this algorithm belongs to.
+        """
+        return 'Graph'
+
+    def groupId(self):
+        """
+        Returns the unique ID of the group this algorithm belongs to.
+        """
+        return 'graph'
+
+    def shortHelpString(self):
+        """
+        Returns a localised short helper string for the algorithm.
+        """
+        return self.tr('''<p>Classifies network links into branched and meshed areas.</p>
+<ul>
+<li>Adds or updates <code>topology</code>: <code>branched</code> or <code>mesh</code>.</li>
+<li>Adds or updates <code>zones</code>: subnetwork identifier.</li>
+<li>Can create a new output layer or update the input link layer.</li>
+</ul>
+<p>Use this algorithm to support network sectorization.</p>
+        ''')
+
+    def initAlgorithm(self, config=None):
+        """
+        Define the inputs and outputs of the algorithm.
+        """
+
+        # ADD THE INPUT NETWORK LINKS
+        self.addParameter(
+            QgsProcessingParameterFeatureSource(
+                self.INPUT_LINES,
+                self.tr('Network links layer input'),
+                [QgsProcessing.TypeVectorLine]
+                )
+            )
+        self.addParameter(
+            QgsProcessingParameterEnum(
+                self.OUTPUT_MODE,
+                self.tr('Output mode'),
+                options=[self.tr(option) for option in OUTPUT_MODE_OPTIONS],
+                defaultValue=OUTPUT_MODE_NEW,
+                optional=False
+                )
+            )
+
+        # ADD LINK FEATURE SINK
+        self.addParameter(
+            QgsProcessingParameterFeatureSink(
+                self.OUTPUT_LINES,
+                self.tr('Subnetwork link layer'),
+                optional=True
+                )
+            )
+
+    def processAlgorithm(self, parameters, context, feedback):
+        """
+        RUN PROCESS
+        """
+        # INPUT
+        output_mode = self.parameterAsEnum(parameters, self.OUTPUT_MODE, context)
+        if output_mode == OUTPUT_MODE_UPDATE:
+            links = self.parameterAsVectorLayer(parameters, self.INPUT_LINES, context)
+        else:
+            links = self.parameterAsSource(parameters, self.INPUT_LINES, context)
+
+        # CREATE NETWORK
+        netg = gr.Graph()
+        link_features = list(links.getFeatures())
+        nofl = len(link_features)
+        for cnt, feature in enumerate(link_features, start=1):
+            netg.add_edge(feature['id'], feature['start'], feature['end'])
+            if cnt % 100 == 0:
+                feedback.setProgress(25 * cnt / nofl)
+
+        # GENERATE SUBNETWORKS
+        classified = netg.classify()
+
+        field_defs = [qfield('topology', QMetaType.QString), qfield('zones', QMetaType.Int)]
+        if output_mode == OUTPUT_MODE_UPDATE:
+            try:
+                fields = add_missing_fields(links, field_defs)
+            except RuntimeError as exc:
+                error(feedback, str(exc))
+                return {}
+            topology_idx = field_index(fields, 'topology')
+            zones_idx = field_index(fields, 'zones')
+            updates = {}
+            cnt = 0
+            for feature in link_features:
+                cnt += 1
+                topology, zone = classified[feature['id']]
+                updates[feature.id()] = {topology_idx: topology_value(topology), zones_idx: zone}
+                if cnt % 100 == 0:
+                    feedback.setProgress(75 + 25 * cnt / nofl)
+            try:
+                update_layer_attributes(links, updates)
+            except RuntimeError as exc:
+                error(feedback, str(exc))
+                return {}
+            link_id = getattr(links, 'id', lambda: self.INPUT_LINES)()
+        else:
+            newfields = links.fields()
+            for field in field_defs:
+                if field_index(newfields, field.name()) < 0:
+                    newfields.append(field)
+            topology_idx = field_index(newfields, 'topology')
+            zones_idx = field_index(newfields, 'zones')
+            (link_sink, link_id) = self.parameterAsSink(
+                parameters,
+                self.OUTPUT_LINES,
+                context,
+                newfields,
+                QgsWkbTypes.LineString,
+                crs=links.sourceCrs()
+                )
+            cnt = 0
+            for feature in link_features:
+                cnt += 1
+                topology, zone = classified[feature['id']]
+                link_sink.addFeature(feature_copy(
+                    feature,
+                    newfields,
+                    updates={'topology': topology_value(topology), 'zones': zone},
+                ))
+                if cnt % 100 == 0:
+                    feedback.setProgress(75 + 25 * cnt / nofl)
+
+        # SHOW INFO
+        start(feedback, self.displayName())
+        info(feedback, "Input links", nofl)
+        info(feedback, "Classified links", nofl)
+        info(feedback, "Output mode", OUTPUT_MODE_OPTIONS[output_mode])
+        finish(feedback)
+
+        # PROCCES CANCELED
+        if feedback.isCanceled():
+            return {}
+
+        # OUTPUT
+        return {self.OUTPUT_LINES: link_id}
+
+
+def topology_value(value):
+    """Return public topology labels for graph classifications."""
+    return {
+        "BRANCHED": "branched",
+        "MESHED": "mesh",
+    }[value]

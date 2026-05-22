@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="qualified">
+  <xs:element name="wntNetworkStore">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="network" maxOccurs="unbounded">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="version" maxOccurs="unbounded">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="metadata" minOccurs="0" type="PropertyListType"/>
+                    <xs:element name="nodes" type="NodesType"/>
+                    <xs:element name="links" type="LinksType"/>
+                  </xs:sequence>
+                  <xs:attribute name="id" type="xs:string" use="required"/>
+                  <xs:attribute name="created" type="xs:string" use="required"/>
+                  <xs:attribute name="modelType" type="xs:string" use="required"/>
+                  <xs:attribute name="source" type="xs:string" use="optional"/>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+            <xs:attribute name="id" type="xs:string" use="required"/>
+            <xs:attribute name="name" type="xs:string" use="optional"/>
+            <xs:attribute name="crs" type="xs:string" use="optional"/>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+      <xs:attribute name="schemaVersion" type="xs:string" use="required" fixed="1.0"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:complexType name="NodesType">
+    <xs:sequence>
+      <xs:element name="node" maxOccurs="unbounded">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="properties" type="DomainPropertiesType" minOccurs="0" maxOccurs="unbounded"/>
+          </xs:sequence>
+          <xs:attribute name="id" type="xs:string" use="required"/>
+          <xs:attribute name="type" type="xs:string" use="required"/>
+          <xs:attribute name="x" type="xs:double" use="required"/>
+          <xs:attribute name="y" type="xs:double" use="required"/>
+          <xs:attribute name="elevation" type="xs:double" use="optional"/>
+        </xs:complexType>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="LinksType">
+    <xs:sequence>
+      <xs:element name="link" minOccurs="0" maxOccurs="unbounded">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="vertices" type="VerticesType"/>
+            <xs:element name="properties" type="DomainPropertiesType" minOccurs="0" maxOccurs="unbounded"/>
+          </xs:sequence>
+          <xs:attribute name="id" type="xs:string" use="required"/>
+          <xs:attribute name="start" type="xs:string" use="required"/>
+          <xs:attribute name="end" type="xs:string" use="required"/>
+          <xs:attribute name="type" type="xs:string" use="required"/>
+          <xs:attribute name="length" type="xs:double" use="optional"/>
+        </xs:complexType>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="VerticesType">
+    <xs:sequence>
+      <xs:element name="vertex" maxOccurs="unbounded">
+        <xs:complexType>
+          <xs:attribute name="x" type="xs:double" use="required"/>
+          <xs:attribute name="y" type="xs:double" use="required"/>
+        </xs:complexType>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="DomainPropertiesType">
+    <xs:sequence>
+      <xs:element name="property" minOccurs="0" maxOccurs="unbounded" type="PropertyType"/>
+    </xs:sequence>
+    <xs:attribute name="domain" type="xs:string" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="PropertyListType">
+    <xs:sequence>
+      <xs:element name="property" minOccurs="0" maxOccurs="unbounded" type="PropertyType"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="PropertyType">
+    <xs:attribute name="name" type="xs:string" use="required"/>
+    <xs:attribute name="type" type="xs:string" use="required"/>
+    <xs:attribute name="value" type="xs:string" use="optional"/>
+  </xs:complexType>
+</xs:schema>
