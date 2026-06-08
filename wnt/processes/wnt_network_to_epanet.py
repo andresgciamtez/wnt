@@ -56,13 +56,13 @@ class NetworkToEpanetAlgorithm(WntProcessingAlgorithm):
         Returns the translated algorithm name, which should be used for any
         user-visible display of the algorithm name.
         """
-        return 'Network to epanet file (.inp)'
+        return self.tr('Network to epanet file (.inp)')
 
     def group(self):
         """
          Returns the name of the group this algorithm belongs to.
         """
-        return 'Export'
+        return self.tr('Export')
 
     def groupId(self):
         """

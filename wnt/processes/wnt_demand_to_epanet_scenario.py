@@ -40,7 +40,7 @@ class DemandToEpanetScenarioAlgorithm(WntProcessingAlgorithm):
         """
          Returns the name of the group this algorithm belongs to.
         """
-        return 'Export'
+        return self.tr('Export')
 
     def groupId(self):
         """

@@ -48,13 +48,13 @@ class ElevationFromTINAlgorithm(WntProcessingAlgorithm):
         """
         Returns the translated algorithm name.
         """
-        return 'Node elevation from TIN (LandXML)'
+        return self.tr('Node elevation from TIN (LandXML)')
 
     def group(self):
         """
         Returns the name of the group this algorithm belongs to.
         """
-        return 'Modify'
+        return self.tr('Modify')
 
     def groupId(self):
         """

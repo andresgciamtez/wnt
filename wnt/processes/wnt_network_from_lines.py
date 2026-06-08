@@ -124,7 +124,7 @@ class NetworkFromLinesAlgorithm(WntProcessingAlgorithm):
         """
         Returns the name of the group this algorithm belongs to.
         """
-        return 'Build'
+        return self.tr('Build')
 
     def groupId(self):
         """

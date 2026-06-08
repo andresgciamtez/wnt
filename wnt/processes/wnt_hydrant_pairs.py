@@ -45,13 +45,13 @@ class HydrantPairsAlgorithm(WntProcessingAlgorithm):
         """
         Returns the translated algorithm name.
         """
-        return 'Hydrant pairs'
+        return self.tr('Hydrant pairs')
 
     def group(self):
         """
         Returns the name of the group this algorithm belongs to.
         """
-        return 'Fire'
+        return self.tr('Fire')
 
     def groupId(self):
         """

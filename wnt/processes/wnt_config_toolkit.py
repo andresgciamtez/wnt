@@ -45,7 +45,7 @@ class ConfigToolkitAlgorithm(WntProcessingAlgorithm):
         """
          Returns the name of the group this algorithm belongs to.
         """
-        return 'Import'
+        return self.tr('Import')
 
     def groupId(self):
         """

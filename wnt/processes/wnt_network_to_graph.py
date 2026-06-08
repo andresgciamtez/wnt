@@ -42,7 +42,7 @@ class NetworkToGraphAlgorithm(WntProcessingAlgorithm):
         """
         Returns the name of the group this algorithm belongs to.
         """
-        return 'Graph'
+        return self.tr('Graph')
 
     def groupId(self):
         """

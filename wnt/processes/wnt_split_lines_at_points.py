@@ -186,13 +186,13 @@ class SplitLinesAtPointsAlgorithm(WntProcessingAlgorithm):
         Returns the translated algorithm name, which should be used for any
         user-visible display of the algorithm name.
         """
-        return 'Split lines at points'
+        return self.tr('Split lines at points')
 
     def group(self):
         """
          Returns the name of the group this algorithm belongs to.
         """
-        return 'Modify'
+        return self.tr('Modify')
 
     def groupId(self):
         """

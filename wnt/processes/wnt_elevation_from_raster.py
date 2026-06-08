@@ -43,13 +43,13 @@ class ElevationFromRasterAlgorithm(WntProcessingAlgorithm):
         """
         Returns the translated algorithm name.
         """
-        return 'Node elevation from DEM'
+        return self.tr('Node elevation from DEM')
 
     def group(self):
         """
         Returns the name of the group this algorithm belongs to.
         """
-        return 'Modify'
+        return self.tr('Modify')
 
     def groupId(self):
         """

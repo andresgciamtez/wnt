@@ -231,10 +231,10 @@ class NetworkFromXmlAlgorithm(WntProcessingAlgorithm):
         return "network_from_xml"
 
     def displayName(self):
-        return "Network from XML"
+        return self.tr("Network from XML")
 
     def group(self):
-        return "Import"
+        return self.tr("Import")
 
     def groupId(self):
         return "import"

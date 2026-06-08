@@ -83,16 +83,15 @@
 &lt;/ul&gt;
 &lt;p&gt;Results are written to the &lt;code&gt;degree&lt;/code&gt; field.&lt;/p&gt;
         </source>
-            <translation>&lt;p&gt;Calculates the graph degree of each network node.&lt;/p&gt;
+            <translation>&lt;p&gt;Calcula el grado de cada nodo de la red.&lt;/p&gt;
 &lt;ul&gt;
-&lt;li&gt;The degree is the number of links connected to a node.&lt;/li&gt;
-&lt;li&gt;Orphan nodes have degree &lt;code&gt;0&lt;/code&gt;.&lt;/li&gt;
-&lt;li&gt;Leaf nodes have degree &lt;code&gt;1&lt;/code&gt;.&lt;/li&gt;
-&lt;li&gt;Continuity nodes have degree &lt;code&gt;2&lt;/code&gt;.&lt;/li&gt;
-&lt;li&gt;Can create a new output layer or update the input node layer.&lt;/li&gt;
+&lt;li&gt;El grado es el número de links conectados a un nodo.&lt;/li&gt;
+&lt;li&gt;Los nodos huérfanos tienen grado &lt;code&gt;0&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;Los nodos hoja tienen grado &lt;code&gt;1&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;Los nodos de continuidad tienen grado &lt;code&gt;2&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;Puede crear una capa de salida nueva o actualizar la capa de nodos de entrada.&lt;/li&gt;
 &lt;/ul&gt;
-&lt;p&gt;Results are written to the &lt;code&gt;degree&lt;/code&gt; field.&lt;/p&gt;
-        </translation>
+&lt;p&gt;Los resultados se escriben en el campo &lt;code&gt;degree&lt;/code&gt;.&lt;/p&gt;</translation>
         </message>
         <message>
             <source>&lt;p&gt;Classifies network links into branched and meshed areas.&lt;/p&gt;
@@ -103,14 +102,13 @@
 &lt;/ul&gt;
 &lt;p&gt;Use this algorithm to support network sectorization.&lt;/p&gt;
         </source>
-            <translation>&lt;p&gt;Classifies network links into branched and meshed areas.&lt;/p&gt;
+            <translation>&lt;p&gt;Clasifica los links de la red en áreas ramificadas y malladas.&lt;/p&gt;
 &lt;ul&gt;
-&lt;li&gt;Adds or updates &lt;code&gt;topology&lt;/code&gt;: &lt;code&gt;branched&lt;/code&gt; or &lt;code&gt;mesh&lt;/code&gt;.&lt;/li&gt;
-&lt;li&gt;Adds or updates &lt;code&gt;zone&lt;/code&gt;: subnetwork identifier.&lt;/li&gt;
-&lt;li&gt;Can create a new output layer or update the input link layer.&lt;/li&gt;
+&lt;li&gt;Añade o actualiza &lt;code&gt;topology&lt;/code&gt;: &lt;code&gt;branched&lt;/code&gt; o &lt;code&gt;mesh&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;Añade o actualiza &lt;code&gt;zone&lt;/code&gt;: identificador de subred.&lt;/li&gt;
+&lt;li&gt;Puede crear una capa de salida nueva o actualizar la capa de links de entrada.&lt;/li&gt;
 &lt;/ul&gt;
-&lt;p&gt;Use this algorithm to support network sectorization.&lt;/p&gt;
-        </translation>
+&lt;p&gt;Usa este algoritmo como apoyo a la sectorización de redes.&lt;/p&gt;</translation>
         </message>
         <message>
             <location filename="../processes/wnt_classify.py" line="63" />
@@ -122,14 +120,13 @@
 &lt;/ul&gt;
 &lt;p&gt;Use this algorithm to support network sectorization.&lt;/p&gt;
         </source>
-            <translation>&lt;p&gt;Classifies network links into branched and meshed areas.&lt;/p&gt;
+            <translation>&lt;p&gt;Clasifica los links de la red en áreas ramificadas y malladas.&lt;/p&gt;
 &lt;ul&gt;
-&lt;li&gt;Adds or updates &lt;code&gt;topology&lt;/code&gt;: &lt;code&gt;branched&lt;/code&gt; or &lt;code&gt;mesh&lt;/code&gt;.&lt;/li&gt;
-&lt;li&gt;Adds or updates &lt;code&gt;zones&lt;/code&gt;: subnetwork identifier.&lt;/li&gt;
-&lt;li&gt;Can create a new output layer or update the input link layer.&lt;/li&gt;
+&lt;li&gt;Añade o actualiza &lt;code&gt;topology&lt;/code&gt;: &lt;code&gt;branched&lt;/code&gt; o &lt;code&gt;mesh&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;Añade o actualiza &lt;code&gt;zones&lt;/code&gt;: identificador de subred.&lt;/li&gt;
+&lt;li&gt;Puede crear una capa de salida nueva o actualizar la capa de links de entrada.&lt;/li&gt;
 &lt;/ul&gt;
-&lt;p&gt;Use this algorithm to support network sectorization.&lt;/p&gt;
-        </translation>
+&lt;p&gt;Usa este algoritmo como apoyo a la sectorización de redes.&lt;/p&gt;</translation>
         </message>
         <message>
             <source>&lt;p&gt;Connects features from a &lt;b&gt;source layer&lt;/b&gt; to a &lt;b&gt;target layer&lt;/b&gt; by minimum distance.&lt;/p&gt;
@@ -175,15 +172,14 @@
 &lt;li&gt;The pipe catalog is selected directly as an external &lt;code&gt;.cat&lt;/code&gt; file.&lt;/li&gt;
 &lt;/ul&gt;
         </source>
-            <translation>&lt;p&gt;Creates a pipesizing &lt;code&gt;.pro&lt;/code&gt; data file.&lt;/p&gt;
+            <translation>&lt;p&gt;Crea un archivo de datos pipesizing &lt;code&gt;.pro&lt;/code&gt;.&lt;/p&gt;
 &lt;ul&gt;
-&lt;li&gt;The required peak-flow and fire-flow pressures must be stored in node layer fields.&lt;/li&gt;
-&lt;li&gt;The pipe series name must be stored in a link layer field.&lt;/li&gt;
-&lt;li&gt;Optional hydrant pair/fire scenario lines can be written from a hydrant pairs layer.&lt;/li&gt;
-&lt;li&gt;The EPANET &lt;code&gt;.inp&lt;/code&gt; file path is written relative to the &lt;code&gt;.pro&lt;/code&gt; file.&lt;/li&gt;
-&lt;li&gt;The pipe catalog is selected directly as an external &lt;code&gt;.cat&lt;/code&gt; file.&lt;/li&gt;
-&lt;/ul&gt;
-        </translation>
+&lt;li&gt;Las presiones requeridas para caudal punta e incendio deben estar almacenadas en campos de la capa de nodos.&lt;/li&gt;
+&lt;li&gt;El nombre de la serie de tuberías debe estar almacenado en un campo de la capa de links.&lt;/li&gt;
+&lt;li&gt;Opcionalmente se pueden escribir pares de hidrantes/escenarios de incendio desde una capa de pares de hidrantes.&lt;/li&gt;
+&lt;li&gt;La ruta del archivo EPANET &lt;code&gt;.inp&lt;/code&gt; se escribe relativa al archivo &lt;code&gt;.pro&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;El catálogo de tuberías se selecciona directamente como archivo externo &lt;code&gt;.cat&lt;/code&gt;.&lt;/li&gt;
+&lt;/ul&gt;</translation>
         </message>
         <message>
             <location filename="../processes/wnt_network_to_pipesizing.py" line="82" />
@@ -195,14 +191,13 @@
 &lt;li&gt;The pipe catalog is selected directly as an external &lt;code&gt;.cat&lt;/code&gt; file.&lt;/li&gt;
 &lt;/ul&gt;
         </source>
-            <translation>&lt;p&gt;Creates a pipesizing &lt;code&gt;.pro&lt;/code&gt; data file.&lt;/p&gt;
+            <translation>&lt;p&gt;Crea un archivo de datos pipesizing &lt;code&gt;.pro&lt;/code&gt;.&lt;/p&gt;
 &lt;ul&gt;
-&lt;li&gt;The required pressure must be stored in a node layer field.&lt;/li&gt;
-&lt;li&gt;The pipe series name must be stored in a link layer field.&lt;/li&gt;
-&lt;li&gt;The EPANET &lt;code&gt;.inp&lt;/code&gt; file path is written relative to the &lt;code&gt;.pro&lt;/code&gt; file.&lt;/li&gt;
-&lt;li&gt;The pipe catalog is selected directly as an external &lt;code&gt;.cat&lt;/code&gt; file.&lt;/li&gt;
-&lt;/ul&gt;
-        </translation>
+&lt;li&gt;La presión requerida debe estar almacenada en un campo de la capa de nodos.&lt;/li&gt;
+&lt;li&gt;El nombre de la serie de tuberías debe estar almacenado en un campo de la capa de links.&lt;/li&gt;
+&lt;li&gt;La ruta del archivo EPANET &lt;code&gt;.inp&lt;/code&gt; se escribe relativa al archivo &lt;code&gt;.pro&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;El catálogo de tuberías se selecciona directamente como archivo externo &lt;code&gt;.cat&lt;/code&gt;.&lt;/li&gt;
+&lt;/ul&gt;</translation>
         </message>
         <message>
             <source>&lt;p&gt;Creates an EPANET &lt;code&gt;.inp&lt;/code&gt; file from network node and link layers.&lt;/p&gt;
@@ -216,17 +211,16 @@
 &lt;li&gt;Pipe diameter and roughness are not exported; add them using scenario files.&lt;/li&gt;
 &lt;/ul&gt;
         </source>
-            <translation>&lt;p&gt;Creates an EPANET &lt;code&gt;.inp&lt;/code&gt; file from network node and link layers.&lt;/p&gt;
+            <translation>&lt;p&gt;Crea un archivo EPANET &lt;code&gt;.inp&lt;/code&gt; desde capas de nodos y links de red.&lt;/p&gt;
 &lt;ul&gt;
-&lt;li&gt;Output mode “Add links and nodes to existing EPANET model” adds the selected node and link layers to an existing EPANET &lt;code&gt;.inp&lt;/code&gt; model; EPANET version and flow units are ignored.&lt;/li&gt;
-&lt;li&gt;Output mode “Create EPANET model from scratch” creates a new EPANET model from a minimal internal template; select the EPANET version and flow units.&lt;/li&gt;
-&lt;li&gt;Adds nodes to &lt;code&gt;JUNCTIONS&lt;/code&gt;, &lt;code&gt;RESERVOIRS&lt;/code&gt;, or &lt;code&gt;TANKS&lt;/code&gt;.&lt;/li&gt;
-&lt;li&gt;Adds links to &lt;code&gt;PIPES&lt;/code&gt;, &lt;code&gt;PUMPS&lt;/code&gt;, or &lt;code&gt;VALVES&lt;/code&gt;.&lt;/li&gt;
-&lt;li&gt;The final network graph is validated before writing the EPANET file.&lt;/li&gt;
-&lt;li&gt;Exports coordinates and intermediate vertices.&lt;/li&gt;
-&lt;li&gt;Pipe diameter and roughness are not exported; add them using scenario files.&lt;/li&gt;
-&lt;/ul&gt;
-        </translation>
+&lt;li&gt;El modo de salida “Add links and nodes to existing EPANET model” añade las capas de nodos y links seleccionadas a un modelo EPANET &lt;code&gt;.inp&lt;/code&gt; existente; se ignoran la versión de EPANET y las unidades de caudal.&lt;/li&gt;
+&lt;li&gt;El modo de salida “Create EPANET model from scratch” crea un modelo EPANET nuevo desde una plantilla interna mínima; selecciona la versión de EPANET y las unidades de caudal.&lt;/li&gt;
+&lt;li&gt;Añade nodos a &lt;code&gt;JUNCTIONS&lt;/code&gt;, &lt;code&gt;RESERVOIRS&lt;/code&gt; o &lt;code&gt;TANKS&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;Añade links a &lt;code&gt;PIPES&lt;/code&gt;, &lt;code&gt;PUMPS&lt;/code&gt; o &lt;code&gt;VALVES&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;El grafo final de la red se valida antes de escribir el archivo EPANET.&lt;/li&gt;
+&lt;li&gt;Exporta coordenadas y vértices intermedios.&lt;/li&gt;
+&lt;li&gt;El diámetro y la rugosidad de tuberías no se exportan; añádelos usando archivos de escenario.&lt;/li&gt;
+&lt;/ul&gt;</translation>
         </message>
         <message>
             <location filename="../processes/wnt_network_to_epanet.py" line="76" />
@@ -240,16 +234,15 @@
 &lt;li&gt;Pipe diameter and roughness are not exported; add them using scenario files.&lt;/li&gt;
 &lt;/ul&gt;
         </source>
-            <translation>&lt;p&gt;Creates an EPANET &lt;code&gt;.inp&lt;/code&gt; file from network node and link layers.&lt;/p&gt;
+            <translation>&lt;p&gt;Crea un archivo EPANET &lt;code&gt;.inp&lt;/code&gt; desde capas de nodos y links de red.&lt;/p&gt;
 &lt;ul&gt;
-&lt;li&gt;Workflow A adds the selected node and link layers to an existing EPANET &lt;code&gt;.inp&lt;/code&gt; model; EPANET version and flow units are ignored.&lt;/li&gt;
-&lt;li&gt;Workflow B creates a new EPANET model from a minimal internal template; select the EPANET version and flow units.&lt;/li&gt;
-&lt;li&gt;Adds nodes to &lt;code&gt;JUNCTIONS&lt;/code&gt;, &lt;code&gt;RESERVOIRS&lt;/code&gt;, or &lt;code&gt;TANKS&lt;/code&gt;.&lt;/li&gt;
-&lt;li&gt;Adds links to &lt;code&gt;PIPES&lt;/code&gt;, &lt;code&gt;PUMPS&lt;/code&gt;, or &lt;code&gt;VALVES&lt;/code&gt;.&lt;/li&gt;
-&lt;li&gt;Exports coordinates and intermediate vertices.&lt;/li&gt;
-&lt;li&gt;Pipe diameter and roughness are not exported; add them using scenario files.&lt;/li&gt;
-&lt;/ul&gt;
-        </translation>
+&lt;li&gt;El flujo A añade las capas de nodos y links seleccionadas a un modelo EPANET &lt;code&gt;.inp&lt;/code&gt; existente; se ignoran la versión de EPANET y las unidades de caudal.&lt;/li&gt;
+&lt;li&gt;El flujo B crea un modelo EPANET nuevo desde una plantilla interna mínima; selecciona la versión de EPANET y las unidades de caudal.&lt;/li&gt;
+&lt;li&gt;Añade nodos a &lt;code&gt;JUNCTIONS&lt;/code&gt;, &lt;code&gt;RESERVOIRS&lt;/code&gt; o &lt;code&gt;TANKS&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;Añade links a &lt;code&gt;PIPES&lt;/code&gt;, &lt;code&gt;PUMPS&lt;/code&gt; o &lt;code&gt;VALVES&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;Exporta coordenadas y vértices intermedios.&lt;/li&gt;
+&lt;li&gt;El diámetro y la rugosidad de tuberías no se exportan; añádelos usando archivos de escenario.&lt;/li&gt;
+&lt;/ul&gt;</translation>
         </message>
         <message>
             <source>&lt;p&gt;Creates an EPANET &lt;code&gt;.scn&lt;/code&gt; scenario file with pipe diameters and roughness values.&lt;/p&gt;
@@ -305,13 +298,12 @@
 &lt;li&gt;Pairs farther apart than the maximum separation are not generated.&lt;/li&gt;
 &lt;/ul&gt;
         </source>
-            <translation>&lt;p&gt;Creates hydrant pairs/calculation scenarios from a hydrant layer.&lt;/p&gt;
+            <translation>&lt;p&gt;Crea pares de hidrantes/escenarios de cálculo a partir de una capa de hidrantes.&lt;/p&gt;
 &lt;ul&gt;
-&lt;li&gt;The output is a line layer connecting paired hydrants/fire scenarios.&lt;/li&gt;
-&lt;li&gt;The line geometry helps verify that pairs can be connected through public space.&lt;/li&gt;
-&lt;li&gt;Pairs farther apart than the maximum separation are not generated.&lt;/li&gt;
-&lt;/ul&gt;
-        </translation>
+&lt;li&gt;La salida es una capa de líneas que conecta los hidrantes/escenarios de incendio emparejados.&lt;/li&gt;
+&lt;li&gt;La geometría de las líneas ayuda a verificar que los pares pueden conectarse por espacio público.&lt;/li&gt;
+&lt;li&gt;No se generan pares separados por una distancia mayor que la separación máxima.&lt;/li&gt;
+&lt;/ul&gt;</translation>
         </message>
         <message>
             <source>&lt;p&gt;Exports network node and link layers to XML.&lt;/p&gt;
@@ -320,12 +312,11 @@
 &lt;li&gt;&lt;code&gt;LandXML 1.2&lt;/code&gt; writes a pipe network with the selected standard network type: sanitary, storm, water or other.&lt;/li&gt;
 &lt;/ul&gt;
         </source>
-            <translation>&lt;p&gt;Exports network node and link layers to XML.&lt;/p&gt;
+            <translation>&lt;p&gt;Exporta capas de nodos y links de red a XML.&lt;/p&gt;
 &lt;ul&gt;
-&lt;li&gt;&lt;code&gt;WNT Network XML&lt;/code&gt; stores topology and domain property bags using the network name as both network and version name.&lt;/li&gt;
-&lt;li&gt;&lt;code&gt;LandXML 1.2&lt;/code&gt; writes a pipe network with the selected standard network type: sanitary, storm, water or other.&lt;/li&gt;
-&lt;/ul&gt;
-        </translation>
+&lt;li&gt;&lt;code&gt;WNT Network XML&lt;/code&gt; almacena la topología y las propiedades de dominio usando el nombre de red como nombre de red y de versión.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;LandXML 1.2&lt;/code&gt; escribe una red de tuberías con el tipo de red estándar seleccionado: sanitary, storm, water u other.&lt;/li&gt;
+&lt;/ul&gt;</translation>
         </message>
         <message>
             <source>&lt;p&gt;Exports the network topology to a Trivial Graph Format file.&lt;/p&gt;
@@ -366,14 +357,13 @@
 &lt;/ul&gt;
 &lt;p&gt;Configure the EPANET toolkit library before running this algorithm.&lt;/p&gt;
         </source>
-            <translation>&lt;p&gt;Imports hydraulic and quality results from an EPANET simulation.&lt;/p&gt;
+            <translation>&lt;p&gt;Importa resultados hidráulicos y de calidad desde una simulación EPANET.&lt;/p&gt;
 &lt;ul&gt;
-&lt;li&gt;Node results: &lt;code&gt;time&lt;/code&gt;, &lt;code&gt;demand&lt;/code&gt;, &lt;code&gt;head&lt;/code&gt;, &lt;code&gt;pressure&lt;/code&gt;.&lt;/li&gt;
-&lt;li&gt;Link results: &lt;code&gt;time&lt;/code&gt;, &lt;code&gt;flow&lt;/code&gt;, &lt;code&gt;velocity&lt;/code&gt;, &lt;code&gt;headloss&lt;/code&gt;, &lt;code&gt;status&lt;/code&gt;, &lt;code&gt;setting&lt;/code&gt;, &lt;code&gt;energy&lt;/code&gt;.&lt;/li&gt;
-&lt;li&gt;Quality results: &lt;code&gt;time&lt;/code&gt;, &lt;code&gt;id&lt;/code&gt;, &lt;code&gt;quality&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;Resultados de nodos: &lt;code&gt;time&lt;/code&gt;, &lt;code&gt;demand&lt;/code&gt;, &lt;code&gt;head&lt;/code&gt;, &lt;code&gt;pressure&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;Resultados de links: &lt;code&gt;time&lt;/code&gt;, &lt;code&gt;flow&lt;/code&gt;, &lt;code&gt;velocity&lt;/code&gt;, &lt;code&gt;headloss&lt;/code&gt;, &lt;code&gt;status&lt;/code&gt;, &lt;code&gt;setting&lt;/code&gt;, &lt;code&gt;energy&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;Resultados de calidad: &lt;code&gt;time&lt;/code&gt;, &lt;code&gt;id&lt;/code&gt;, &lt;code&gt;quality&lt;/code&gt;.&lt;/li&gt;
 &lt;/ul&gt;
-&lt;p&gt;Configure the EPANET toolkit library before running this algorithm.&lt;/p&gt;
-        </translation>
+&lt;p&gt;Configura la biblioteca del toolkit de EPANET antes de ejecutar este algoritmo.&lt;/p&gt;</translation>
         </message>
         <message>
             <location filename="../processes/wnt_results_from_epanet.py" line="62" />
@@ -399,13 +389,12 @@
 &lt;li&gt;Network names are written as a comma or semicolon separated list. If empty, all networks are loaded.&lt;/li&gt;
 &lt;/ul&gt;
         </source>
-            <translation>&lt;p&gt;Imports network node and link layers from XML.&lt;/p&gt;
+            <translation>&lt;p&gt;Importa capas de nodos y links de red desde XML.&lt;/p&gt;
 &lt;ul&gt;
-&lt;li&gt;&lt;code&gt;WNT Network XML&lt;/code&gt; files are loaded by network name and version; empty version loads the latest version for each selected network.&lt;/li&gt;
-&lt;li&gt;&lt;code&gt;LandXML 1.2&lt;/code&gt; pipe networks are converted to WNT node and link layers.&lt;/li&gt;
-&lt;li&gt;Network names are written as a comma or semicolon separated list. If empty, all networks are loaded.&lt;/li&gt;
-&lt;/ul&gt;
-        </translation>
+&lt;li&gt;Los archivos &lt;code&gt;WNT Network XML&lt;/code&gt; se cargan por nombre de red y versión; si la versión está vacía, se carga la última versión de cada red seleccionada.&lt;/li&gt;
+&lt;li&gt;Las redes de tuberías &lt;code&gt;LandXML 1.2&lt;/code&gt; se convierten a capas WNT de nodos y links.&lt;/li&gt;
+&lt;li&gt;Los nombres de red se escriben como una lista separada por comas o punto y coma. Si se deja vacío, se cargan todas las redes.&lt;/li&gt;
+&lt;/ul&gt;</translation>
         </message>
         <message>
             <source>&lt;p&gt;Merges two networks from their node and link layers.&lt;/p&gt;
@@ -418,16 +407,15 @@
 &lt;li&gt;Output node and link layers are written in the selected CRS.&lt;/li&gt;
 &lt;/ul&gt;
         </source>
-            <translation>&lt;p&gt;Merges two networks from their node and link layers.&lt;/p&gt;
+            <translation>&lt;p&gt;Fusiona dos redes a partir de sus capas de nodos y links.&lt;/p&gt;
 &lt;ul&gt;
-&lt;li&gt;Nodes from the second network are connected to nodes from the first network when they are within the tolerance distance in the selected output CRS units.&lt;/li&gt;
-&lt;li&gt;Connected nodes keep the &lt;code&gt;id&lt;/code&gt; and position of the first network node.&lt;/li&gt;
-&lt;li&gt;Incident links from the second network are renamed and their endpoints are snapped to connected first-network nodes.&lt;/li&gt;
-&lt;li&gt;Links from the second network must not already exist in the first network by &lt;code&gt;id&lt;/code&gt; or by matching endpoints within the tolerance distance.&lt;/li&gt;
-&lt;li&gt;Near misses are reported when second-network nodes are closer than the configured near-merge factor times the tolerance.&lt;/li&gt;
-&lt;li&gt;Output node and link layers are written in the selected CRS.&lt;/li&gt;
-&lt;/ul&gt;
-        </translation>
+&lt;li&gt;Los nodos de la segunda red se conectan con nodos de la primera red cuando están dentro de la tolerancia en las unidades del SRC de salida seleccionado.&lt;/li&gt;
+&lt;li&gt;Los nodos conectados conservan el &lt;code&gt;id&lt;/code&gt; y la posición del nodo de la primera red.&lt;/li&gt;
+&lt;li&gt;Los links incidentes de la segunda red se renombran y sus extremos se ajustan a los nodos conectados de la primera red.&lt;/li&gt;
+&lt;li&gt;Los links de la segunda red no deben existir ya en la primera red por &lt;code&gt;id&lt;/code&gt; ni por extremos coincidentes dentro de la tolerancia.&lt;/li&gt;
+&lt;li&gt;Se informa de aproximaciones cuando los nodos de la segunda red están más cerca que el factor configurado por la tolerancia.&lt;/li&gt;
+&lt;li&gt;Las capas de nodos y links de salida se escriben en el SRC seleccionado.&lt;/li&gt;
+&lt;/ul&gt;</translation>
         </message>
         <message>
             <location filename="../processes/wnt_merge_networks.py" line="243" />
@@ -442,17 +430,16 @@
 &lt;/ul&gt;
 &lt;p&gt;Validate the merged network after running this algorithm.&lt;/p&gt;
         </source>
-            <translation>&lt;p&gt;Merges two networks from their node and link layers.&lt;/p&gt;
+            <translation>&lt;p&gt;Fusiona dos redes a partir de sus capas de nodos y links.&lt;/p&gt;
 &lt;ul&gt;
-&lt;li&gt;Nodes from the second network are connected to nodes from the first network when they are within the tolerance distance in the selected output CRS units.&lt;/li&gt;
-&lt;li&gt;Connected nodes keep the &lt;code&gt;id&lt;/code&gt; and position of the first network node.&lt;/li&gt;
-&lt;li&gt;Incident links from the second network are renamed and their endpoints are snapped to connected first-network nodes.&lt;/li&gt;
-&lt;li&gt;Links from the second network must not already exist in the first network by &lt;code&gt;id&lt;/code&gt; or by matching endpoints within the tolerance distance.&lt;/li&gt;
-&lt;li&gt;Near misses are reported when second-network nodes are closer than the configured near-merge factor times the tolerance.&lt;/li&gt;
-&lt;li&gt;Output node and link layers are written in the selected CRS.&lt;/li&gt;
+&lt;li&gt;Los nodos de la segunda red se conectan con nodos de la primera red cuando están dentro de la tolerancia en las unidades del SRC de salida seleccionado.&lt;/li&gt;
+&lt;li&gt;Los nodos conectados conservan el &lt;code&gt;id&lt;/code&gt; y la posición del nodo de la primera red.&lt;/li&gt;
+&lt;li&gt;Los links incidentes de la segunda red se renombran y sus extremos se ajustan a los nodos conectados de la primera red.&lt;/li&gt;
+&lt;li&gt;Los links de la segunda red no deben existir ya en la primera red por &lt;code&gt;id&lt;/code&gt; ni por extremos coincidentes dentro de la tolerancia.&lt;/li&gt;
+&lt;li&gt;Se informa de aproximaciones cuando los nodos de la segunda red están más cerca que el factor configurado por la tolerancia.&lt;/li&gt;
+&lt;li&gt;Las capas de nodos y links de salida se escriben en el SRC seleccionado.&lt;/li&gt;
 &lt;/ul&gt;
-&lt;p&gt;Validate the merged network after running this algorithm.&lt;/p&gt;
-        </translation>
+&lt;p&gt;Valida la red fusionada después de ejecutar este algoritmo.&lt;/p&gt;</translation>
         </message>
         <message>
             <source>&lt;p&gt;Sets node elevations from a raster DEM.&lt;/p&gt;
@@ -463,14 +450,13 @@
 &lt;li&gt;Can create a new output layer or update the input node layer.&lt;/li&gt;
 &lt;/ul&gt;
         </source>
-            <translation>&lt;p&gt;Sets node elevations from a raster DEM.&lt;/p&gt;
+            <translation>&lt;p&gt;Establece elevaciones de nodos desde un ráster MDE.&lt;/p&gt;
 &lt;ul&gt;
-&lt;li&gt;Reads elevation values from the DEM at each node position.&lt;/li&gt;
-&lt;li&gt;Writes the values to the selected elevation field.&lt;/li&gt;
-&lt;li&gt;Nodes outside the raster extent are reported as skipped and kept unchanged.&lt;/li&gt;
-&lt;li&gt;Can create a new output layer or update the input node layer.&lt;/li&gt;
-&lt;/ul&gt;
-        </translation>
+&lt;li&gt;Lee valores de elevación del MDE en la posición de cada nodo.&lt;/li&gt;
+&lt;li&gt;Escribe los valores en el campo de elevación seleccionado.&lt;/li&gt;
+&lt;li&gt;Los nodos fuera de la extensión del ráster se informan como omitidos y se mantienen sin cambios.&lt;/li&gt;
+&lt;li&gt;Puede crear una capa de salida nueva o actualizar la capa de nodos de entrada.&lt;/li&gt;
+&lt;/ul&gt;</translation>
         </message>
         <message>
             <source>&lt;p&gt;Sets node elevations from one LandXML TIN surface.&lt;/p&gt;
@@ -480,13 +466,12 @@
 &lt;li&gt;Can create a new output layer or update the input node layer.&lt;/li&gt;
 &lt;/ul&gt;
         </source>
-            <translation>&lt;p&gt;Sets node elevations from one LandXML TIN surface.&lt;/p&gt;
+            <translation>&lt;p&gt;Establece elevaciones de nodos desde una superficie TIN LandXML.&lt;/p&gt;
 &lt;ul&gt;
-&lt;li&gt;If no surface is selected, the first TIN surface found in the file is used and reported.&lt;/li&gt;
-&lt;li&gt;The selected surface is loaded once and searched with its spatial index.&lt;/li&gt;
-&lt;li&gt;Can create a new output layer or update the input node layer.&lt;/li&gt;
-&lt;/ul&gt;
-        </translation>
+&lt;li&gt;Si no se selecciona ninguna superficie, se usa y se informa la primera superficie TIN encontrada en el archivo.&lt;/li&gt;
+&lt;li&gt;La superficie seleccionada se carga una sola vez y se consulta con su índice espacial.&lt;/li&gt;
+&lt;li&gt;Puede crear una capa de salida nueva o actualizar la capa de nodos de entrada.&lt;/li&gt;
+&lt;/ul&gt;</translation>
         </message>
         <message>
             <location filename="../processes/wnt_elevation_from_tin.py" line="67" />
@@ -498,14 +483,13 @@
 &lt;li&gt;Can create a new output layer or update the input node layer.&lt;/li&gt;
 &lt;/ul&gt;
         </source>
-            <translation>&lt;p&gt;Sets node elevations from one or more LandXML TIN surfaces.&lt;/p&gt;
+            <translation>&lt;p&gt;Establece elevaciones de nodos desde una o varias superficies TIN LandXML.&lt;/p&gt;
 &lt;ul&gt;
-&lt;li&gt;Surface names are written as a comma or semicolon separated list.&lt;/li&gt;
-&lt;li&gt;If no surface is selected, the first TIN surface found in the file is used and reported.&lt;/li&gt;
-&lt;li&gt;When several selected surfaces cover the same node, elevations must be consistent.&lt;/li&gt;
-&lt;li&gt;Can create a new output layer or update the input node layer.&lt;/li&gt;
-&lt;/ul&gt;
-        </translation>
+&lt;li&gt;Los nombres de superficie se escriben como una lista separada por comas o punto y coma.&lt;/li&gt;
+&lt;li&gt;Si no se selecciona ninguna superficie, se usa y se informa la primera superficie TIN encontrada en el archivo.&lt;/li&gt;
+&lt;li&gt;Cuando varias superficies seleccionadas cubren el mismo nodo, las elevaciones deben ser coherentes.&lt;/li&gt;
+&lt;li&gt;Puede crear una capa de salida nueva o actualizar la capa de nodos de entrada.&lt;/li&gt;
+&lt;/ul&gt;</translation>
         </message>
         <message>
             <source>&lt;p&gt;Sets the path to the EPANET toolkit library.&lt;/p&gt;
@@ -530,13 +514,12 @@
 &lt;li&gt;Can create a new output layer or replace the input line layer features.&lt;/li&gt;
 &lt;/ul&gt;
         </source>
-            <translation>&lt;p&gt;Splits line features at point positions.&lt;/p&gt;
+            <translation>&lt;p&gt;Divide entidades de línea en posiciones de puntos.&lt;/p&gt;
 &lt;ul&gt;
-&lt;li&gt;Use this algorithm to insert junctions or intermediate nodes into line layers.&lt;/li&gt;
-&lt;li&gt;Points are matched to lines using the tolerance in the selected output CRS units.&lt;/li&gt;
-&lt;li&gt;Can create a new output layer or replace the input line layer features.&lt;/li&gt;
-&lt;/ul&gt;
-        </translation>
+&lt;li&gt;Usa este algoritmo para insertar uniones o nodos intermedios en capas de líneas.&lt;/li&gt;
+&lt;li&gt;Los puntos se emparejan con las líneas usando la tolerancia en las unidades del SRC de salida seleccionado.&lt;/li&gt;
+&lt;li&gt;Puede crear una capa de salida nueva o reemplazar las entidades de la capa de líneas de entrada.&lt;/li&gt;
+&lt;/ul&gt;</translation>
         </message>
         <message>
             <source>&lt;p&gt;Updates demand assignments after editing assignment lines.&lt;/p&gt;
@@ -560,6 +543,110 @@
         <message>
             <source>Add topology and zone fields</source>
             <translation>Añade topología y zona a los links</translation>
+        </message>
+        <message>
+            <source>Add links and nodes to existing EPANET model</source>
+            <translation>Añadir links y nodos a un modelo EPANET existente</translation>
+        </message>
+        <message>
+            <source>Build</source>
+            <translation>Construir</translation>
+        </message>
+        <message>
+            <source>Classify</source>
+            <translation>Clasificar</translation>
+        </message>
+        <message>
+            <source>Create EPANET model from scratch</source>
+            <translation>Crear un modelo EPANET desde cero</translation>
+        </message>
+        <message>
+            <source>Create new output layer</source>
+            <translation>Crear capa de salida nueva</translation>
+        </message>
+        <message>
+            <source>Demand</source>
+            <translation>Demanda</translation>
+        </message>
+        <message>
+            <source>Export</source>
+            <translation>Exportar</translation>
+        </message>
+        <message>
+            <source>Fire</source>
+            <translation>Incendio</translation>
+        </message>
+        <message>
+            <source>Graph</source>
+            <translation>Grafo</translation>
+        </message>
+        <message>
+            <source>Hydrant pairs</source>
+            <translation>Pares de hidrantes</translation>
+        </message>
+        <message>
+            <source>Hydraulic and quality results</source>
+            <translation>Resultados hidráulicos y de calidad</translation>
+        </message>
+        <message>
+            <source>Hydraulic results</source>
+            <translation>Resultados hidráulicos</translation>
+        </message>
+        <message>
+            <source>Import</source>
+            <translation>Importar</translation>
+        </message>
+        <message>
+            <source>Merge networks</source>
+            <translation>Fusionar redes</translation>
+        </message>
+        <message>
+            <source>Modify</source>
+            <translation>Modificar</translation>
+        </message>
+        <message>
+            <source>Network from XML</source>
+            <translation>Red desde XML</translation>
+        </message>
+        <message>
+            <source>Network to epanet file (.inp)</source>
+            <translation>Red a archivo EPANET (.inp)</translation>
+        </message>
+        <message>
+            <source>Network to pipesizing data file (.pro)</source>
+            <translation>Red a archivo de datos pipesizing (.pro)</translation>
+        </message>
+        <message>
+            <source>Network to XML</source>
+            <translation>Red a XML</translation>
+        </message>
+        <message>
+            <source>Node degrees</source>
+            <translation>Grados de nodo</translation>
+        </message>
+        <message>
+            <source>Node elevation from DEM</source>
+            <translation>Elevación de nodos desde MDE</translation>
+        </message>
+        <message>
+            <source>Node elevation from TIN (LandXML)</source>
+            <translation>Elevación de nodos desde TIN (LandXML)</translation>
+        </message>
+        <message>
+            <source>Results from EPANET</source>
+            <translation>Resultados de EPANET</translation>
+        </message>
+        <message>
+            <source>Quality results</source>
+            <translation>Resultados de calidad</translation>
+        </message>
+        <message>
+            <source>Split lines at points</source>
+            <translation>Dividir líneas en puntos</translation>
+        </message>
+        <message>
+            <source>Update input layer</source>
+            <translation>Actualizar capa de entrada</translation>
         </message>
         <message>
             <source>Algorithms</source>
@@ -640,7 +727,7 @@
         </message>
         <message>
             <source>Existing EPANET model file is required for this output mode</source>
-            <translation>Existing EPANET model file is required for this output mode</translation>
+            <translation>El archivo de modelo EPANET existente es obligatorio para este modo de salida</translation>
         </message>
         <message>
             <location filename="../processes/wnt_network_to_epanet.py" line="159" />
@@ -729,7 +816,7 @@
         </message>
         <message>
             <source>LandXML network type</source>
-            <translation>LandXML network type</translation>
+            <translation>Tipo de red LandXML</translation>
         </message>
         <message>
             <source>Line vector layer input</source>
@@ -761,7 +848,7 @@
         </message>
         <message>
             <source>Links</source>
-            <translation>Links</translation>
+            <translation>Links de salida</translation>
         </message>
         <message>
             <source>Max distance</source>
@@ -797,11 +884,11 @@
         </message>
         <message>
             <source>Network name</source>
-            <translation>Network name</translation>
+            <translation>Nombre de red</translation>
         </message>
         <message>
             <source>Network names</source>
-            <translation>Network names</translation>
+            <translation>Nombres de red</translation>
         </message>
         <message>
             <source>Network node layer</source>
@@ -869,7 +956,7 @@
         </message>
         <message>
             <source>Output pipesizing file</source>
-            <translation>Output pipesizing file</translation>
+            <translation>Archivo pipesizing de salida</translation>
         </message>
         <message>
             <source>Output ppno file</source>
@@ -889,19 +976,19 @@
         </message>
         <message>
             <source>Pipe series field</source>
-            <translation>Pipe series field</translation>
+            <translation>Campo de serie de tubería</translation>
         </message>
         <message>
             <source>Pipesizing pipe catalog file</source>
-            <translation>Pipesizing pipe catalog file</translation>
+            <translation>Archivo de catálogo de tuberías pipesizing</translation>
         </message>
         <message>
             <source>Required fire pressure field</source>
-            <translation>Campo de presion minima en incendio</translation>
+            <translation>Campo de presión mínima en incendio</translation>
         </message>
         <message>
             <source>Required peak pressure field</source>
-            <translation>Campo de presion minima en caudal punta</translation>
+            <translation>Campo de presión mínima en caudal punta</translation>
         </message>
         <message>
             <source>Required pressure field</source>
@@ -952,7 +1039,7 @@
         <message>
             <location filename="../processes/wnt_elevation_from_tin.py" line="104" />
             <source>Surface names</source>
-            <translation>Surface names</translation>
+            <translation>Nombres de superficie</translation>
         </message>
         <message>
             <location filename="../processes/wnt_assign_demand.py" line="99" />
@@ -986,7 +1073,7 @@
         </message>
         <message>
             <source>WNT model type</source>
-            <translation>WNT model type</translation>
+            <translation>Tipo de modelo WNT</translation>
         </message>
         <message>
             <location filename="../processes/wnt_network_to_epanet.py" line="107" />

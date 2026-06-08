@@ -223,13 +223,13 @@ class MergeNetworksAlgorithm(WntProcessingAlgorithm):
         """
         Returns the translated algorithm name.
         """
-        return 'Merge networks'
+        return self.tr('Merge networks')
 
     def group(self):
         """
         Returns the name of the group this algorithm belongs to.
         """
-        return 'Modify'
+        return self.tr('Modify')
 
     def groupId(self):
         """

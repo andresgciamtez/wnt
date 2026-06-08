@@ -52,7 +52,7 @@ class AssignDemandAlgorithm(WntProcessingAlgorithm):
         """
         Returns the name of the group this algorithm belongs to.
         """
-        return 'Demand'
+        return self.tr('Demand')
 
     def groupId(self):
         """

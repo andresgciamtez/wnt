@@ -53,13 +53,13 @@ class ResultsFromEpanetAlgorithm(WntProcessingAlgorithm):
         """
         Returns the translated algorithm name.
         """
-        return 'Results from EPANET'
+        return self.tr('Results from EPANET')
 
     def group(self):
         """
         Returns the name of the group this algorithm belongs to.
         """
-        return 'Import'
+        return self.tr('Import')
 
     def groupId(self):
         """

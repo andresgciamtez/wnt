@@ -233,10 +233,10 @@ class NetworkToXmlAlgorithm(WntProcessingAlgorithm):
         return "network_to_xml"
 
     def displayName(self):
-        return "Network to XML"
+        return self.tr("Network to XML")
 
     def group(self):
-        return "Export"
+        return self.tr("Export")
 
     def groupId(self):
         return "export"

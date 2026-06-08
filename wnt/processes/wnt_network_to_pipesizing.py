@@ -113,10 +113,10 @@ class NetworkToPipesizingAlgorithm(WntProcessingAlgorithm):
         return 'network_to_pipesizing'
 
     def displayName(self):
-        return 'Network to pipesizing data file (.pro)'
+        return self.tr('Network to pipesizing data file (.pro)')
 
     def group(self):
-        return 'Export'
+        return self.tr('Export')
 
     def groupId(self):
         return 'export'

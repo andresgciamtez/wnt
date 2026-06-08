@@ -42,13 +42,13 @@ class NodeDegreesAlgorithm(WntProcessingAlgorithm):
         Returns the translated algorithm name, which should be used for any
         user-visible display of the algorithm name.
         """
-        return 'Node degrees'
+        return self.tr('Node degrees')
 
     def group(self):
         """
          Returns the name of the group this algorithm belongs to.
         """
-        return 'Graph'
+        return self.tr('Graph')
 
     def groupId(self):
         """
