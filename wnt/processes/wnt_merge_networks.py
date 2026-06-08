@@ -15,6 +15,7 @@ from qgis.core import (QgsCoordinateTransform,
                        QgsUnitTypes
                        )
 from .base import WntProcessingAlgorithm, missing_fields, set_progress
+from ..utils import utils_graph as graph
 from .messages import crs as log_crs
 from .messages import error, finish, info, start, warning
 
@@ -249,7 +250,6 @@ class MergeNetworksAlgorithm(WntProcessingAlgorithm):
 <li>Near misses are reported when second-network nodes are closer than the configured near-merge factor times the tolerance.</li>
 <li>Output node and link layers are written in the selected CRS.</li>
 </ul>
-<p>Validate the merged network after running this algorithm.</p>
         ''')
 
     def initAlgorithm(self, config=None):
@@ -405,6 +405,30 @@ class MergeNetworksAlgorithm(WntProcessingAlgorithm):
                 if nearest_near is None or distance < nearest_near[0]:
                     nearest_near = record
 
+        final_node_ids = [feature_value(feature, 'id') for feature in nodes_1]
+        final_node_ids.extend(
+            feature_value(feature, 'id')
+            for feature in nodes_2
+            if feature_value(feature, 'id') not in node_id_map
+        )
+        final_links = [
+            (feature_value(feature, 'id'), feature_value(feature, 'start'), feature_value(feature, 'end'))
+            for feature in links_1
+        ]
+        for feature in links_2:
+            start_id = feature_value(feature, 'start')
+            end_id = feature_value(feature, 'end')
+            final_links.append((
+                feature_value(feature, 'id'),
+                node_id_map.get(start_id, start_id),
+                node_id_map.get(end_id, end_id),
+            ))
+        problems = graph.validate_records(final_node_ids, final_links)
+        problem_text = self._problem_text(problems)
+        if problem_text:
+            error(feedback, "Merged network is not valid: " + problem_text)
+            return {}
+
         # GENERATE MERGED NODE LAYER
         node_fields = n1lay.fields()
         for field in n2lay.fields():
@@ -502,3 +526,11 @@ class MergeNetworksAlgorithm(WntProcessingAlgorithm):
 
         # OUTPUT
         return {self.OUTPUT_NODES: node_id, self.OUTPUT_LINES: link_id}
+
+    @staticmethod
+    def _problem_text(problems):
+        parts = []
+        for name, values in problems.items():
+            if values:
+                parts.append("{}: {}".format(name, ", ".join(sorted(str(value) for value in values))))
+        return "; ".join(parts)

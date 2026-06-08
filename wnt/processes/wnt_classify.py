@@ -8,8 +8,8 @@ from qgis.core import (QgsProcessing,
                        QgsWkbTypes
                        )
 from .base import (OUTPUT_MODE_NEW, OUTPUT_MODE_UPDATE, OUTPUT_MODE_OPTIONS,
-                   WntProcessingAlgorithm, add_missing_fields, feature_copy,
-                   field_index, qfield, update_layer_attributes)
+                   WntProcessingAlgorithm, feature_copy,
+                   field_index, qfield, update_layer_fields_and_attributes)
 from ..utils import utils_graph as gr
 from .messages import error, finish, info, start
 
@@ -63,7 +63,7 @@ class ClassifyAlgorithm(WntProcessingAlgorithm):
         return self.tr('''<p>Classifies network links into branched and meshed areas.</p>
 <ul>
 <li>Adds or updates <code>topology</code>: <code>branched</code> or <code>mesh</code>.</li>
-<li>Adds or updates <code>zones</code>: subnetwork identifier.</li>
+<li>Adds or updates <code>zone</code>: subnetwork identifier.</li>
 <li>Can create a new output layer or update the input link layer.</li>
 </ul>
 <p>Use this algorithm to support network sectorization.</p>
@@ -122,38 +122,44 @@ class ClassifyAlgorithm(WntProcessingAlgorithm):
                 feedback.setProgress(25 * cnt / nofl)
 
         # GENERATE SUBNETWORKS
-        classified = netg.classify()
+        classified = gr.unique_zone_classification(netg.classify())
 
-        field_defs = [qfield('topology', QMetaType.QString), qfield('zones', QMetaType.Int)]
+        field_defs = [qfield('topology', QMetaType.QString), qfield('zone', QMetaType.Int)]
         if output_mode == OUTPUT_MODE_UPDATE:
+            def updates_factory(fields):
+                topology_idx = field_index(fields, 'topology')
+                zone_idx = field_index(fields, 'zone')
+                updates = {}
+                cnt = 0
+                for feature in link_features:
+                    cnt += 1
+                    topology, zone = classified[feature['id']]
+                    updates[feature.id()] = {topology_idx: topology_value(topology), zone_idx: zone}
+                    if cnt % 100 == 0:
+                        feedback.setProgress(75 + 25 * cnt / nofl)
+                return updates
             try:
-                fields = add_missing_fields(links, field_defs)
-            except RuntimeError as exc:
-                error(feedback, str(exc))
-                return {}
-            topology_idx = field_index(fields, 'topology')
-            zones_idx = field_index(fields, 'zones')
-            updates = {}
-            cnt = 0
-            for feature in link_features:
-                cnt += 1
-                topology, zone = classified[feature['id']]
-                updates[feature.id()] = {topology_idx: topology_value(topology), zones_idx: zone}
-                if cnt % 100 == 0:
-                    feedback.setProgress(75 + 25 * cnt / nofl)
-            try:
-                update_layer_attributes(links, updates)
+                update_layer_fields_and_attributes(
+                    links,
+                    field_defs,
+                    updates_factory,
+                    delete_field_names=['zones'],
+                )
             except RuntimeError as exc:
                 error(feedback, str(exc))
                 return {}
             link_id = getattr(links, 'id', lambda: self.INPUT_LINES)()
         else:
             newfields = links.fields()
+            zones_idx = field_index(newfields, 'zones')
+            if zones_idx >= 0:
+                try:
+                    newfields.remove(zones_idx)
+                except (TypeError, ValueError):
+                    del newfields[zones_idx]
             for field in field_defs:
                 if field_index(newfields, field.name()) < 0:
                     newfields.append(field)
-            topology_idx = field_index(newfields, 'topology')
-            zones_idx = field_index(newfields, 'zones')
             (link_sink, link_id) = self.parameterAsSink(
                 parameters,
                 self.OUTPUT_LINES,
@@ -169,7 +175,7 @@ class ClassifyAlgorithm(WntProcessingAlgorithm):
                 link_sink.addFeature(feature_copy(
                     feature,
                     newfields,
-                    updates={'topology': topology_value(topology), 'zones': zone},
+                    updates={'topology': topology_value(topology), 'zone': zone},
                 ))
                 if cnt % 100 == 0:
                     feedback.setProgress(75 + 25 * cnt / nofl)

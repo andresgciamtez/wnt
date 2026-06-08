@@ -116,9 +116,11 @@ class DemandToEpanetScenarioAlgorithm(WntProcessingAlgorithm):
 
             for f in nodes.getFeatures():
                 for field in defields:
-                    if f[field] and f['type'] == 'JUNCTION':
+                    value = f[field]
+                    node_type = str(f['type'] or '').upper()
+                    if value not in (None, '') and node_type == 'JUNCTION':
                         cnt += 1
-                        line = '{}  {}  {} \n'.format(f['id'], f[field], field)
+                        line = '{}  {}  {} \n'.format(f['id'], value, field)
                         file.write(line)
 
         # SHOW INFO

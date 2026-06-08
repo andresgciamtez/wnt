@@ -10,6 +10,7 @@ from qgis.core import (QgsProcessing,
                        QgsProcessingParameterFileDestination)
 from .base import WntProcessingAlgorithm
 from ..utils import utils_core as tools
+from ..utils import utils_graph as graph
 from .messages import crs as log_crs
 from .messages import error, finish, info, start
 
@@ -31,8 +32,8 @@ class NetworkToEpanetAlgorithm(WntProcessingAlgorithm):
     WORKFLOW_EXISTING = 0
     WORKFLOW_SCRATCH = 1
     WORKFLOW_OPTIONS = (
-        'A - Add links and nodes to existing EPANET model',
-        'B - Create EPANET model from scratch',
+        'Add links and nodes to existing EPANET model',
+        'Create EPANET model from scratch',
     )
     EPANET_VERSION_OPTIONS = ('2.00.12', '2.2+')
     FLOW_UNIT_OPTIONS = ('CFS', 'GPM', 'MGD', 'IMGD', 'AFD', 'LPS', 'LPM', 'MLD', 'CMH', 'CMD')
@@ -75,10 +76,11 @@ class NetworkToEpanetAlgorithm(WntProcessingAlgorithm):
         """
         return self.tr('''<p>Creates an EPANET <code>.inp</code> file from network node and link layers.</p>
 <ul>
-<li>Workflow A adds the selected node and link layers to an existing EPANET <code>.inp</code> model; EPANET version and flow units are ignored.</li>
-<li>Workflow B creates a new EPANET model from a minimal internal template; select the EPANET version and flow units.</li>
+<li>Output mode “Add links and nodes to existing EPANET model” adds the selected node and link layers to an existing EPANET <code>.inp</code> model; EPANET version and flow units are ignored.</li>
+<li>Output mode “Create EPANET model from scratch” creates a new EPANET model from a minimal internal template; select the EPANET version and flow units.</li>
 <li>Adds nodes to <code>JUNCTIONS</code>, <code>RESERVOIRS</code>, or <code>TANKS</code>.</li>
 <li>Adds links to <code>PIPES</code>, <code>PUMPS</code>, or <code>VALVES</code>.</li>
+<li>The final network graph is validated before writing the EPANET file.</li>
 <li>Exports coordinates and intermediate vertices.</li>
 <li>Pipe diameter and roughness are not exported; add them using scenario files.</li>
 </ul>
@@ -107,7 +109,7 @@ class NetworkToEpanetAlgorithm(WntProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterEnum(
                 self.WORKFLOW,
-                self.tr('Workflow'),
+                self.tr('Output mode'),
                 options=[self.tr(option) for option in self.WORKFLOW_OPTIONS],
                 defaultValue=self.WORKFLOW_EXISTING,
                 optional=False
@@ -156,7 +158,7 @@ class NetworkToEpanetAlgorithm(WntProcessingAlgorithm):
         workflow = self.parameterAsEnum(parameters, self.WORKFLOW, context)
         epanet_file = self.parameterAsFile(parameters, self.INPUT_EPANET, context)
         if workflow == self.WORKFLOW_EXISTING and not epanet_file:
-            return False, self.tr('Existing EPANET model file is required for workflow A')
+            return False, self.tr('Existing EPANET model file is required for this output mode')
         return super().checkParameterValues(parameters, context)
 
     def processAlgorithm(self, parameters, context, feedback):
@@ -225,16 +227,30 @@ class NetworkToEpanetAlgorithm(WntProcessingAlgorithm):
         cleanup_template = None
         if workflow == self.WORKFLOW_EXISTING:
             if not template_file:
-                error(feedback, "Existing EPANET model file is required for workflow A")
+                error(feedback, "Existing EPANET model file is required for this output mode")
                 return {}
-            info(feedback, "Workflow", self.WORKFLOW_OPTIONS[self.WORKFLOW_EXISTING])
+            try:
+                base_net = tools.WntNetwork()
+                base_net.from_epanet(template_file)
+            except Exception as exc:
+                error(feedback, "Could not read existing EPANET model file: " + str(exc))
+                return {}
+            problems = self._network_problems([base_net, newnet])
+            if self._has_graph_problems(problems):
+                error(feedback, "Merged EPANET network is not valid: " + self._problem_text(problems))
+                return {}
+            info(feedback, "Output mode", self.WORKFLOW_OPTIONS[self.WORKFLOW_EXISTING])
             info(feedback, "Existing EPANET model file", template_file)
         else:
             version_label = self.EPANET_VERSION_OPTIONS[epanet_version]
             flow_unit_label = self.FLOW_UNIT_OPTIONS[flow_units]
             template_file = self._create_minimal_template(version_label, flow_unit_label)
             cleanup_template = template_file
-            info(feedback, "Workflow", self.WORKFLOW_OPTIONS[self.WORKFLOW_SCRATCH])
+            problems = self._network_problems([newnet])
+            if self._has_graph_problems(problems):
+                error(feedback, "EPANET network is not valid: " + self._problem_text(problems))
+                return {}
+            info(feedback, "Output mode", self.WORKFLOW_OPTIONS[self.WORKFLOW_SCRATCH])
             info(feedback, "EPANET version", version_label)
             info(feedback, "Flow units", flow_unit_label)
 
@@ -259,6 +275,28 @@ class NetworkToEpanetAlgorithm(WntProcessingAlgorithm):
 
         # OUTPUT
         return {self.OUTPUT: EPANET}
+
+    @staticmethod
+    def _network_problems(networks):
+        """Return graph validation problems for one or more WntNetwork objects."""
+        node_ids = []
+        links = []
+        for network in networks:
+            node_ids.extend(node.name() for node in network.nodes())
+            links.extend((link.name(), link.start(), link.end()) for link in network.links())
+        return graph.validate_records(node_ids, links)
+
+    @staticmethod
+    def _has_graph_problems(problems):
+        return any(bool(values) for values in problems.values())
+
+    @staticmethod
+    def _problem_text(problems):
+        parts = []
+        for name, values in problems.items():
+            if values:
+                parts.append("{}: {}".format(name, ", ".join(sorted(str(value) for value in values))))
+        return "; ".join(parts)
 
     @classmethod
     def _create_minimal_template(cls, version, flow_units):

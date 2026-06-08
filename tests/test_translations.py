@@ -84,6 +84,20 @@ def test_translation_catalog_matches_translatable_sources():
     assert code_sources <= catalog_sources
 
 
+def test_spanish_translation_catalog_has_no_unfinished_entries():
+    """Spanish catalog entries must be usable by QGIS, not left unfinished."""
+    plugin_dir = Path(__file__).resolve().parents[1] / 'wnt'
+    catalog = ET.parse(plugin_dir / 'i18n' / 'wnt_es.ts')
+    unfinished = catalog.findall('.//translation[@type="unfinished"]')
+    empty = [
+        translation for translation in catalog.findall('.//translation')
+        if not ''.join(translation.itertext()).strip()
+    ]
+
+    assert unfinished == []
+    assert empty == []
+
+
 
 def test_spanish_catalog_has_no_mojibake_markers():
     """Spanish translations should keep UTF-8 accents readable."""

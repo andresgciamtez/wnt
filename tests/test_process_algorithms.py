@@ -487,7 +487,7 @@ def test_node_degrees_writes_degree_field(monkeypatch):
     assert algorithm.processAlgorithm({}, None, FakeFeedback(canceled=True)) == {}
 
 
-def test_classify_writes_topology_and_zones(monkeypatch):
+def test_classify_writes_topology_and_zone(monkeypatch):
     algorithm = ClassifyAlgorithm()
     links = FakeSource(
         [
@@ -511,7 +511,8 @@ def test_classify_writes_topology_and_zones(monkeypatch):
     assert result == {algorithm.OUTPUT_LINES: f"{algorithm.OUTPUT_LINES}_id"}
     classifications = [feature.attributes()[-2:] for feature in sinks[algorithm.OUTPUT_LINES].features]
     assert ["branched", 1] in classifications
-    assert ["mesh", 1] in classifications
+    assert ["mesh", 2] in classifications
+    assert sorted({zone for _, zone in classifications}) == [1, 2]
     assert algorithm.processAlgorithm({}, None, FakeFeedback(canceled=True)) == {}
 
 
@@ -946,12 +947,15 @@ def test_network_to_epanet_creates_file_from_scratch(monkeypatch, tmp_path):
     algorithm = NetworkToEpanetAlgorithm()
     output = tmp_path / "scratch.inp"
     nodes = FakeSource(
-        [FakeFeature({"id": "J1", "type": "JUNCTION", "elevation": 1}, FakeGeometry(0, 0))]
+        [
+            FakeFeature({"id": "J1", "type": "JUNCTION", "elevation": 1}, FakeGeometry(0, 0)),
+            FakeFeature({"id": "J2", "type": "JUNCTION", "elevation": 2}, FakeGeometry(1, 0)),
+        ]
     )
     links = FakeSource(
         [
             FakeFeature(
-                {"id": "P1", "start": "J1", "end": "J1", "type": "PIPE", "length": 1.0},
+                    {"id": "P1", "start": "J1", "end": "J2", "type": "PIPE", "length": 1.0},
                 FakeGeometry(0, 0, "LineString(0 0, 1 0)"),
             )
         ]
@@ -975,6 +979,54 @@ def test_network_to_epanet_creates_file_from_scratch(monkeypatch, tmp_path):
     assert "UNITS CMH" in text
     assert "DEMAND MODEL DDA" in text
     assert "J1    1.0    0.0" in text
+    assert "J2    2.0    0.0" in text
+
+
+def test_network_to_epanet_aborts_invalid_merged_network(monkeypatch, tmp_path):
+    algorithm = NetworkToEpanetAlgorithm()
+    output = tmp_path / "merged.inp"
+    existing = tmp_path / "existing.inp"
+    existing.write_text(
+        "[JUNCTIONS]\n"
+        "J1 0\n"
+        "J2 0\n"
+        "[PIPES]\n"
+        "P1 J1 J2 1 100 100 0 Open\n"
+        "[COORDINATES]\n"
+        "J1 0 0\n"
+        "J2 1 0\n"
+        "[END]\n",
+        encoding="latin-1",
+    )
+    nodes = FakeSource(
+        [FakeFeature({"id": "J1", "type": "JUNCTION", "elevation": 1}, FakeGeometry(0, 0))]
+    )
+    links = FakeSource(
+        [
+            FakeFeature(
+                {"id": "P2", "start": "J1", "end": "J2", "type": "PIPE", "length": 1.0},
+                FakeGeometry(0, 0, "LineString(0 0, 1 0)"),
+            )
+        ]
+    )
+    bind_common_parameters(
+        monkeypatch,
+        algorithm,
+        sources={algorithm.INPUT_NODES: nodes, algorithm.INPUT_LINES: links},
+        files={algorithm.INPUT_EPANET: existing, algorithm.OUTPUT: output},
+        enums={
+            algorithm.WORKFLOW: algorithm.WORKFLOW_EXISTING,
+            algorithm.EPANET_VERSION: 1,
+            algorithm.FLOW_UNITS: algorithm.FLOW_UNIT_OPTIONS.index("CMH"),
+        },
+    )
+    feedback = FakeFeedback()
+
+    result = algorithm.processAlgorithm({}, None, feedback)
+
+    assert result == {}
+    assert not output.exists()
+    assert any("Merged EPANET network is not valid" in line for line in feedback.errors)
 
 
 def test_epanet_minimal_templates_match_selected_versions():
@@ -1566,9 +1618,8 @@ def test_merge_networks_merges_near_nodes_snaps_links_and_reports_counts(monkeyp
         [
             FakeFeature({"id": "N2B", "zone": "B"}, QgsGeometry.fromPointXY(QgsPointXY(1.005, 0))),
             FakeFeature({"id": "N3", "zone": "C"}, QgsGeometry.fromPointXY(QgsPointXY(3, 0))),
-            FakeFeature({"id": "N4", "zone": "near"}, QgsGeometry.fromPointXY(QgsPointXY(1.05, 0))),
-        ],
-        fields=node_fields_2,
+            ],
+            fields=node_fields_2,
     )
     l1 = FakeSource(
         [
@@ -1611,7 +1662,6 @@ def test_merge_networks_merges_near_nodes_snaps_links_and_reports_counts(monkeyp
         ["N1", 1, None],
         ["N2", 2, None],
         ["N3", None, "C"],
-        ["N4", None, "near"],
     ]
     assert [feature.attributes_value for feature in sinks[algorithm.OUTPUT_LINES].features] == [
         ["L1", "N1", "N2", None],
@@ -1622,14 +1672,13 @@ def test_merge_networks_merges_near_nodes_snaps_links_and_reports_counts(monkeyp
     assert snapped[0].y() == pytest.approx(0.0)
     assert snapped[-1].x() == pytest.approx(3.0)
     assert "First network nodes: 2" in feedback.info
-    assert "Second network nodes: 3" in feedback.info
-    assert "Output nodes: 4" in feedback.info
+    assert "Second network nodes: 2" in feedback.info
+    assert "Output nodes: 3" in feedback.info
     assert "First network links: 1" in feedback.info
     assert "Second network links: 1" in feedback.info
     assert "Output links: 2" in feedback.info
     assert "Connected nodes: 1" in feedback.info
-    assert "Near merge nodes: 1" in feedback.info
-    assert any("Closest near merge node N4 to N2 distance is" in line for line in feedback.info)
+    assert "Near merge nodes: 0" in feedback.info
     assert algorithm.processAlgorithm({}, None, FakeFeedback(canceled=True)) == {}
 
     bad = FakeSource([], crs=FakeCrs("EPSG:4326"))
@@ -1675,7 +1724,7 @@ def test_merge_networks_rejects_second_link_duplicate_id(monkeypatch):
         [FakeFeature({"id": "L1", "start": "N3", "end": "N4"}, QgsGeometry.fromPolylineXY([QgsPointXY(2, 0), QgsPointXY(3, 0)]))],
         fields=link_fields,
     )
-    sinks = bind_common_parameters(
+    bind_common_parameters(
         monkeypatch,
         algorithm,
         sources={
@@ -1690,7 +1739,48 @@ def test_merge_networks_rejects_second_link_duplicate_id(monkeypatch):
 
     assert algorithm.processAlgorithm({}, None, feedback) == {}
     assert feedback.errors == ["ERROR: Second network link ids already exist in first network: L1"]
-    assert sinks == {}
+
+
+def test_merge_networks_aborts_invalid_final_network(monkeypatch):
+    algorithm = MergeNetworksAlgorithm()
+    node_fields = fake_fields("id")
+    link_fields = fake_fields("id", "start", "end")
+    n1 = FakeSource(
+        [
+            FakeFeature({"id": "N1"}, QgsGeometry.fromPointXY(QgsPointXY(0, 0))),
+            FakeFeature({"id": "N2"}, QgsGeometry.fromPointXY(QgsPointXY(1, 0))),
+        ],
+        fields=node_fields,
+    )
+    n2 = FakeSource(
+        [FakeFeature({"id": "N3"}, QgsGeometry.fromPointXY(QgsPointXY(5, 0)))],
+        fields=node_fields,
+    )
+    l1 = FakeSource(
+        [
+            FakeFeature(
+                {"id": "L1", "start": "N1", "end": "N2"},
+                QgsGeometry.fromPolylineXY([QgsPointXY(0, 0), QgsPointXY(1, 0)]),
+            )
+        ],
+        fields=link_fields,
+    )
+    l2 = FakeSource([], fields=link_fields)
+    bind_common_parameters(
+        monkeypatch,
+        algorithm,
+        sources={
+            algorithm.INPUT_NODES_1: n1,
+            algorithm.INPUT_LINES_1: l1,
+            algorithm.INPUT_NODES_2: n2,
+            algorithm.INPUT_LINES_2: l2,
+        },
+        fields={algorithm.TOLERANCE: 0.01},
+    )
+    feedback = FakeFeedback()
+
+    assert algorithm.processAlgorithm({}, None, feedback) == {}
+    assert any("orphan nodes: N3" in line for line in feedback.errors)
 
 
 def test_merge_networks_rejects_second_link_endpoint_overlap_reversed(monkeypatch):
@@ -2404,6 +2494,7 @@ class FakeEpanetLibrary:
         self.link_status = link_status
         self.calls = {}
         self.next_calls = 0
+        self.next_quality_calls = 0
 
     def _err(self, name):
         self.calls[name] = self.calls.get(name, 0) + 1
@@ -2492,6 +2583,33 @@ class FakeEpanetLibrary:
         self.next_calls += 1
         out._obj.value = 0
         return 0
+
+    def ENsolveH(self):
+        return self._err("ENsolveH")
+
+    def ENopenQ(self):
+        return self._err("ENopenQ")
+
+    def ENinitQ(self, save):
+        return self._err("ENinitQ")
+
+    def ENrunQ(self, out):
+        err = self._err("ENrunQ")
+        if err:
+            return err
+        out._obj.value = self.next_quality_calls * 3600
+        return 0
+
+    def ENnextQ(self, out):
+        err = self._err("ENnextQ")
+        if err:
+            return err
+        self.next_quality_calls += 1
+        out._obj.value = 0
+        return 0
+
+    def ENcloseQ(self):
+        return self._err("ENcloseQ")
 
     def ENclose(self):
         return self._err("ENclose")
@@ -2586,6 +2704,34 @@ def test_results_from_epanet_loads_posix_library_and_closed_status(monkeypatch, 
         algorithm.OUTPUT_LINES: f"{algorithm.OUTPUT_LINES}_id",
     }
     assert sinks[algorithm.OUTPUT_LINES].features[0].attributes_value[5] == "CLOSED"
+
+
+def test_results_from_epanet_loads_quality_results(monkeypatch, tmp_path):
+    algorithm = ResultsFromEpanetAlgorithm()
+    inp = tmp_path / "model.inp"
+    inp.write_text("[END]\n", encoding="utf-8")
+
+    patch_results_algorithm(monkeypatch)
+    sinks = bind_common_parameters(
+        monkeypatch,
+        algorithm,
+        files={algorithm.INPUT: inp},
+        enums={algorithm.RESULT_TYPE: algorithm.RESULT_QUALITY},
+    )
+
+    context = FakeProcessingContext()
+    result = algorithm.processAlgorithm({}, context, FakeFeedback())
+
+    assert result == {
+        algorithm.OUTPUT_NODE_QUALITY: f"{algorithm.OUTPUT_NODE_QUALITY}_id",
+        algorithm.OUTPUT_LINK_QUALITY: f"{algorithm.OUTPUT_LINK_QUALITY}_id",
+    }
+    node_attrs = sinks[algorithm.OUTPUT_NODE_QUALITY].features[0].attributes_value
+    link_attrs = sinks[algorithm.OUTPUT_LINK_QUALITY].features[0].attributes_value
+    node_attrs[1] = node_attrs[1].rstrip("\x00")
+    link_attrs[1] = link_attrs[1].rstrip("\x00")
+    assert node_attrs == ["00:00:00", "N1", 12.0]
+    assert link_attrs == ["00:00:00", "L1", 14.0]
 
 
 def test_results_from_epanet_reports_configuration_and_toolkit_errors(monkeypatch, tmp_path):
@@ -2724,8 +2870,8 @@ def test_network_to_pipesizing_writes_pro_with_external_catalog(monkeypatch, tmp
     epanet_file.write_text("[END]\n", encoding="utf-8")
     input_catalog.write_text("S1    100.0    120.0\n", encoding="utf-8")
     nodes = FakeSource(
-        [FakeFeature({"id": "N1", "pressure": 20}), FakeFeature({"id": "N2", "pressure": ""})],
-        fields=fake_fields("id", "pressure"),
+        [FakeFeature({"id": "N1", "peak": 20, "fire": 10}), FakeFeature({"id": "N2", "peak": "", "fire": ""})],
+        fields=fake_fields("id", "peak", "fire"),
     )
     links = FakeSource(
         [FakeFeature({"id": "L1", "group": "S1"}), FakeFeature({"id": "L2", "group": ""})],
@@ -2735,7 +2881,14 @@ def test_network_to_pipesizing_writes_pro_with_external_catalog(monkeypatch, tmp
         monkeypatch,
         algorithm,
         sources={algorithm.INPUT_NODES: nodes, algorithm.INPUT_LINES: links},
-        fields={algorithm.FIELD_PRESSURE: "pressure", algorithm.FIELD_SERIES: "group"},
+        fields={
+            algorithm.FIELD_PRESSURE: "peak",
+            algorithm.FIELD_PRESSURE_FIRE: "fire",
+            algorithm.FIELD_SERIES: "group",
+            algorithm.PEAK_FACTOR: 1.5,
+            algorithm.FIRE_FACTOR: 0.75,
+            algorithm.FIRE_FLOW: 0.0,
+        },
         files={algorithm.INPUT_EPANET: epanet_file, algorithm.INPUT_CATALOG: input_catalog, algorithm.OUTPUT: output},
     )
 
@@ -2744,12 +2897,14 @@ def test_network_to_pipesizing_writes_pro_with_external_catalog(monkeypatch, tmp
     assert result == {algorithm.OUTPUT: str(output)}
     text = output.read_text(encoding="utf-8")
     output_catalog = output.with_suffix(".cat")
-    assert "[NETWORK]" in text
+    assert "[SETTINGS]" in text
     assert "model.inp" in text
-    assert "[PIPE_CATALOG]" in text
+    assert "peak_factor 1.5" in text
+    assert "fire_factor 0.75" in text
     assert "sizing.cat" in text
     assert "[PRESSURES]" in text
-    assert "N1    20" in text
+    assert "N1    20    10" in text
+    assert "[FIRE_SCENARIOS]" in text
     assert "[PIPES]" in text
     assert "L1    S1" in text
     assert "[SERIES]" not in text
@@ -2763,7 +2918,14 @@ def test_network_to_pipesizing_writes_pro_with_external_catalog(monkeypatch, tmp
         monkeypatch,
         algorithm,
         sources={algorithm.INPUT_NODES: nodes, algorithm.INPUT_LINES: unknown_links},
-        fields={algorithm.FIELD_PRESSURE: "pressure", algorithm.FIELD_SERIES: "group"},
+        fields={
+            algorithm.FIELD_PRESSURE: "peak",
+            algorithm.FIELD_PRESSURE_FIRE: "fire",
+            algorithm.FIELD_SERIES: "group",
+            algorithm.PEAK_FACTOR: 1.0,
+            algorithm.FIRE_FACTOR: 1.0,
+            algorithm.FIRE_FLOW: 0.0,
+        },
         files={algorithm.INPUT_EPANET: epanet_file, algorithm.INPUT_CATALOG: input_catalog, algorithm.OUTPUT: output},
     )
     feedback = FakeFeedback()

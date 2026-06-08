@@ -24,13 +24,16 @@ class EpanetConstants:
     demand: int
     head: int
     pressure: int
+    quality: int
     flow: int
     velocity: int
     headloss: int
     status: int
     setting: int
     energy: int
+    link_quality: int
     no_save: int
+    save: int
     max_label_len: int
 
 
@@ -44,13 +47,16 @@ def constants_for_version(version):
         demand=9,
         head=10,
         pressure=11,
+        quality=12,
         flow=8,
         velocity=9,
         headloss=10,
         status=11,
         setting=12,
         energy=13,
+        link_quality=14,
         no_save=0,
+        save=1,
         max_label_len=max_label_len,
     )
 
@@ -291,6 +297,61 @@ class EpanetToolkit:
                 pass
         return EpanetResults(node_rows, link_rows, step_count, node_count, link_count)
 
+    def read_quality_results(self, inp_file):
+        """Run quality analysis and return node/link quality results for each time step."""
+        self._check_quality_symbols()
+        with tempfile.NamedTemporaryFile(suffix=".rpt", delete=False) as report:
+            report_file = report.name
+        node_rows = []
+        link_rows = []
+        step_count = 0
+        try:
+            self.open(inp_file, report_file)
+            node_count = self.getcount(self.constants.node_count)
+            link_count = self.getcount(self.constants.link_count)
+            if hasattr(self._lib, "ENsolveH"):
+                self._check(self._lib.ENsolveH())
+            else:
+                self.open_hydraulics()
+                self.init_hydraulics(self.constants.save)
+                while True:
+                    self.run_hydraulics()
+                    if self.next_hydraulics() == 0:
+                        break
+                self.close_hydraulics()
+            self.open_quality()
+            self.init_quality(self.constants.no_save)
+            while True:
+                step_count += 1
+                current_time = strftime("%H:%M:%S", gmtime(self.run_quality()))
+                for index in range(1, node_count + 1):
+                    node_rows.append(
+                        [
+                            current_time,
+                            self.getnodeid(index),
+                            self.getnodevalue(index, self.constants.quality),
+                        ]
+                    )
+                for index in range(1, link_count + 1):
+                    link_rows.append(
+                        [
+                            current_time,
+                            self.getlinkid(index),
+                            self.getlinkvalue(index, self.constants.link_quality),
+                        ]
+                    )
+                if self.next_quality() == 0:
+                    break
+            self.close_quality()
+        finally:
+            if self._project_open:
+                self.close()
+            try:
+                Path(report_file).unlink(missing_ok=True)
+            except OSError:
+                pass
+        return EpanetResults(node_rows, link_rows, step_count, node_count, link_count)
+
     def open(self, inp_file, report_file):
         inp = ctypes.c_char_p(str(inp_file).encode())
         rpt = ctypes.c_char_p(str(report_file).encode())
@@ -326,6 +387,29 @@ class EpanetToolkit:
         next_time = ctypes.c_long()
         self._check(self._lib.ENnextH(ctypes.byref(next_time)))
         return next_time.value
+
+    def close_hydraulics(self):
+        if hasattr(self._lib, "ENcloseH"):
+            self._check(self._lib.ENcloseH())
+
+    def open_quality(self):
+        self._check(self._lib.ENopenQ())
+
+    def init_quality(self, flag):
+        self._check(self._lib.ENinitQ(ctypes.c_int(flag)))
+
+    def run_quality(self):
+        current_time = ctypes.c_long()
+        self._check(self._lib.ENrunQ(ctypes.byref(current_time)))
+        return current_time.value
+
+    def next_quality(self):
+        next_time = ctypes.c_long()
+        self._check(self._lib.ENnextQ(ctypes.byref(next_time)))
+        return next_time.value
+
+    def close_quality(self):
+        self._check(self._lib.ENcloseQ())
 
     def getnodeid(self, index):
         node_id = ctypes.create_string_buffer(self.constants.max_label_len + 1)
@@ -377,6 +461,15 @@ class EpanetToolkit:
                 + ", ".join(missing)
             )
 
+    def _check_quality_symbols(self):
+        symbols = ("ENopenQ", "ENinitQ", "ENrunQ", "ENnextQ", "ENcloseQ")
+        missing = [name for name in symbols if not hasattr(self._lib, name)]
+        if missing:
+            raise EpanetConfigurationError(
+                "EPANET toolkit library is missing quality analysis functions: "
+                + ", ".join(missing)
+            )
+
     def _configure_signatures(self):
         p_char = ctypes.c_char_p
         p_int = ctypes.POINTER(ctypes.c_int)
@@ -392,6 +485,13 @@ class EpanetToolkit:
             "ENinitH": [ctypes.c_int],
             "ENrunH": [p_long],
             "ENnextH": [p_long],
+            "ENcloseH": [],
+            "ENsolveH": [],
+            "ENopenQ": [],
+            "ENinitQ": [ctypes.c_int],
+            "ENrunQ": [p_long],
+            "ENnextQ": [p_long],
+            "ENcloseQ": [],
             "ENgetnodeid": [ctypes.c_int, p_char],
             "ENgetnodevalue": [ctypes.c_int, ctypes.c_int, p_float],
             "ENgetlinkid": [ctypes.c_int, p_char],

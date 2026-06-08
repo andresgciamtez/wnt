@@ -65,6 +65,19 @@ def validate_records(node_ids, links):
     return problems
 
 
+def unique_zone_classification(classified):
+    """Return classified links with zone numbers unique across all topology classes."""
+    zone_keys = sorted(
+        set(classified.values()),
+        key=lambda value: (0 if value[0] == 'BRANCHED' else 1, value[1]),
+    )
+    zone_by_key = {key: index for index, key in enumerate(zone_keys, start=1)}
+    return {
+        link_id: (topology, zone_by_key[(topology, zone)])
+        for link_id, (topology, zone) in classified.items()
+    }
+
+
 class Graph():
     """Define a graph as a dictionary of edges, {label: (start, end)}.
     """

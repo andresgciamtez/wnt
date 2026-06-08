@@ -11,20 +11,22 @@ from qgis.core import (QgsProcessing,
                       )
 from .base import (OUTPUT_MODE_NEW, OUTPUT_MODE_UPDATE, OUTPUT_MODE_OPTIONS,
                    WntProcessingAlgorithm, field_index, missing_fields,
-                   parse_name_list, set_progress, update_layer_attributes)
-from ..utils.utils_tin import ACCEPTABLE_DEVIATION, TIN, surface_names
+                   set_progress, update_layer_attributes)
+from .widgets import LandXmlSurfaceWidgetWrapper
+from ..utils.utils_tin import TIN
 from .messages import crs as log_crs
 from .messages import error, finish, info, start
 
 class ElevationFromTINAlgorithm(WntProcessingAlgorithm):
     """
-    Set the node elevation from one or more TIN surfaces in LandXML format.
+    Set the node elevation from a TIN surface in LandXML format.
     """
 
     # DEFINE CONSTANTS
     INPUT_NODES = 'INPUT_NODES'
     FIELD_ELEVATION = 'FIELD_ELEVATION'
     INPUT_TIN = 'INPUT_TIN'
+    SURFACE_NAME = 'SURFACE_NAME'
     SURFACE_NAMES = 'SURFACE_NAMES'
     OUTPUT_MODE = 'OUTPUT_MODE'
     OUTPUT = 'OUTPUT'
@@ -64,11 +66,10 @@ class ElevationFromTINAlgorithm(WntProcessingAlgorithm):
         """
         Returns a localised short help string for the algorithm.
         """
-        return self.tr('''<p>Sets node elevations from one or more LandXML TIN surfaces.</p>
+        return self.tr('''<p>Sets node elevations from one LandXML TIN surface.</p>
 <ul>
-<li>Surface names are written as a comma or semicolon separated list.</li>
 <li>If no surface is selected, the first TIN surface found in the file is used and reported.</li>
-<li>When several selected surfaces cover the same node, elevations must be consistent.</li>
+<li>The selected surface is loaded once and searched with its spatial index.</li>
 <li>Can create a new output layer or update the input node layer.</li>
 </ul>
         ''')
@@ -101,14 +102,19 @@ class ElevationFromTINAlgorithm(WntProcessingAlgorithm):
                 extension='xml'
                 )
             )
+        surface_parameter = QgsProcessingParameterString(
+            self.SURFACE_NAME,
+            self.tr('Surface name'),
+            defaultValue='',
+            multiLine=False,
+            optional=True
+            )
+        surface_parameter.setMetadata({
+            'widget_wrapper': {'class': LandXmlSurfaceWidgetWrapper},
+            'landxml_file_parameter': self.INPUT_TIN,
+        })
         self.addParameter(
-            QgsProcessingParameterString(
-                self.SURFACE_NAMES,
-                self.tr('Surface names'),
-                defaultValue='',
-                multiLine=False,
-                optional=True
-                )
+            surface_parameter
             )
         self.addParameter(
             QgsProcessingParameterEnum(
@@ -142,32 +148,16 @@ class ElevationFromTINAlgorithm(WntProcessingAlgorithm):
             nodelayer = self.parameterAsSource(parameters, self.INPUT_NODES, context)
         efield = self.parameterAsString(parameters, self.FIELD_ELEVATION, context)
         tinlayer = self.parameterAsFile(parameters, self.INPUT_TIN, context)
-        selected_surface_names = parse_name_list(self.parameterAsString(parameters, self.SURFACE_NAMES, context))
+        selected_surface_name = self.parameterAsString(parameters, self.SURFACE_NAME, context).strip()
+        if not selected_surface_name and self.SURFACE_NAMES in parameters:
+            selected_surface_name = str(parameters.get(self.SURFACE_NAMES) or '').strip()
 
         missing = missing_fields(nodelayer, [efield])
         if nodelayer.fields().names() and missing:
             error(feedback, "Node layer is missing required fields: " + ", ".join(missing))
             return {}
 
-        try:
-            available_surfaces = surface_names(tinlayer)
-        except Exception as exc:
-            error(feedback, str(exc))
-            return {}
-        if not available_surfaces:
-            error(feedback, "No LandXML TIN surfaces found")
-            return {}
-
-        if selected_surface_names:
-            missing_surfaces = [name for name in selected_surface_names if name not in available_surfaces]
-            if missing_surfaces:
-                error(feedback, "LandXML TIN surfaces not found: " + ", ".join(missing_surfaces))
-                return {}
-            names_to_load = selected_surface_names
-            using_default_surface = False
-        else:
-            names_to_load = [available_surfaces[0]]
-            using_default_surface = True
+        using_default_surface = not selected_surface_name
 
         # SEND INFORMATION TO THE USER
         crs = nodelayer.sourceCrs()
@@ -191,48 +181,29 @@ class ElevationFromTINAlgorithm(WntProcessingAlgorithm):
         nodes = list(nodelayer.getFeatures())
         points = [feature.geometry().asPoint() for feature in nodes]
         point_tuples = [(point.x(), point.y()) for point in points]
-        elevations_by_surface = []
         try:
-            for name in names_to_load:
-                surface = TIN()
-                surface.from_landxml(tinlayer, name)
-                elevations_by_surface.append((surface.surface_name, surface.elevations(point_tuples)))
+            surface = TIN()
+            surface.from_landxml(tinlayer, selected_surface_name)
+            surface_elevations = surface.elevations(point_tuples)
         except Exception as exc:
             error(feedback, str(exc))
             return {}
 
         # SHOW PROGRESS
         info(feedback, "Input nodes", len(points))
-        info(feedback, "LandXML surfaces selected", ", ".join(name for name, _ in elevations_by_surface))
+        info(feedback, "LandXML surface selected", surface.surface_name)
         if using_default_surface:
-            info(feedback, "Default LandXML surface used", elevations_by_surface[0][0])
+            info(feedback, "Default LandXML surface used", surface.surface_name)
         feedback.setProgress(50)
 
         result_elevations = []
         skipped = 0
-        for index, feature in enumerate(nodes):
-            values = [
-                (name, values[index])
-                for name, values in elevations_by_surface
-                if values[index] is not None
-            ]
-            if not values:
+        for value in surface_elevations:
+            if value is None:
                 result_elevations.append(None)
                 skipped += 1
                 continue
-            reference_name, reference_value = values[0]
-            conflicts = [
-                (name, value)
-                for name, value in values[1:]
-                if abs(value - reference_value) > ACCEPTABLE_DEVIATION
-            ]
-            if conflicts:
-                node_id = feature['id'] if 'id' in feature.fields().names() else str(index + 1)
-                conflict_text = ["{}={}".format(reference_name, reference_value)]
-                conflict_text.extend("{}={}".format(name, value) for name, value in conflicts)
-                error(feedback, "Conflicting TIN elevations for node {}: {}".format(node_id, ", ".join(conflict_text)))
-                return {}
-            result_elevations.append(reference_value)
+            result_elevations.append(value)
 
         elevation_index = field_index(nodelayer.fields(), efield)
         updates = {}

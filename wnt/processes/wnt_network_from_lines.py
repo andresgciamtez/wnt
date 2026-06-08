@@ -26,6 +26,7 @@ from qgis.core import (QgsFeature,
                        QgsPointXY
                        )
 from .base import WntProcessingAlgorithm
+from .widgets import LandXmlSurfaceWidgetWrapper
 from ..utils import utils_core as tools
 from ..utils import utils_graph as graph
 from ..utils.utils_tin import TIN
@@ -274,14 +275,19 @@ class NetworkFromLinesAlgorithm(WntProcessingAlgorithm):
                 optional=True
                 )
             )
+        surface_parameter = QgsProcessingParameterString(
+            self.SURFACE_NAME,
+            self.tr('Surface name (if empty, first found)'),
+            defaultValue='',
+            multiLine=False,
+            optional=True
+            )
+        surface_parameter.setMetadata({
+            'widget_wrapper': {'class': LandXmlSurfaceWidgetWrapper},
+            'landxml_file_parameter': self.INPUT_LANDXML,
+        })
         self.addParameter(
-            QgsProcessingParameterString(
-                self.SURFACE_NAME,
-                self.tr('Surface name (if empty, first found)'),
-                defaultValue='',
-                multiLine=False,
-                optional=True
-                )
+            surface_parameter
             )
 
         # ADD NODE AND LINK FEATURE SINK
@@ -601,7 +607,7 @@ class NetworkFromLinesAlgorithm(WntProcessingAlgorithm):
         netg = graph.Graph()
         for link_id, start_id, end_id in link_records:
             netg.add_edge(link_id, start_id, end_id)
-        classified = netg.classify()
+        classified = graph.unique_zone_classification(netg.classify())
         return {
             link_id: [TOPOLOGY_VALUES[topology], zone]
             for link_id, (topology, zone) in classified.items()

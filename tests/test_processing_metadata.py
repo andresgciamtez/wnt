@@ -183,7 +183,7 @@ def test_network_to_epanet_exposes_workflow_controls():
 
     algorithm.initAlgorithm()
 
-    assert algorithm.parameterDefinition(algorithm.WORKFLOW).description() == "Workflow"
+    assert algorithm.parameterDefinition(algorithm.WORKFLOW).description() == "Output mode"
     assert algorithm.parameterDefinition(algorithm.INPUT_EPANET).description() == (
         "Existing EPANET model file"
     )
@@ -198,7 +198,7 @@ def test_corrected_help_strings_are_exposed():
     provider.loadAlgorithms()
     algorithms = {algorithm.name(): algorithm for algorithm in provider.algorithms()}
 
-    assert "Workflow A" in algorithms["network_to_epanet"].shortHelpString()
+    assert "Output mode" in algorithms["network_to_epanet"].shortHelpString()
     assert "external <code" in algorithms["network_to_ppno"].shortHelpString()
     assert ".cat</code>" in algorithms["network_to_ppno"].shortHelpString()
     assert "EPANET demand scenario file" in algorithms["network_to_epanet_demand_scenario"].shortHelpString()

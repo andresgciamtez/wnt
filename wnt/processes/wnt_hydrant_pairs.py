@@ -63,9 +63,9 @@ class HydrantPairsAlgorithm(WntProcessingAlgorithm):
         """
         Returns a localised short help string for the algorithm.
         """
-        return self.tr('''<p>Creates hydrant pairs from a hydrant node layer.</p>
+        return self.tr('''<p>Creates hydrant pairs/calculation scenarios from a hydrant layer.</p>
 <ul>
-<li>The output is a line layer connecting paired hydrants.</li>
+<li>The output is a line layer connecting paired hydrants/fire scenarios.</li>
 <li>The line geometry helps verify that pairs can be connected through public space.</li>
 <li>Pairs farther apart than the maximum separation are not generated.</li>
 </ul>

@@ -91,10 +91,39 @@ def add_missing_fields(layer, field_defs):
     fields = layer.fields()
     missing = [field for field in field_defs if field_index(fields, field.name()) < 0]
     if missing:
-        provider = layer.dataProvider()
-        if not provider.addAttributes(missing):
-            raise RuntimeError("Could not add required fields to input layer")
+        editable = bool(getattr(layer, "isEditable", lambda: False)())
+        if editable and hasattr(layer, "addAttribute"):
+            for field in missing:
+                if not layer.addAttribute(field):
+                    raise RuntimeError("Could not add required fields to input layer")
+        else:
+            provider = layer.dataProvider()
+            if not provider.addAttributes(missing):
+                raise RuntimeError("Could not add required fields to input layer")
         layer.updateFields()
+    return layer.fields()
+
+
+def delete_fields(layer, field_names_to_delete):
+    """Delete fields by name from an editable vector layer and return updated fields."""
+    fields = layer.fields()
+    indexes = sorted(
+        (field_index(fields, name) for name in field_names_to_delete),
+        reverse=True,
+    )
+    indexes = [index for index in indexes if index >= 0]
+    if not indexes:
+        return fields
+    editable = bool(getattr(layer, "isEditable", lambda: False)())
+    if editable and hasattr(layer, "deleteAttribute"):
+        for index in indexes:
+            if not layer.deleteAttribute(index):
+                raise RuntimeError("Could not delete input layer fields")
+    else:
+        provider = layer.dataProvider()
+        if not provider.deleteAttributes(indexes):
+            raise RuntimeError("Could not delete input layer fields")
+    layer.updateFields()
     return layer.fields()
 
 
@@ -128,6 +157,57 @@ def update_layer_attributes(layer, updates_by_feature_id):
         _rollback_edit(layer, already_editing)
         raise
 
+
+def update_layer_fields_and_attributes(layer, field_defs, updates_factory, delete_field_names=None):
+    """Add/delete fields and update attributes in one editable layer edit session."""
+    already_editing = _start_edit(layer)
+    try:
+        if delete_field_names:
+            fields = delete_fields(layer, delete_field_names)
+        else:
+            fields = layer.fields()
+        fields = add_missing_fields(layer, field_defs)
+        updates_by_feature_id = updates_factory(fields)
+        for feature_id, updates in updates_by_feature_id.items():
+            for field_idx, value in updates.items():
+                if not layer.changeAttributeValue(feature_id, field_idx, value):
+                    raise RuntimeError("Could not update input layer attributes")
+        _finish_edit(layer, already_editing)
+        return layer.fields()
+    except Exception:
+        _rollback_edit(layer, already_editing)
+        raise
+
+
+def update_multiple_layer_fields_and_attributes(layer_specs):
+    """Add fields and update attributes across layers, rolling all back on failure."""
+    started_layers = []
+    try:
+        for spec in layer_specs:
+            layer = spec["layer"]
+            already_editing = _start_edit(layer)
+            started_layers.append((layer, already_editing))
+            if spec.get("delete_field_names"):
+                delete_fields(layer, spec["delete_field_names"])
+            add_missing_fields(layer, spec.get("field_defs", []))
+
+        prepared = []
+        for spec in layer_specs:
+            fields = spec["layer"].fields()
+            prepared.append((spec["layer"], spec["updates_factory"](fields)))
+
+        for layer, updates_by_feature_id in prepared:
+            for feature_id, updates in updates_by_feature_id.items():
+                for field_idx, value in updates.items():
+                    if not layer.changeAttributeValue(feature_id, field_idx, value):
+                        raise RuntimeError("Could not update input layer attributes")
+
+        for layer, already_editing in reversed(started_layers):
+            _finish_edit(layer, already_editing)
+    except Exception:
+        for layer, already_editing in reversed(started_layers):
+            _rollback_edit(layer, already_editing)
+        raise
 
 
 def replace_layer_features(layer, features):

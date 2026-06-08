@@ -8,8 +8,8 @@ from qgis.core import (QgsProcessing,
                        QgsWkbTypes
                        )
 from .base import (OUTPUT_MODE_NEW, OUTPUT_MODE_UPDATE, OUTPUT_MODE_OPTIONS,
-                   WntProcessingAlgorithm, add_missing_fields, feature_copy,
-                   field_index, qfield, update_layer_attributes)
+                   WntProcessingAlgorithm, feature_copy,
+                   field_index, qfield, update_multiple_layer_fields_and_attributes)
 from ..utils import utils_graph as graph
 from .messages import error, finish, info, message, start
 
@@ -182,19 +182,27 @@ class ValidateAlgorithm(WntProcessingAlgorithm):
 
         problems_field = qfield('problems', QMetaType.QString)
         if output_mode == OUTPUT_MODE_UPDATE:
+            def node_updates_factory(fields):
+                node_idx = field_index(fields, 'problems')
+                return {fid: {node_idx: msg} for fid, msg in node_problem_messages.items()}
+
+            def link_updates_factory(fields):
+                link_idx = field_index(fields, 'problems')
+                return {fid: {link_idx: msg} for fid, msg in link_problem_messages.items()}
+
             try:
-                node_fields = add_missing_fields(nodelay, [problems_field])
-                link_fields = add_missing_fields(linklay, [problems_field])
-                node_idx = field_index(node_fields, 'problems')
-                link_idx = field_index(link_fields, 'problems')
-                update_layer_attributes(
-                    nodelay,
-                    {fid: {node_idx: msg} for fid, msg in node_problem_messages.items()},
-                )
-                update_layer_attributes(
-                    linklay,
-                    {fid: {link_idx: msg} for fid, msg in link_problem_messages.items()},
-                )
+                update_multiple_layer_fields_and_attributes([
+                    {
+                        'layer': nodelay,
+                        'field_defs': [problems_field],
+                        'updates_factory': node_updates_factory,
+                    },
+                    {
+                        'layer': linklay,
+                        'field_defs': [problems_field],
+                        'updates_factory': link_updates_factory,
+                    },
+                ])
             except RuntimeError as exc:
                 error(feedback, str(exc))
                 return {}

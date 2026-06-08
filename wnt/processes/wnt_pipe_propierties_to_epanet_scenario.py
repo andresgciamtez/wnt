@@ -117,23 +117,25 @@ class PipePropiertiesToEpanetScenarioAlgorithm(WntProcessingAlgorithm):
 
         # WRITE FILE
         cnt = 0
+        pipe_features = [
+            feature for feature in links.getFeatures()
+            if str(feature['type'] or '').upper() in ['PIPE', 'CVPIPE']
+        ]
         with open(scnfile, 'w', encoding='utf-8') as file:
             file.write('; File generated automatically by Water Network Tools \n')
             file.write('[DIAMETERS] \n')
             file.write(';Pipe    Diameter \n')
 
-            for feature in links.getFeatures():
-                if feature['type'] in ['PIPE', 'CVPIPE']:
-                    cnt += 1
-                    file.write('{}    {} \n'.format(feature['id'], feature[dfield]))
+            for feature in pipe_features:
+                cnt += 1
+                file.write('{}    {} \n'.format(feature['id'], feature[dfield]))
 
             file.write(' \n')
             file.write('[ROUGHNESS] \n')
             file.write(';Pipe    Roughness \n')
 
-            for feature in links.getFeatures():
-                if feature['type'] in ['PIPE', 'CVPIPE']:
-                    file.write('{}    {} \n'.format(feature['id'], feature[rfield]))
+            for feature in pipe_features:
+                file.write('{}    {} \n'.format(feature['id'], feature[rfield]))
 
         # SHOW INFO
         start(feedback, self.displayName())
