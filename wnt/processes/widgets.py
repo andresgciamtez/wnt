@@ -3,22 +3,22 @@
 from pathlib import Path
 
 from qgis.PyQt.QtWidgets import QComboBox
-from qgis.gui import QgsAbstractProcessingParameterWidgetWrapper
+from processing.gui.wrappers import WidgetWrapper
 
 from ..utils.utils_tin import surface_names
 
 
-class LandXmlSurfaceWidgetWrapper(QgsAbstractProcessingParameterWidgetWrapper):
+class LandXmlSurfaceWidgetWrapper(WidgetWrapper):
     """Editable combo box populated from the selected LandXML file."""
 
-    def createWidget(self):
-        self._combo = QComboBox()
-        self._combo.setEditable(True)
-        self._combo.currentTextChanged.connect(
+    def createWidget(self, **kwargs):
+        self._file_wrapper = None
+        widget = QComboBox()
+        widget.setEditable(True)
+        widget.currentTextChanged.connect(
             lambda _text: self.widgetValueHasChanged.emit(self)
         )
-        self._file_wrapper = None
-        return self._combo
+        return widget
 
     def postInitialize(self, wrappers):
         file_parameter = self.parameterDefinition().metadata().get("landxml_file_parameter")
@@ -37,7 +37,7 @@ class LandXmlSurfaceWidgetWrapper(QgsAbstractProcessingParameterWidgetWrapper):
         self._set_combo_text(str(value or ""))
 
     def widgetValue(self):
-        return self._combo.currentText().strip()
+        return self.widget.currentText().strip()
 
     def _selected_file(self):
         if self._file_wrapper is None:
@@ -48,7 +48,7 @@ class LandXmlSurfaceWidgetWrapper(QgsAbstractProcessingParameterWidgetWrapper):
             return str(self._file_wrapper.parameterValue() or "")
 
     def _refresh_surfaces(self):
-        current = self.widgetValue()
+        current = self.value()
         names = []
         landxml_file = self._selected_file()
         if landxml_file and Path(landxml_file).is_file():
@@ -57,18 +57,24 @@ class LandXmlSurfaceWidgetWrapper(QgsAbstractProcessingParameterWidgetWrapper):
             except Exception:
                 names = []
 
-        self._combo.blockSignals(True)
-        self._combo.clear()
-        self._combo.addItems(names)
+        self.widget.blockSignals(True)
+        self.widget.clear()
+        self.widget.addItems(names)
         if current:
             self._set_combo_text(current)
         elif names:
-            self._combo.setCurrentText(names[0])
-        self._combo.blockSignals(False)
+            self.widget.setCurrentText(names[0])
+        self.widget.blockSignals(False)
+
+    def value(self):
+        return self.widget.currentText().strip()
+
+    def setValue(self, value):
+        self._set_combo_text(str(value or ""))
 
     def _set_combo_text(self, value):
-        index = self._combo.findText(value)
+        index = self.widget.findText(value)
         if index >= 0:
-            self._combo.setCurrentIndex(index)
+            self.widget.setCurrentIndex(index)
         else:
-            self._combo.setEditText(value)
+            self.widget.setEditText(value)
