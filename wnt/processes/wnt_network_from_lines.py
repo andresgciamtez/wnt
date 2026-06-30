@@ -25,7 +25,7 @@ from qgis.core import (QgsFeature,
                        QgsUnitTypes,
                        QgsPointXY
                        )
-from .base import WntProcessingAlgorithm
+from .base import WntProcessingAlgorithm, require_projected_crs
 from .widgets import LandXmlSurfaceWidgetWrapper
 from ..utils import utils_core as tools
 from ..utils import utils_graph as graph
@@ -118,7 +118,7 @@ class NetworkFromLinesAlgorithm(WntProcessingAlgorithm):
         """
         Returns the translated algorithm name.
         """
-        return 'Network from lines'
+        return self.tr('Network from lines')
 
     def group(self):
         """
@@ -354,6 +354,8 @@ class NetworkFromLinesAlgorithm(WntProcessingAlgorithm):
         )
 
         # SEND INFORMATION TO THE USER
+        if not require_projected_crs(output_crs, feedback):
+            return {}
         log_start(feedback, self.displayName())
         log_crs(feedback, output_crs)
         self._log_options(

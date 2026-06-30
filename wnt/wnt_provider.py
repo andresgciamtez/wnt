@@ -1,29 +1,36 @@
 """Processing provider for Water Network Tools."""
 
+from importlib import import_module
+
 from qgis.core import QgsProcessingProvider
-from .processes.wnt_assign_demand import AssignDemandAlgorithm
-from .processes.wnt_classify import ClassifyAlgorithm
-from .processes.wnt_config_toolkit import ConfigToolkitAlgorithm
-from .processes.wnt_connect_by_distance import ConnectByDistanceAlgorithm
-from .processes.wnt_elevation_from_raster import ElevationFromRasterAlgorithm
-from .processes.wnt_elevation_from_tin import ElevationFromTINAlgorithm
-from .processes.wnt_network_to_epanet import NetworkToEpanetAlgorithm
-from .processes.wnt_network_to_xml import NetworkToXmlAlgorithm
-from .processes.wnt_network_to_graph import NetworkToGraphAlgorithm
-from .processes.wnt_hydrant_pairs import HydrantPairsAlgorithm
-from .processes.wnt_network_from_xml import NetworkFromXmlAlgorithm
-from .processes.wnt_merge_networks import MergeNetworksAlgorithm
-from .processes.wnt_network_from_epanet import NetworkFromEpanetAlgorithm
-from .processes.wnt_network_from_lines import NetworkFromLinesAlgorithm
-from .processes.wnt_node_degrees import NodeDegreesAlgorithm
-from .processes.wnt_network_to_ppno import NetworkToPpnoAlgorithm
-from .processes.wnt_network_to_pipesizing import NetworkToPipesizingAlgorithm
-from .processes.wnt_results_from_epanet import ResultsFromEpanetAlgorithm
-from .processes.wnt_demand_to_epanet_scenario import DemandToEpanetScenarioAlgorithm
-from .processes.wnt_pipe_propierties_to_epanet_scenario import PipePropiertiesToEpanetScenarioAlgorithm
-from .processes.wnt_split_lines_at_points import SplitLinesAtPointsAlgorithm
-from .processes.wnt_validate import ValidateAlgorithm
-from .processes.wnt_update_assignment import UpdateAssignmentAlgorithm
+
+
+ALGORITHM_SPECS = (
+    ('.processes.wnt_assign_demand', 'AssignDemandAlgorithm'),
+    ('.processes.wnt_classify', 'ClassifyAlgorithm'),
+    ('.processes.wnt_config_toolkit', 'ConfigToolkitAlgorithm'),
+    ('.processes.wnt_connect_by_distance', 'ConnectByDistanceAlgorithm'),
+    ('.processes.wnt_elevation_from_raster', 'ElevationFromRasterAlgorithm'),
+    ('.processes.wnt_elevation_from_tin', 'ElevationFromTINAlgorithm'),
+    ('.processes.wnt_network_to_epanet', 'NetworkToEpanetAlgorithm'),
+    ('.processes.wnt_demand_to_epanet_scenario', 'DemandToEpanetScenarioAlgorithm'),
+    ('.processes.wnt_pipe_propierties_to_epanet_scenario', 'PipePropiertiesToEpanetScenarioAlgorithm'),
+    ('.processes.wnt_network_to_xml', 'NetworkToXmlAlgorithm'),
+    ('.processes.wnt_network_to_graph', 'NetworkToGraphAlgorithm'),
+    ('.processes.wnt_hydrant_pairs', 'HydrantPairsAlgorithm'),
+    ('.processes.wnt_network_from_xml', 'NetworkFromXmlAlgorithm'),
+    ('.processes.wnt_merge_networks', 'MergeNetworksAlgorithm'),
+    ('.processes.wnt_network_from_epanet', 'NetworkFromEpanetAlgorithm'),
+    ('.processes.wnt_network_from_lines', 'NetworkFromLinesAlgorithm'),
+    ('.processes.wnt_node_degrees', 'NodeDegreesAlgorithm'),
+    ('.processes.wnt_network_to_ppno', 'NetworkToPpnoAlgorithm'),
+    ('.processes.wnt_network_to_pipesizing', 'NetworkToPipesizingAlgorithm'),
+    ('.processes.wnt_results_from_epanet', 'ResultsFromEpanetAlgorithm'),
+    ('.processes.wnt_split_lines_at_points', 'SplitLinesAtPointsAlgorithm'),
+    ('.processes.wnt_validate', 'ValidateAlgorithm'),
+    ('.processes.wnt_update_assignment', 'UpdateAssignmentAlgorithm'),
+)
+
 
 class WaterNetworkToolsProvider(QgsProcessingProvider):
     """Main class"""
@@ -32,6 +39,7 @@ class WaterNetworkToolsProvider(QgsProcessingProvider):
         Default constructor.
         """
         QgsProcessingProvider.__init__(self)
+        self.load_errors = []
 
     def unload(self):
         """
@@ -44,29 +52,14 @@ class WaterNetworkToolsProvider(QgsProcessingProvider):
         """
         Loads all algorithms belonging to this provider.
         """
-        self.addAlgorithm(AssignDemandAlgorithm())
-        self.addAlgorithm(ClassifyAlgorithm())
-        self.addAlgorithm(ConfigToolkitAlgorithm())
-        self.addAlgorithm(ConnectByDistanceAlgorithm())
-        self.addAlgorithm(ElevationFromRasterAlgorithm())
-        self.addAlgorithm(ElevationFromTINAlgorithm())
-        self.addAlgorithm(NetworkToEpanetAlgorithm())
-        self.addAlgorithm(DemandToEpanetScenarioAlgorithm())
-        self.addAlgorithm(PipePropiertiesToEpanetScenarioAlgorithm())
-        self.addAlgorithm(NetworkToXmlAlgorithm())
-        self.addAlgorithm(NetworkToGraphAlgorithm())
-        self.addAlgorithm(HydrantPairsAlgorithm())
-        self.addAlgorithm(NetworkFromXmlAlgorithm())
-        self.addAlgorithm(MergeNetworksAlgorithm())
-        self.addAlgorithm(NetworkFromEpanetAlgorithm())
-        self.addAlgorithm(NetworkFromLinesAlgorithm())
-        self.addAlgorithm(NodeDegreesAlgorithm())
-        self.addAlgorithm(NetworkToPpnoAlgorithm())
-        self.addAlgorithm(NetworkToPipesizingAlgorithm())
-        self.addAlgorithm(ResultsFromEpanetAlgorithm())
-        self.addAlgorithm(SplitLinesAtPointsAlgorithm())
-        self.addAlgorithm(ValidateAlgorithm())
-        self.addAlgorithm(UpdateAssignmentAlgorithm())
+        self.load_errors = []
+        for module_name, class_name in ALGORITHM_SPECS:
+            try:
+                module = import_module(module_name, package=__package__)
+                algorithm_class = getattr(module, class_name)
+                self.addAlgorithm(algorithm_class())
+            except Exception as exc:
+                self.load_errors.append((class_name, str(exc)))
 
     def id(self):
         """

@@ -12,7 +12,7 @@ from qgis.core import (QgsFeature,
                        QgsSpatialIndex,
                        QgsWkbTypes
                       )
-from .base import WntProcessingAlgorithm, missing_fields, set_progress
+from .base import WntProcessingAlgorithm, missing_fields, require_projected_crs, set_progress
 from .messages import crs as log_crs
 from .messages import error, finish, info, start
 
@@ -47,7 +47,7 @@ class ConnectByDistanceAlgorithm(WntProcessingAlgorithm):
         """
         Returns the translated algorithm name.
         """
-        return 'Connect by distance'
+        return self.tr('Connect by distance')
 
     def group(self):
         """
@@ -136,6 +136,8 @@ class ConnectByDistanceAlgorithm(WntProcessingAlgorithm):
         if crs == t_ly.sourceCrs():
 
             # SEND INFORMATION TO THE USER
+            if not require_projected_crs(crs, feedback):
+                return {}
             start(feedback, self.displayName())
             log_crs(feedback, crs)
         else:

@@ -11,9 +11,11 @@ from qgis.core import (QgsFeature,
                        QgsProcessingParameterFeatureSink,
                        QgsProcessingParameterFeatureSource,
                        QgsProcessingParameterField,
+                       QgsRectangle,
+                       QgsSpatialIndex,
                        QgsWkbTypes
                       )
-from .base import WntProcessingAlgorithm
+from .base import WntProcessingAlgorithm, require_projected_crs
 from .messages import crs as log_crs
 from .messages import finish, info, start
 
@@ -118,22 +120,57 @@ class HydrantPairsAlgorithm(WntProcessingAlgorithm):
         idfield = self.parameterAsString(parameters, self.FIELD_ID, context)
         maxdist = self.parameterAsDouble(parameters, self.MAX_DISTANCE, context)
 
+        crs = hydlayer.sourceCrs()
+        if not require_projected_crs(crs, feedback):
+            return {}
+
         # SEND INFORMATION TO THE USER
         start(feedback, self.displayName())
-        log_crs(feedback, hydlayer.sourceCrs())
+        log_crs(feedback, crs)
 
         # READ HYDRANTS
-        hydrants = []
+        hydrant_features = list(hydlayer.getFeatures())
+        hydrants = [(f[idfield], f.geometry().asPoint(), f.id()) for f in hydrant_features]
         pairs = []
-        for f in hydlayer.getFeatures():
-            hydrants.append((f[idfield], f.geometry().asPoint()))
 
         # CALCULATE PAIRS
-        for i in range(len(hydrants)-1):
-            for j in range(i+1, len(hydrants)):
-                dist = hydrants[i][1].distance(hydrants[j][1])
-                if dist <= maxdist:
-                    pairs.append((hydrants[i], hydrants[j], dist))
+        try:
+            index = QgsSpatialIndex(iter(hydrant_features))
+        except (TypeError, RuntimeError):
+            index = None
+
+        if index is None:
+            for i in range(len(hydrants)-1):
+                for j in range(i+1, len(hydrants)):
+                    dist = hydrants[i][1].distance(hydrants[j][1])
+                    if dist <= maxdist:
+                        pairs.append((hydrants[i], hydrants[j], dist))
+        else:
+            by_fid = {f.id(): item for f, item in zip(hydrant_features, hydrants)}
+            seen = set()
+            for left in hydrants:
+                point = left[1]
+                try:
+                    bbox = QgsRectangle(
+                        point.x() - maxdist,
+                        point.y() - maxdist,
+                        point.x() + maxdist,
+                        point.y() + maxdist,
+                    )
+                    candidate_ids = index.intersects(bbox)
+                except AttributeError:
+                    candidate_ids = [item[2] for item in hydrants]
+                for fid in candidate_ids:
+                    right = by_fid.get(fid)
+                    if right is None or left[2] == right[2]:
+                        continue
+                    key = tuple(sorted((left[2], right[2])))
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    dist = left[1].distance(right[1])
+                    if dist <= maxdist:
+                        pairs.append((left, right, dist))
 
         # SHOW INFO
         info(feedback, "Input hydrants", len(hydrants))

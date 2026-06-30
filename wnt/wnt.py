@@ -2,9 +2,10 @@
 
 from pathlib import Path
 
-from qgis.PyQt.QtCore import QCoreApplication, QSettings, QTranslator
+from qgis.PyQt.QtCore import QCoreApplication, QTranslator
 from qgis.core import QgsApplication
 from .wnt_provider import WaterNetworkToolsProvider
+from .i18n import _locale_prefix
 
 
 class WaterNetworkToolsPlugin():
@@ -15,8 +16,8 @@ class WaterNetworkToolsPlugin():
         self._load_translation()
 
     def _load_translation(self):
-        """Load the compiled translation matching the QGIS locale."""
-        locale = QSettings().value('locale/userLocale', '', type=str)[:2]
+        """Load the compiled translation matching the active locale."""
+        locale = _locale_prefix()
         if not locale:
             return
 
@@ -38,7 +39,9 @@ class WaterNetworkToolsPlugin():
         self.initProcessing()
 
     def unload(self):
-        QgsApplication.processingRegistry().removeProvider(self.provider)
+        if self.provider is not None:
+            QgsApplication.processingRegistry().removeProvider(self.provider)
+            self.provider = None
         if self.translator is not None:
             QCoreApplication.removeTranslator(self.translator)
             self.translator = None

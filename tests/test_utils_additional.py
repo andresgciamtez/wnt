@@ -20,7 +20,13 @@ from wnt.utils.utils_graph import (
     validate_records,
 )
 from wnt.utils.utils_landxml import network_from_xml
-from wnt.utils.utils_tin import TIN, Triangle
+
+
+def tin_helpers():
+    pytest.importorskip("qgis")
+    from wnt.utils.utils_tin import TIN, Triangle, surface_names
+
+    return TIN, Triangle, surface_names
 
 
 def test_xy_accepts_indexed_and_qgis_like_points():
@@ -399,6 +405,7 @@ def test_graph_classifies_tree_and_mesh_edges():
 
 
 def test_tin_triangle_and_landxml_loading(tmp_path):
+    TIN, Triangle, _surface_names = tin_helpers()
     triangle = Triangle((0, 0, 1), (1, 0, 2), (0, 1, 3))
 
     assert triangle.xy_area() == 0.5
@@ -440,6 +447,7 @@ def test_tin_triangle_and_landxml_loading(tmp_path):
 
 
 def test_tin_reload_replaces_previous_surface(tmp_path):
+    TIN, _Triangle, _surface_names = tin_helpers()
     xml = tmp_path / "surfaces.xml"
     xml.write_text(
         textwrap.dedent(
@@ -482,6 +490,7 @@ def test_tin_reload_replaces_previous_surface(tmp_path):
 
 
 def test_tin_rejects_degenerate_faces(tmp_path):
+    TIN, _Triangle, _surface_names = tin_helpers()
     xml = tmp_path / "surface.xml"
     xml.write_text(
         textwrap.dedent(
@@ -510,6 +519,7 @@ def test_tin_rejects_degenerate_faces(tmp_path):
 
 
 def test_tin_spatial_index_limits_candidate_triangles(tmp_path):
+    TIN, _Triangle, _surface_names = tin_helpers()
     xml = tmp_path / "surface.xml"
     xml.write_text(
         textwrap.dedent(
@@ -717,3 +727,21 @@ def test_landxml_parser_handles_optional_crs_desc_and_inverts(tmp_path):
     assert set(storm["nodes"]) == {"S1", "S2", "S3"}
     assert set(storm["links"]) == {"P1"}
     assert storm["links"]["P1"]["roughness"] == 0.013
+
+
+def test_landxml_parsers_reject_entity_expansion(tmp_path):
+    TIN, _Triangle, surface_names = tin_helpers()
+    xml = tmp_path / "malicious.xml"
+    xml.write_text(
+        """<!DOCTYPE data [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>
+        <LandXML xmlns="http://www.landxml.org/schema/LandXML-1.2">&xxe;</LandXML>
+        """,
+        encoding="utf-8",
+    )
+
+    with pytest.raises(Exception):
+        network_from_xml(xml)
+    with pytest.raises(Exception):
+        surface_names(xml)
+    with pytest.raises(Exception):
+        TIN().from_landxml(xml)

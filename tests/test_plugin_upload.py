@@ -39,6 +39,11 @@ def parameters():
     )
 
 
+
+def test_plugin_upload_imports_defusedxml_monkey_patch():
+    assert plugin_upload.monkey_patch.__module__ == "defusedxml.xmlrpc"
+
+
 def test_hide_password_masks_password():
     assert (
         plugin_upload.hide_password("https://user:secret@plugins.example:443/plugins/RPC2/")

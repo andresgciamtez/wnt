@@ -14,7 +14,7 @@ from qgis.core import (QgsCoordinateTransform,
                        QgsSpatialIndex,
                        QgsUnitTypes
                        )
-from .base import WntProcessingAlgorithm, missing_fields, set_progress
+from .base import WntProcessingAlgorithm, missing_fields, require_projected_crs, set_progress
 from ..utils import utils_graph as graph
 from .messages import crs as log_crs
 from .messages import error, finish, info, start, warning
@@ -334,6 +334,8 @@ class MergeNetworksAlgorithm(WntProcessingAlgorithm):
         if crs == l1lay.sourceCrs() == n2lay.sourceCrs() == l2lay.sourceCrs():
 
             # SEND INFORMATION TO THE USER
+            if not require_projected_crs(output_crs, feedback):
+                return {}
             start(feedback, self.displayName())
             log_crs(feedback, output_crs)
         else:

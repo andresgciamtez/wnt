@@ -46,7 +46,7 @@ class AssignDemandAlgorithm(WntProcessingAlgorithm):
         """
         Returns the translated algorithm name.
         """
-        return 'Assign demand'
+        return self.tr('Assign demand')
 
     def group(self):
         """
@@ -168,8 +168,10 @@ class AssignDemandAlgorithm(WntProcessingAlgorithm):
 
         tfields = tlayer.fields()
         node_fields = QgsFields(tfields)
+        existing_node_fields = set(tfields.names())
         for field in sfields:
-            node_fields.append(QgsField(field, QMetaType.Double))
+            if field not in existing_node_fields:
+                node_fields.append(QgsField(field, QMetaType.Double))
 
         (node_sink, node_id) = self.parameterAsSink(
             parameters,
@@ -264,8 +266,12 @@ class AssignDemandAlgorithm(WntProcessingAlgorithm):
 
             t_id = tfeature.attributes()[t_id_idx]
             attr = list(tfeature.attributes())
+            if len(attr) < len(node_fields):
+                attr.extend([None] * (len(node_fields) - len(attr)))
             for field in sfields:
-                attr.append(values[(t_id, field)])
+                index = node_fields.lookupField(field)
+                if index >= 0:
+                    attr[index] = values[(t_id, field)]
 
             f = QgsFeature(node_fields)
             f.setGeometry(tfeature.geometry())

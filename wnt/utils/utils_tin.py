@@ -1,6 +1,6 @@
 """TIN interpolation utilities for LandXML surfaces."""
 
-import xml.etree.ElementTree as ET
+from .safe_xml import parse as safe_xml_parse
 
 from qgis.core import (QgsFeature,
                        QgsGeometry,
@@ -18,7 +18,7 @@ def xmlname(name):
 
 def surface_names(file):
     """Return LandXML TIN surface names in file order."""
-    tree = ET.parse(file)
+    tree = safe_xml_parse(file)
     root = tree.getroot()
     names = []
     for surface in root.iter(xmlname('Surface')):
@@ -98,7 +98,7 @@ class TIN:
         file, string, is the LandXML file name
         surfname, string, is the surface name, by default load the first one
         '''
-        tree = ET.parse(file)
+        tree = safe_xml_parse(file)
         root = tree.getroot()
         for surface in root.iter(xmlname('Surface')):
             definition = surface.find(xmlname('Definition'))

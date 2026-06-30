@@ -1,7 +1,7 @@
 """LandXML pipe network parser."""
 
 import re
-import xml.etree.ElementTree as ET
+from .safe_xml import parse as safe_xml_parse
 
 NS = "{http://www.landxml.org/schema/LandXML-1.2}"
 
@@ -215,7 +215,7 @@ def _pressure_node_type(struct):
     source = " ".join(
         filter(None, (struct.attrib.get("name"), struct.attrib.get("desc"), struct.attrib.get("type")))
     )
-    if re.search(r"tank|dep[oó]sito", source, flags=re.IGNORECASE):
+    if re.search(r"tank|dep[oÃ³]sito", source, flags=re.IGNORECASE):
         return "tank"
     if re.search(r"reservoir|embalse|fuente", source, flags=re.IGNORECASE):
         return "reservoir"
@@ -228,7 +228,7 @@ def _gravity_node_type(struct):
     )
     if re.search(r"outfall|outlet|descarga|salida", source, flags=re.IGNORECASE):
         return "outfall"
-    if re.search(r"storage|tank|dep[oó]sito", source, flags=re.IGNORECASE):
+    if re.search(r"storage|tank|dep[oÃ³]sito", source, flags=re.IGNORECASE):
         return "storage"
     return "manhole"
 
@@ -281,7 +281,7 @@ def _water_link_type(pipe):
     source = " ".join(filter(None, (pipe.attrib.get("name"), pipe.attrib.get("desc"), pipe.attrib.get("type"))))
     if re.search(r"pump|bomba", source, flags=re.IGNORECASE):
         return "pump"
-    if re.search(r"valve|v[aá]lvula", source, flags=re.IGNORECASE):
+    if re.search(r"valve|v[aÃ¡]lvula", source, flags=re.IGNORECASE):
         return "valve"
     return "pipe"
 
@@ -366,7 +366,7 @@ def _link_record(origin, net_type, link_id, pipe, inverts, nodes):
 
 def network_from_xml(xmlfn):
     """Import all LandXML pipe networks into a unified WNT schema."""
-    tree = ET.parse(xmlfn)
+    tree = safe_xml_parse(xmlfn)
     root = tree.getroot()
     crs = root.find(xmlname("CoordinateSystem"))
     epsg_code = None

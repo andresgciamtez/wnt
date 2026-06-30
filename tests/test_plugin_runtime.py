@@ -4,8 +4,11 @@ from pathlib import Path
 
 import pytest
 
+pytest.importorskip("qgis")
+
 import wnt
 from wnt.wnt import WaterNetworkToolsPlugin
+from wnt.wnt_provider import WaterNetworkToolsProvider
 
 from .utilities import get_qgis_app
 
@@ -46,23 +49,52 @@ def test_unload_removes_loaded_translator(monkeypatch):
     assert plugin.translator is None
 
 
+
+def test_unload_without_init_processing_does_not_fail():
+    plugin = WaterNetworkToolsPlugin()
+
+    plugin.unload()
+
+    assert plugin.provider is None
+
+
+def test_provider_keeps_loading_after_algorithm_import_error(monkeypatch):
+    added = []
+
+    class FakeModule:
+        def __getattr__(self, name):
+            return lambda: name
+
+    def fake_import_module(module_name, package=None):
+        if module_name.endswith("wnt_assign_demand"):
+            raise ImportError("broken optional dependency")
+        return FakeModule()
+
+    class TestProvider(WaterNetworkToolsProvider):
+        def __init__(self):
+            self.load_errors = []
+
+        def addAlgorithm(self, algorithm):
+            added.append(algorithm)
+
+    monkeypatch.setattr("wnt.wnt_provider.import_module", fake_import_module)
+    provider = TestProvider()
+
+    provider.loadAlgorithms()
+
+    assert provider.load_errors == [("AssignDemandAlgorithm", "broken optional dependency")]
+    assert added
+
+
 def test_load_translation_branches(monkeypatch, tmp_path):
     plugin = WaterNetworkToolsPlugin()
     plugin.translator = None
 
-    class EmptySettings:
-        def value(self, *args, **kwargs):
-            return ""
-
-    monkeypatch.setattr("wnt.wnt.QSettings", EmptySettings)
+    monkeypatch.setattr("wnt.wnt._locale_prefix", lambda: "")
     plugin._load_translation()
     assert plugin.translator is None
 
-    class MissingSettings:
-        def value(self, *args, **kwargs):
-            return "zz"
-
-    monkeypatch.setattr("wnt.wnt.QSettings", MissingSettings)
+    monkeypatch.setattr("wnt.wnt._locale_prefix", lambda: "zz")
     plugin._load_translation()
     assert plugin.translator is None
 
@@ -89,10 +121,6 @@ def test_load_translation_branches(monkeypatch, tmp_path):
         def __str__(self):
             return str(qm)
 
-    class CatalogSettings:
-        def value(self, *args, **kwargs):
-            return "yy"
-
     class FakeTranslator:
         def load(self, path):
             assert path == str(qm)
@@ -100,7 +128,7 @@ def test_load_translation_branches(monkeypatch, tmp_path):
 
     installed = []
 
-    monkeypatch.setattr("wnt.wnt.QSettings", CatalogSettings)
+    monkeypatch.setattr("wnt.wnt._locale_prefix", lambda: "yy")
     monkeypatch.setattr("wnt.wnt.Path", FakePath)
     monkeypatch.setattr("wnt.wnt.QTranslator", FakeTranslator)
     monkeypatch.setattr("wnt.wnt.QCoreApplication.installTranslator", installed.append)

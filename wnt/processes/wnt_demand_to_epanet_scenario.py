@@ -4,7 +4,7 @@ from qgis.core import (QgsProcessing,
                        QgsProcessingParameterFeatureSource,
                        QgsProcessingParameterField,
                        QgsProcessingParameterFileDestination)
-from .base import WntProcessingAlgorithm
+from .base import WntProcessingAlgorithm, missing_fields
 from .messages import error, finish, info, start
 
 class DemandToEpanetScenarioAlgorithm(WntProcessingAlgorithm):
@@ -34,7 +34,7 @@ class DemandToEpanetScenarioAlgorithm(WntProcessingAlgorithm):
         """
         Returns a localised short helper string for the algorithm.
         """
-        return 'Demand to epanet scenario file (.scn)'
+        return self.tr('Demand to epanet scenario file (.scn)')
 
     def group(self):
         """
@@ -104,24 +104,32 @@ class DemandToEpanetScenarioAlgorithm(WntProcessingAlgorithm):
         if not defields:
             error(feedback, "Field containing demand is required")
             return {}
+        missing = missing_fields(nodes, ['id', 'type', *defields])
+        if missing:
+            error(feedback, "Node layer is missing required fields: " + ", ".join(missing))
+            return {}
 
         # WRITE FILE
         cnt = 0
         scnfn = self.parameterAsFileOutput(parameters, self.OUTPUT, context)
-        with open(scnfn, 'w', encoding='utf-8') as file:
-            file.write('; File generated automatically by Water Network Tools \n')
-            file.write('[DEMANDS] \n')
-            file.write(';Node    Demand    Pattern \n')
-            feedback.setProgress(5) # Update the progress bar
+        try:
+            with open(scnfn, 'w', encoding='utf-8') as file:
+                file.write('; File generated automatically by Water Network Tools \n')
+                file.write('[DEMANDS] \n')
+                file.write(';Node    Demand    Pattern \n')
+                feedback.setProgress(5) # Update the progress bar
 
-            for f in nodes.getFeatures():
-                for field in defields:
-                    value = f[field]
-                    node_type = str(f['type'] or '').upper()
-                    if value not in (None, '') and node_type == 'JUNCTION':
-                        cnt += 1
-                        line = '{}  {}  {} \n'.format(f['id'], value, field)
-                        file.write(line)
+                for f in nodes.getFeatures():
+                    for field in defields:
+                        value = f[field]
+                        node_type = str(f['type'] or '').upper()
+                        if value not in (None, '') and node_type == 'JUNCTION':
+                            cnt += 1
+                            line = '{}  {}  {} \n'.format(f['id'], value, field)
+                            file.write(line)
+        except UnicodeEncodeError as exc:
+            error(feedback, "Output contains characters that cannot be written: " + str(exc))
+            return {}
 
         # SHOW INFO
         start(feedback, self.displayName())

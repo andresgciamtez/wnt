@@ -3,6 +3,8 @@
 import json
 import xml.etree.ElementTree as ET
 import pytest
+
+pytest.importorskip("qgis")
 from qgis.core import QgsGeometry, QgsLineString, QgsMultiLineString, QgsPoint, QgsPointXY
 
 from wnt.processes import messages
@@ -1189,6 +1191,31 @@ def test_network_from_epanet_imports_node_and_link_features(monkeypatch, tmp_pat
     assert algorithm.processAlgorithm({}, None, FakeFeedback(canceled=True)) == {}
 
 
+
+def test_network_from_epanet_allows_missing_coordinates_in_output(monkeypatch, tmp_path):
+    algorithm = NetworkFromEpanetAlgorithm()
+    inp = tmp_path / "no_coordinates.inp"
+    inp.write_text(
+        "[JUNCTIONS]\nJ1 0\nJ2 0\n[PIPES]\nP1 J1 J2 1 100 120 0 Open\n[END]\n",
+        encoding="latin-1",
+    )
+    sinks = bind_common_parameters(
+        monkeypatch,
+        algorithm,
+        fields={algorithm.CRS: FakeCrs()},
+        files={algorithm.INPUT: inp},
+    )
+
+    result = algorithm.processAlgorithm({}, FakeProcessingContext(), FakeFeedback())
+
+    assert result == {
+        algorithm.OUTPUT_NODES: f"{algorithm.OUTPUT_NODES}_id",
+        algorithm.OUTPUT_LINES: f"{algorithm.OUTPUT_LINES}_id",
+    }
+    assert len(sinks[algorithm.OUTPUT_NODES].features) == 2
+    assert len(sinks[algorithm.OUTPUT_LINES].features) == 1
+
+
 def test_network_from_epanet_keeps_missing_version_dependent_json_keys_editable(monkeypatch, tmp_path):
     algorithm = NetworkFromEpanetAlgorithm()
     inp = tmp_path / "minimal.inp"
@@ -1557,6 +1584,52 @@ def test_update_assignment_updates_moved_target_and_errors(monkeypatch):
     feedback = FakeFeedback()
     assert algorithm.processAlgorithm({}, None, feedback) == {}
     assert feedback.errors == ["ERROR: Source point misplaced: S1"]
+
+
+
+def test_update_assignment_validates_schema_and_geometry(monkeypatch):
+    algorithm = UpdateAssignmentAlgorithm()
+    sources = FakeSource(
+        [FakeFeature({"id": "S1", "base": 1.0}, FakeGeometry(0, 0))],
+        fields=FakeFields([FakeNamedField("id"), FakeNamedField("base")]),
+    )
+    targets = FakeSource(
+        [FakeFeature({"id": "T1", "base": 0.0}, FakeGeometry(1, 0))],
+        fields=FakeFields([FakeNamedField("id"), FakeNamedField("base")]),
+    )
+    missing_target = FakeSource(
+        [FakeFeature({"source": "S1", "base": 0.0}, FakeGeometry(0, 0, polyline=[FakePoint(0, 0), FakePoint(1, 0)]))],
+        fields=FakeFields([FakeNamedField("source"), FakeNamedField("base")]),
+    )
+    bind_common_parameters(
+        monkeypatch,
+        algorithm,
+        sources={
+            algorithm.INPUT_SOURCE: sources,
+            algorithm.INPUT_TARGET: targets,
+            algorithm.INPUT_ASSIGNMENTS: missing_target,
+        },
+    )
+    feedback = FakeFeedback()
+    assert algorithm.processAlgorithm({}, None, feedback) == {}
+    assert feedback.errors == ["ERROR: Assignment layer is missing required fields: target"]
+
+    empty_geometry = FakeSource(
+        [FakeFeature({"source": "S1", "target": "T1", "base": 0.0}, FakeGeometry(0, 0, polyline=[]))],
+        fields=FakeFields([FakeNamedField("source"), FakeNamedField("target"), FakeNamedField("base")]),
+    )
+    bind_common_parameters(
+        monkeypatch,
+        algorithm,
+        sources={
+            algorithm.INPUT_SOURCE: sources,
+            algorithm.INPUT_TARGET: targets,
+            algorithm.INPUT_ASSIGNMENTS: empty_geometry,
+        },
+    )
+    feedback = FakeFeedback()
+    assert algorithm.processAlgorithm({}, None, feedback) == {}
+    assert feedback.errors == ["ERROR: Assignment geometry must be a LineString with at least two vertices"]
 
 
 def test_split_lines_at_points_splits_and_keeps_original(monkeypatch):
@@ -2090,7 +2163,7 @@ def test_network_from_lines_reprojects_to_selected_crs(monkeypatch):
 
     monkeypatch.setattr("wnt.processes.wnt_network_from_lines.QgsCoordinateTransform", FakeTransform)
     monkeypatch.setattr("wnt.processes.wnt_network_from_lines.QgsProject", FakeProject)
-    output_crs = FakeCrs("EPSG:4326")
+    output_crs = FakeCrs("EPSG:3857")
     lines = FakeSource(
         [FakeFeature({}, FakeGeometry(0, 0, polyline=[FakePoint(0, 0), FakePoint(1, 0)]))],
         crs=FakeCrs("EPSG:25830"),
@@ -2990,6 +3063,36 @@ def test_network_to_ppno_writes_ext_from_catalog_and_rejects_crs(monkeypatch, tm
 
     assert algorithm.processAlgorithm({}, None, feedback) == {}
     assert feedback.errors == ["ERROR: PPNO pipe catalog must not contain section headers"]
+
+
+def test_scenario_exporters_validate_required_fields(monkeypatch, tmp_path):
+    demand = DemandToEpanetScenarioAlgorithm()
+    output = tmp_path / "demands.scn"
+    nodes = FakeSource([FakeFeature({"id": "J1", "base": 1.0})], fields=FakeFields([FakeNamedField("id"), FakeNamedField("base")]))
+    bind_common_parameters(
+        monkeypatch,
+        demand,
+        sources={demand.INPUT_NODES: nodes},
+        fields={demand.FIELD_DEMAND: ["base"]},
+        files={demand.OUTPUT: output},
+    )
+    feedback = FakeFeedback()
+    assert demand.processAlgorithm({}, None, feedback) == {}
+    assert feedback.errors == ["ERROR: Node layer is missing required fields: type"]
+
+    pipe = PipePropiertiesToEpanetScenarioAlgorithm()
+    links = FakeSource([FakeFeature({"id": "P1", "type": "PIPE", "diameter": 100})])
+    bind_common_parameters(
+        monkeypatch,
+        pipe,
+        sources={pipe.INPUT_LINES: links},
+        fields={pipe.FIELD_DIAMETER: "diameter", pipe.FIELD_ROUGHNESS: "roughness"},
+        files={pipe.OUTPUT: output},
+    )
+    feedback = FakeFeedback()
+    assert pipe.processAlgorithm({}, None, feedback) == {}
+    assert feedback.errors == ["ERROR: Link layer is missing required fields: roughness"]
+
 
 def test_demand_to_epanet_scenario_writes_selected_junction_demands(monkeypatch, tmp_path):
     algorithm = DemandToEpanetScenarioAlgorithm()

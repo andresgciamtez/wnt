@@ -39,7 +39,7 @@ class ConfigToolkitAlgorithm(WntProcessingAlgorithm):
         Returns the translated algorithm name, which should be used for any
         user-visible display of the algorithm name.
         """
-        return 'Configure EPANET lib'
+        return self.tr('Configure EPANET lib')
 
     def group(self):
         """

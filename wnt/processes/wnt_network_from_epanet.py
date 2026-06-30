@@ -16,7 +16,7 @@ from .base import WntProcessingAlgorithm
 from ..utils import utils_core as tools
 from ..utils.utils_parser import SectionedText, parse_tokens
 from .messages import crs as log_crs
-from .messages import finish, info, start
+from .messages import error, finish, info, start
 
 
 NODE_KEY_MAP = {
@@ -298,7 +298,7 @@ class NetworkFromEpanetAlgorithm(WntProcessingAlgorithm):
         """
         Returns the translated algorithm name.
         """
-        return 'Network from EPANET file'
+        return self.tr('Network from EPANET file')
 
     def group(self):
         """
@@ -373,7 +373,11 @@ class NetworkFromEpanetAlgorithm(WntProcessingAlgorithm):
 
         # READ NETWORK
         network = tools.WntNetwork()
-        network.from_epanet(epanetf)
+        try:
+            network.from_epanet(epanetf)
+        except Exception as exc:
+            error(feedback, str(exc))
+            return {}
         nodes = network.nodes()
         links = network.links()
         sections = read_epanet_sections(epanetf)
@@ -402,7 +406,9 @@ class NetworkFromEpanetAlgorithm(WntProcessingAlgorithm):
             #add feature to sink
             ncnt += 1
             f = QgsFeature()
-            f.setGeometry(QgsGeometry.fromWkt(node.to_wkt()))
+            node_wkt = node.to_wkt()
+            if node_wkt:
+                f.setGeometry(QgsGeometry.fromWkt(node_wkt))
             properties = base_node_properties(node)
             properties.update(node_extra.get(node.name(), {}))
             f.setAttributes(
@@ -439,7 +445,9 @@ class NetworkFromEpanetAlgorithm(WntProcessingAlgorithm):
         for link in links:
             lcnt += 1
             f = QgsFeature()
-            f.setGeometry(QgsGeometry.fromWkt(link.to_wkt()))
+            link_wkt = link.to_wkt()
+            if link_wkt:
+                f.setGeometry(QgsGeometry.fromWkt(link_wkt))
             properties = base_link_properties(link)
             properties.update(link_extra.get(link.name(), {}))
             f.setAttributes(
@@ -471,4 +479,3 @@ class NetworkFromEpanetAlgorithm(WntProcessingAlgorithm):
 
         # OUTPUT
         return {self.OUTPUT_NODES: node_id, self.OUTPUT_LINES: link_id}
-

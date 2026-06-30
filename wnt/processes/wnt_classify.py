@@ -9,7 +9,7 @@ from qgis.core import (QgsProcessing,
                        )
 from .base import (OUTPUT_MODE_NEW, OUTPUT_MODE_UPDATE, OUTPUT_MODE_OPTIONS,
                    WntProcessingAlgorithm, feature_copy,
-                   field_index, qfield, update_layer_fields_and_attributes)
+                   field_index, missing_fields, qfield, update_layer_fields_and_attributes)
 from ..utils import utils_graph as gr
 from .messages import error, finish, info, start
 
@@ -112,12 +112,23 @@ class ClassifyAlgorithm(WntProcessingAlgorithm):
         else:
             links = self.parameterAsSource(parameters, self.INPUT_LINES, context)
 
+        missing = missing_fields(links, ['id', 'start', 'end'])
+        if missing:
+            error(feedback, "Input link layer is missing required fields: " + ", ".join(missing))
+            return {}
+
         # CREATE NETWORK
         netg = gr.Graph()
         link_features = list(links.getFeatures())
         nofl = len(link_features)
+        seen_ids = set()
         for cnt, feature in enumerate(link_features, start=1):
-            netg.add_edge(feature['id'], feature['start'], feature['end'])
+            link_id = feature['id']
+            if link_id in seen_ids:
+                error(feedback, "Duplicate link id: " + str(link_id))
+                return {}
+            seen_ids.add(link_id)
+            netg.add_edge(link_id, feature['start'], feature['end'])
             if cnt % 100 == 0:
                 feedback.setProgress(25 * cnt / nofl)
 

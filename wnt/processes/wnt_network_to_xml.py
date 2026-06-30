@@ -1,7 +1,8 @@
 """Export network layer pairs to WNT Network XML or LandXML."""
 
 import json
-import xml.etree.ElementTree as ET
+# ElementTree is used only to construct trusted XML output.
+import xml.etree.ElementTree as ET  # nosec B405
 
 from qgis.core import (
     QgsProcessing,

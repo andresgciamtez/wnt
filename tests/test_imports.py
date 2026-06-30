@@ -2,6 +2,8 @@
 
 import pytest
 
+pytest.importorskip("qgis")
+
 
 pytestmark = pytest.mark.qgis
 

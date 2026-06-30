@@ -4,8 +4,8 @@ from qgis.core import (QgsProcessing,
                        QgsProcessingParameterFeatureSource,
                        QgsProcessingParameterField,
                        QgsProcessingParameterFileDestination)
-from .base import WntProcessingAlgorithm
-from .messages import finish, info, start
+from .base import WntProcessingAlgorithm, missing_fields
+from .messages import error, finish, info, start
 
 class PipePropiertiesToEpanetScenarioAlgorithm(WntProcessingAlgorithm):
     """
@@ -37,7 +37,7 @@ class PipePropiertiesToEpanetScenarioAlgorithm(WntProcessingAlgorithm):
         Returns the translated algorithm name, which should be used for any
         user-visible display of the algorithm name.
         """
-        return 'Pipe propierties to epanet scenario file (.scn)'
+        return self.tr('Pipe propierties to epanet scenario file (.scn)')
 
     def group(self):
         """
@@ -112,6 +112,11 @@ class PipePropiertiesToEpanetScenarioAlgorithm(WntProcessingAlgorithm):
         dfield = self.parameterAsString(parameters, self.FIELD_DIAMETER, context)
         rfield = self.parameterAsString(parameters, self.FIELD_ROUGHNESS, context)
 
+        missing = missing_fields(links, ['id', 'type', dfield, rfield])
+        if missing:
+            error(feedback, "Link layer is missing required fields: " + ", ".join(missing))
+            return {}
+
         # OUTPUT
         scnfile = self.parameterAsFileOutput(parameters, self.OUTPUT, context)
 
@@ -121,21 +126,25 @@ class PipePropiertiesToEpanetScenarioAlgorithm(WntProcessingAlgorithm):
             feature for feature in links.getFeatures()
             if str(feature['type'] or '').upper() in ['PIPE', 'CVPIPE']
         ]
-        with open(scnfile, 'w', encoding='utf-8') as file:
-            file.write('; File generated automatically by Water Network Tools \n')
-            file.write('[DIAMETERS] \n')
-            file.write(';Pipe    Diameter \n')
+        try:
+            with open(scnfile, 'w', encoding='utf-8') as file:
+                file.write('; File generated automatically by Water Network Tools \n')
+                file.write('[DIAMETERS] \n')
+                file.write(';Pipe    Diameter \n')
 
-            for feature in pipe_features:
-                cnt += 1
-                file.write('{}    {} \n'.format(feature['id'], feature[dfield]))
+                for feature in pipe_features:
+                    cnt += 1
+                    file.write('{}    {} \n'.format(feature['id'], feature[dfield]))
 
-            file.write(' \n')
-            file.write('[ROUGHNESS] \n')
-            file.write(';Pipe    Roughness \n')
+                file.write(' \n')
+                file.write('[ROUGHNESS] \n')
+                file.write(';Pipe    Roughness \n')
 
-            for feature in pipe_features:
-                file.write('{}    {} \n'.format(feature['id'], feature[rfield]))
+                for feature in pipe_features:
+                    file.write('{}    {} \n'.format(feature['id'], feature[rfield]))
+        except UnicodeEncodeError as exc:
+            error(feedback, "Output contains characters that cannot be written: " + str(exc))
+            return {}
 
         # SHOW INFO
         start(feedback, self.displayName())

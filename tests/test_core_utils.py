@@ -66,6 +66,41 @@ def test_from_epanet_allows_missing_optional_sections(tmp_path):
     assert network.nodes()[0].get_geometry() == (0.0, 0.0)
 
 
+
+def test_from_epanet_allows_missing_coordinates_without_link_geometry(tmp_path):
+    inp_file = tmp_path / "no_coordinates.inp"
+    inp_file.write_text(
+        "\n".join([
+            "[JUNCTIONS]",
+            "J1 0",
+            "J2 0",
+            "[PIPES]",
+            "P1 J1 J2 1 100 120 0 Open",
+            "[END]",
+        ]),
+        encoding="latin-1",
+    )
+
+    network = WntNetwork()
+    network.from_epanet(str(inp_file))
+
+    assert [node.get_geometry() for node in network.nodes()] == [(None, None), (None, None)]
+    assert network.links()[0].get_geometry() is None
+
+
+def test_wnt_xml_rejects_entity_expansion(tmp_path):
+    xml_file = tmp_path / "entity.xml"
+    xml_file.write_text(
+        """<!DOCTYPE data [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>
+        <wntNetworkStore schemaVersion="1.0"><network id="&xxe;" /></wntNetworkStore>
+        """,
+        encoding="utf-8",
+    )
+
+    with pytest.raises(Exception):
+        WntNetwork().from_xml(xml_file)
+
+
 def test_label_indexes_preserve_first_duplicate():
     """Label lookups preserve the previous first-match behavior."""
     network = WntNetwork()

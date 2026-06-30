@@ -1,12 +1,14 @@
 """Core network model and EPANET file helpers."""
 
 import json
-import xml.etree.ElementTree as ET
+# XML parsing uses safe_xml_parse; ElementTree only builds XML output.
+import xml.etree.ElementTree as ET  # nosec B405
 from collections import defaultdict
 from datetime import datetime, timezone
 from math import dist, floor
 from pathlib import Path
 from .utils_parser import SectionedText, format_tokens, parse_tokens
+from .safe_xml import parse as safe_xml_parse
 
 
 XML_SCHEMA_VERSION = "1.0"
@@ -464,6 +466,7 @@ class WntLink:
         """Return the middle vertices."""
         if self._linestring:
             return self._linestring[1:-1]
+        return []
 
     def set_type(self, linktype):
         """Set link type."""
@@ -563,7 +566,7 @@ class WntNetwork:
     def _read_or_create_xml(xml_file):
         xml_path = Path(xml_file)
         if xml_path.exists() and xml_path.stat().st_size > 0:
-            tree = ET.parse(str(xml_path))
+            tree = safe_xml_parse(str(xml_path))
             root = tree.getroot()
             if root.tag != "wntNetworkStore":
                 raise Exception("Invalid WNT XML file: expected wntNetworkStore root.")
@@ -696,7 +699,7 @@ class WntNetwork:
 
     def from_xml(self, xml_file, version_id=None, network_id=None):
         """Load one network version from a WNT XML file."""
-        tree = ET.parse(str(xml_file))
+        tree = safe_xml_parse(str(xml_file))
         root = tree.getroot()
         if root.tag != "wntNetworkStore":
             raise Exception("Invalid WNT XML file: expected wntNetworkStore root.")
@@ -878,9 +881,11 @@ class WntNetwork:
             end_index = self.get_nodeindex(link.end())
             if start_index is None or end_index is None:
                 continue
-            tmp = [self._nodes[start_index].get_geometry()]
-            tmp.append(self._nodes[end_index].get_geometry())
-            link.set_geometry(tmp)
+            start_geometry = self._nodes[start_index].get_geometry()
+            end_geometry = self._nodes[end_index].get_geometry()
+            if None in start_geometry or None in end_geometry:
+                continue
+            link.set_geometry([start_geometry, end_geometry])
 
         for line in sections.get('VERTICES', []):
             nid, x, y = parse_tokens(line)

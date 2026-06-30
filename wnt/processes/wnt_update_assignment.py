@@ -5,7 +5,7 @@ from qgis.core import (QgsProcessing,
                        QgsProcessingParameterFeatureSource,
                        QgsWkbTypes
                        )
-from .base import WntProcessingAlgorithm
+from .base import WntProcessingAlgorithm, missing_fields, require_projected_crs
 from .messages import crs as log_crs
 from .messages import error, finish, info, message, start
 
@@ -40,7 +40,7 @@ class UpdateAssignmentAlgorithm(WntProcessingAlgorithm):
         """
         Returns the translated algorithm name.
         """
-        return 'Update assignment'
+        return self.tr('Update assignment')
 
     def group(self):
         """
@@ -121,12 +121,27 @@ class UpdateAssignmentAlgorithm(WntProcessingAlgorithm):
         # CHECK CRS
         crs = slayer.sourceCrs()
         if crs == tlayer.sourceCrs() == alayer.sourceCrs():
+            if not require_projected_crs(crs, feedback):
+                return {}
 
             # SEND INFORMATION TO THE USER
             start(feedback, self.displayName())
             log_crs(feedback, crs)
         else:
             error(feedback, "Layers have different CRS")
+            return {}
+
+        assignment_missing = missing_fields(alayer, ['source', 'target'])
+        if assignment_missing:
+            error(feedback, "Assignment layer is missing required fields: " + ", ".join(assignment_missing))
+            return {}
+        source_missing = missing_fields(slayer, ['id'])
+        if source_missing:
+            error(feedback, "Source layer is missing required fields: " + ", ".join(source_missing))
+            return {}
+        target_missing = missing_fields(tlayer, ['id'])
+        if target_missing:
+            error(feedback, "Target layer is missing required fields: " + ", ".join(target_missing))
             return {}
 
         # OUTPUT LAYERS
@@ -138,7 +153,7 @@ class UpdateAssignmentAlgorithm(WntProcessingAlgorithm):
             QgsWkbTypes.LineString,
             crs
             )
-        (target_sink, target_id) = self.parameterAsSink(
+        (target_sink, target_layer_id) = self.parameterAsSink(
             parameters,
             self.OUTPUT_TARGETS,
             context,
@@ -149,8 +164,36 @@ class UpdateAssignmentAlgorithm(WntProcessingAlgorithm):
 
         # CHECK SOURCE POSITION AND READ SOURCE VALUES
         field_names = alayer.fields().names()
-        field_names.remove("source")
-        field_names.remove("target")
+        field_names = [name for name in field_names if name not in ("source", "target")]
+        if not field_names:
+            error(feedback, "Assignment layer must contain at least one demand field")
+            return {}
+        source_missing = missing_fields(slayer, field_names)
+        if source_missing:
+            error(feedback, "Source layer is missing required fields: " + ", ".join(source_missing))
+            return {}
+        target_missing = missing_fields(tlayer, field_names)
+        if target_missing:
+            error(feedback, "Target layer is missing required fields: " + ", ".join(target_missing))
+            return {}
+
+        def assignment_endpoints(feature):
+            geometry = feature.geometry()
+            try:
+                polyline = geometry.asPolyline()
+            except (AttributeError, TypeError):
+                polyline = []
+            if len(polyline) < 2:
+                try:
+                    multi = geometry.asMultiPolyline()
+                except (AttributeError, TypeError):
+                    multi = []
+                if len(multi) == 1 and len(multi[0]) >= 2:
+                    polyline = multi[0]
+            if len(polyline) < 2:
+                raise ValueError("Assignment geometry must be a LineString with at least two vertices")
+            return polyline[0], polyline[-1]
+
         src_pos = {}
         src_fds = {}
         assignments = []
@@ -159,13 +202,21 @@ class UpdateAssignmentAlgorithm(WntProcessingAlgorithm):
             for name in field_names:
                 src_fds[(f["id"], name)] = f[name]
         for f in alayer.getFeatures():
-            start_point = f.geometry().asPolyline()[0]
-            if start_point.distance(src_pos[f["source"]]) > POS_TOLERANCE:
-                msg = f'Source point misplaced: {f["source"]}'
+            source_id = f["source"]
+            if source_id not in src_pos:
+                error(feedback, f"Assignment references unknown source: {source_id}")
+                return {}
+            try:
+                start_point, _ = assignment_endpoints(f)
+            except ValueError as exc:
+                error(feedback, str(exc))
+                return {}
+            if start_point.distance(src_pos[source_id]) > POS_TOLERANCE:
+                msg = f'Source point misplaced: {source_id}'
                 error(feedback, msg)
                 return {}
             for name in field_names:
-                f[name] = src_fds[(f["source"], name)]
+                f[name] = src_fds[(source_id, name)]
             assignments.append(f)
 
         # SHOW PROGRESS
@@ -181,23 +232,32 @@ class UpdateAssignmentAlgorithm(WntProcessingAlgorithm):
             for name in field_names:
                 values[(f["id"], name)] = 0
         for f in assignments:
-            end_point = f.geometry().asPolyline()[-1]
-            if end_point.distance(tar_pos[f["target"]]) > POS_TOLERANCE:
+            target_id = f["target"]
+            if target_id not in tar_pos:
+                error(feedback, f"Assignment references unknown target: {target_id}")
+                return {}
+            try:
+                _, end_point = assignment_endpoints(f)
+            except ValueError as exc:
+                error(feedback, str(exc))
+                return {}
+            if end_point.distance(tar_pos[target_id]) > POS_TOLERANCE:
                 for id_, point in tar_pos.items():
                     if end_point.distance(point) <= POS_TOLERANCE:
-                        msg = f'Updated position of target from: {f["target"]}'
+                        msg = f'Updated position of target from: {target_id}'
                         msg += f' to: {id_}'
                         f["target"] = id_
+                        target_id = id_
                         cnt += 1
                         message(feedback, msg)
                         break
                 else:
                     msg = f'Misassignment. Source: {f["source"]}'
-                    msg += f' target: {f["target"]}'
+                    msg += f' target: {target_id}'
                     error(feedback, msg)
                     return {}
             for name in field_names:
-                values[(f["target"], name)] += f[name]
+                values[(target_id, name)] += f[name]
         info(feedback, "Updated targets", cnt)
         # WRITE ASSIGNEMENT LAYER
         for f in assignments:
@@ -223,5 +283,4 @@ class UpdateAssignmentAlgorithm(WntProcessingAlgorithm):
             return {}
 
         # OUTPUT
-        return {self.OUTPUT_ASSIGNMENTS: assign_id, self.OUTPUT_TARGETS: target_id}
-
+        return {self.OUTPUT_ASSIGNMENTS: assign_id, self.OUTPUT_TARGETS: target_layer_id}

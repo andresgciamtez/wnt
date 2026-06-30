@@ -1,7 +1,6 @@
 """Import network layers from WNT Network XML or LandXML."""
 
 import json
-import xml.etree.ElementTree as ET
 
 from qgis.PyQt.QtCore import QMetaType
 from qgis.core import (
@@ -25,6 +24,7 @@ from .messages import crs as log_crs
 from .messages import error, finish, info, start
 from ..utils import utils_core as tools
 from ..utils import utils_landxml as landxml
+from ..utils.safe_xml import parse as safe_xml_parse
 
 
 DOMAIN_ORDER = ("epanet", "swmm", "landxml", "custom")
@@ -56,8 +56,8 @@ LINK_FIELD_TYPES = {
 def xml_root_name(path):
     """Return the local root element name for an XML file."""
     try:
-        tag = ET.parse(path).getroot().tag
-    except ET.ParseError:
+        tag = safe_xml_parse(path).getroot().tag
+    except Exception:
         return ""
     return tag.split("}", 1)[-1]
 
@@ -162,7 +162,7 @@ def link_length(link):
 
 def wnt_network_names(xml_file):
     """Return WNT network ids in file order."""
-    root = ET.parse(str(xml_file)).getroot()
+    root = safe_xml_parse(str(xml_file)).getroot()
     if root.tag != "wntNetworkStore":
         raise ValueError("Invalid WNT XML file: expected wntNetworkStore root.")
     return [network.get("id") for network in root.findall("network") if network.get("id")]
@@ -328,7 +328,11 @@ class NetworkFromXmlAlgorithm(WntProcessingAlgorithm):
         return {self.OUTPUT_NODES: node_id, self.OUTPUT_LINES: link_id}
 
     def _process_landxml(self, xml_file, selected_network_names, parameters, context, feedback):
-        imp_net = landxml.network_from_xml(xml_file)
+        try:
+            imp_net = landxml.network_from_xml(xml_file)
+        except Exception as exc:
+            error(feedback, str(exc))
+            return {}
         networks = imp_net['networks']
         if 'epsg_code' in imp_net:
             epsg_code = imp_net['epsg_code']

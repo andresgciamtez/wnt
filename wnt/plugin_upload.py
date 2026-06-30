@@ -1,10 +1,14 @@
-﻿#!/usr/bin/env python
+#!/usr/bin/env python
 """Upload a plugin package to the QGIS plugin repository."""
 
 import sys
 import getpass
-import xmlrpc.client
+from defusedxml.xmlrpc import monkey_patch
+# defusedxml monkey_patch() is applied before XML-RPC use.
+import xmlrpc.client  # nosec B411
 from optparse import OptionParser
+
+monkey_patch()
 
 # Configuration
 PROTOCOL = 'https'
@@ -103,5 +107,3 @@ if __name__ == "__main__":
         # interactive mode
         options.password = getpass.getpass()
     main(options, args)
-
-

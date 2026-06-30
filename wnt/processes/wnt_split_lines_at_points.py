@@ -18,7 +18,7 @@ from qgis.core import (Qgis,
                        QgsUnitTypes
                        )
 from .base import (OUTPUT_MODE_NEW, OUTPUT_MODE_UPDATE, OUTPUT_MODE_OPTIONS,
-                   WntProcessingAlgorithm, replace_layer_features, set_progress)
+                   WntProcessingAlgorithm, replace_layer_features, require_projected_crs, set_progress)
 from .messages import crs as log_crs
 from .messages import error, finish, info, start
 
@@ -287,6 +287,8 @@ class SplitLinesAtPointsAlgorithm(WntProcessingAlgorithm):
         if crs == linlayer.sourceCrs():
 
             # SEND INFORMATION TO THE USER
+            if not require_projected_crs(output_crs, feedback):
+                return {}
             start(feedback, self.displayName())
             log_crs(feedback, output_crs)
         else:

@@ -15,6 +15,7 @@ CODE_STYLE = 'color:#0057b8; font-weight:600;'
 OUTPUT_MODE_NEW = 0
 OUTPUT_MODE_UPDATE = 1
 OUTPUT_MODE_OPTIONS = ('Create new output layer', 'Update input layer')
+PROJECTED_CRS_ERROR = 'Use a projected CRS with linear units for distance-based operations'
 
 
 def style_help_html(message):
@@ -24,13 +25,44 @@ def style_help_html(message):
 
 def field_names(source):
     """Return the field names exposed by a vector source."""
-    return set(source.fields().names())
+    names = set(source.fields().names())
+    if names:
+        return names
+    try:
+        first = next(iter(source.getFeatures()))
+    except StopIteration:
+        return names
+    except (AttributeError, TypeError):
+        return names
+    try:
+        return set(first.fields().names())
+    except AttributeError:
+        return names
 
 
 def missing_fields(source, required_fields):
     """Return required fields that are not present in a vector source."""
     names = field_names(source)
     return [field for field in required_fields if field not in names]
+
+
+def crs_is_geographic(crs):
+    """Return True when a CRS uses angular/geographic coordinates."""
+    if crs is None:
+        return False
+    try:
+        return bool(crs.isGeographic())
+    except AttributeError:
+        authid = crs.authid() if hasattr(crs, 'authid') else str(crs)
+        return str(authid).upper() == 'EPSG:4326'
+
+
+def require_projected_crs(crs, feedback, message=PROJECTED_CRS_ERROR):
+    """Report an error and return False when a distance operation uses a geographic CRS."""
+    if crs_is_geographic(crs):
+        feedback.reportError(f'ERROR: {message}')
+        return False
+    return True
 
 
 def set_progress(feedback, start, end, count, total):

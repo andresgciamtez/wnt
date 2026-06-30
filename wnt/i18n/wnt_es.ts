@@ -1084,5 +1084,49 @@
             <source>XML file</source>
             <translation>Archivo XML</translation>
         </message>
+        <message>
+            <source>Assign demand</source>
+            <translation>Asignar demanda</translation>
+        </message>
+        <message>
+            <source>Configure EPANET lib</source>
+            <translation>Configurar biblioteca EPANET</translation>
+        </message>
+        <message>
+            <source>Connect by distance</source>
+            <translation>Conectar por distancia</translation>
+        </message>
+        <message>
+            <source>Demand to epanet scenario file (.scn)</source>
+            <translation>Demanda a archivo de escenario de EPANET (.scn)</translation>
+        </message>
+        <message>
+            <source>Network from EPANET file</source>
+            <translation>Red desde archivo de EPANET</translation>
+        </message>
+        <message>
+            <source>Network from lines</source>
+            <translation>Red desde líneas</translation>
+        </message>
+        <message>
+            <source>Network to graph file</source>
+            <translation>Red a archivo de grafo</translation>
+        </message>
+        <message>
+            <source>Network to pressure pipe optimization data file (.ext)</source>
+            <translation>Red a archivo de datos para optimización de tuberías a presión (.ext)</translation>
+        </message>
+        <message>
+            <source>Pipe propierties to epanet scenario file (.scn)</source>
+            <translation>Propiedades de tuberías a archivo de escenario de EPANET (.scn)</translation>
+        </message>
+        <message>
+            <source>Update assignment</source>
+            <translation>Actualizar asignación</translation>
+        </message>
+        <message>
+            <source>Validate</source>
+            <translation>Validar</translation>
+        </message>
     </context>
 </TS>

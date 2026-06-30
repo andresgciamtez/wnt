@@ -8,7 +8,7 @@ from qgis.core import (QgsProcessing,
                        QgsProcessingParameterField,
                        QgsProcessingParameterFile,
                        QgsProcessingParameterFileDestination)
-from .base import WntProcessingAlgorithm
+from .base import WntProcessingAlgorithm, missing_fields
 from ..utils import utils_parser as parser
 from .messages import error, finish, info, start
 
@@ -55,7 +55,7 @@ class NetworkToPpnoAlgorithm(WntProcessingAlgorithm):
         Returns the translated algorithm name, which should be used for any
         user-visible display of the algorithm name.
         """
-        return 'Network to pressure pipe optimization data file (.ext)'
+        return self.tr('Network to pressure pipe optimization data file (.ext)')
 
     def group(self):
         """
@@ -183,6 +183,10 @@ class NetworkToPpnoAlgorithm(WntProcessingAlgorithm):
         if nodes.sourceCrs() != links.sourceCrs():
             error(feedback, "Layers have different CRS")
             return {}
+        missing = missing_fields(nodes, ['id', pfield]) + missing_fields(links, ['id', sfield])
+        if missing:
+            error(feedback, "Missing required fields: " + ", ".join(missing))
+            return {}
 
         # PIPE CATALOG SECTION
         catalog_source = Path(catalog_input_file)
@@ -226,7 +230,11 @@ class NetworkToPpnoAlgorithm(WntProcessingAlgorithm):
                 ppnof.sections['PIPES'].append(line)
 
         # WRITE EXT FILE
-        ppnof.write(extfile)
+        try:
+            ppnof.write(extfile)
+        except UnicodeEncodeError as exc:
+            error(feedback, "Output contains characters that cannot be written with PPNO latin-1 encoding: " + str(exc))
+            return {}
 
         # SHOW INFO
         start(feedback, self.displayName())

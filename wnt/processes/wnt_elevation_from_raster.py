@@ -1,5 +1,7 @@
 """Set node elevations from a raster DEM."""
 
+from math import isfinite
+
 from qgis.core import (QgsProcessing,
                        QgsFeatureSink,
                        QgsProcessingParameterEnum,
@@ -169,12 +171,27 @@ class ElevationFromRasterAlgorithm(WntProcessingAlgorithm):
         elevation_index = field_index(nodelayer.fields(), efield)
         updates = {}
 
+        def valid_sample(value):
+            if value is None:
+                return False
+            try:
+                numeric = float(value)
+            except (TypeError, ValueError):
+                return False
+            if not isfinite(numeric):
+                return False
+            try:
+                nodata = provider.sourceNoDataValue(1)
+            except (AttributeError, TypeError):
+                nodata = None
+            return nodata is None or numeric != nodata
+
         for processed, feat in enumerate(nodelayer.getFeatures(), start=1):
             if feedback.isCanceled():
                 return {}
 
             val, res = provider.sample(feat.geometry().asPoint(), 1)
-            if res:
+            if res and valid_sample(val):
                 pcnt += 1
                 if output_mode == OUTPUT_MODE_UPDATE:
                     updates[feat.id()] = {elevation_index: val}

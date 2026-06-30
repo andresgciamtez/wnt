@@ -8,7 +8,7 @@ from qgis.core import (QgsProcessing,
                        QgsProcessingParameterFeatureSource,
                        QgsProcessingParameterFile,
                        QgsProcessingParameterFileDestination)
-from .base import WntProcessingAlgorithm
+from .base import WntProcessingAlgorithm, missing_fields
 from ..utils import utils_core as tools
 from ..utils import utils_graph as graph
 from .messages import crs as log_crs
@@ -184,6 +184,12 @@ class NetworkToEpanetAlgorithm(WntProcessingAlgorithm):
             error(feedback, "Layers have different CRS")
             return {}
 
+        missing = missing_fields(nodes, ['id', 'type', 'elevation'])
+        missing += missing_fields(links, ['id', 'start', 'end', 'type', 'length'])
+        if missing:
+            error(feedback, "Missing required fields: " + ", ".join(missing))
+            return {}
+
         # OUTPUT
         EPANET = self.parameterAsFileOutput(
             parameters,
@@ -249,6 +255,12 @@ class NetworkToEpanetAlgorithm(WntProcessingAlgorithm):
             problems = self._network_problems([newnet])
             if self._has_graph_problems(problems):
                 error(feedback, "EPANET network is not valid: " + self._problem_text(problems))
+                if cleanup_template:
+                    try:
+                        os.unlink(cleanup_template)
+                    except OSError:
+                        pass
+                    cleanup_template = None
                 return {}
             info(feedback, "Output mode", self.WORKFLOW_OPTIONS[self.WORKFLOW_SCRATCH])
             info(feedback, "EPANET version", version_label)
@@ -256,6 +268,9 @@ class NetworkToEpanetAlgorithm(WntProcessingAlgorithm):
 
         try:
             newnet.to_epanet(EPANET, template_file)
+        except UnicodeEncodeError as exc:
+            error(feedback, "Output contains characters that cannot be written with EPANET latin-1 encoding: " + str(exc))
+            return {}
         finally:
             if cleanup_template:
                 try:

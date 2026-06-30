@@ -36,7 +36,7 @@ class NetworkToGraphAlgorithm(WntProcessingAlgorithm):
         """
         Returns the translated algorithm name.
         """
-        return 'Network to graph file'
+        return self.tr('Network to graph file')
 
     def group(self):
         """
