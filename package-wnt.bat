@@ -25,6 +25,7 @@ if not defined CONDA_PREFIX (
 
 set "CONDAENV=%CONDA_PREFIX%"
 set "PYTHONHOME="
+set "PYTHONPATH="
 set "PATH=%CONDAENV%;%CONDAENV%\Library\bin;%CONDAENV%\Scripts;C:\Program Files\7-Zip;%PATH%"
 
 where pb_tool >nul 2>nul
@@ -38,6 +39,24 @@ if errorlevel 1 (
   echo 7z.exe not found in PATH. Install 7-Zip or update this script with its location.
   exit /b 1
 )
+
+cd /d "%REPO%"
+if errorlevel 1 exit /b %errorlevel%
+
+echo.
+echo Running pytest...
+python -m pytest -q
+if errorlevel 1 exit /b %errorlevel%
+
+echo.
+echo Running Bandit...
+python -m bandit -r wnt -x tests
+if errorlevel 1 exit /b %errorlevel%
+
+echo.
+echo Running Flake8...
+python -m flake8 wnt tests --statistics --count
+if errorlevel 1 exit /b %errorlevel%
 
 cd /d "%PLUGIN_DIR%"
 if errorlevel 1 exit /b %errorlevel%

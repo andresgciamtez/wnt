@@ -325,7 +325,7 @@ class WntNode:
         try:
             self._x = float(coor[0])
             self._y = float(coor[1])
-        except:
+        except (IndexError, TypeError, ValueError):
             raise Exception(ERR_MSG)
 
     def get_geometry(self):
@@ -337,7 +337,7 @@ class WntNode:
         ERR_MSG = 'Bad elevation.'
         try:
             self._elevation = float(z)
-        except:
+        except (TypeError, ValueError):
             raise Exception(ERR_MSG)
 
     def get_elevation(self):
@@ -349,7 +349,7 @@ class WntNode:
         ERR_MSG = 'Incorrect type, it must be: {}.'.format(WntNode.NODE_TYPES)
         try:
             self._type = nodetype.upper()
-        except:
+        except AttributeError:
             raise Exception(ERR_MSG)
         if self._type not in WntNode.NODE_TYPES:
             self._type = None
@@ -369,7 +369,7 @@ class WntNode:
             point = point.strip().split()
             point = float(point[0]), float(point[1])
             self.set_geometry(point)
-        except:
+        except (AttributeError, IndexError, TypeError, ValueError):
             raise Exception(ERR_MSG)
 
     def to_wkt(self):
@@ -452,7 +452,7 @@ class WntLink:
             raise Exception(ERR_MSG2)
         try:
             self._linestring = [(float(x), float(y)) for x, y in linestring]
-        except:
+        except (TypeError, ValueError):
             raise Exception(ERR_MSG3)
         if polyline_length(self._linestring) == 0:
             self._linestring = None
@@ -474,7 +474,7 @@ class WntLink:
         try:
             linktype = linktype.upper()
             self._type = linktype
-        except:
+        except AttributeError:
             raise Exception(ERR_MSG)
         if self._type not in WntLink.LINK_TYPES:
             self._type = None
@@ -490,7 +490,7 @@ class WntLink:
         ERR_MSG2 = " Multi-geometry is not supported."
         try:
             txt = wkt.upper()
-        except:
+        except AttributeError:
             raise Exception(ERR_MSG1)
         if 'MULTI' in txt:
             raise Exception(ERR_MSG2)
@@ -498,10 +498,10 @@ class WntLink:
             for clean in ['LINESTRING', 'Z', '(', ')', '"', '\n']:
                 txt = txt.replace(clean, '')
             points = []
-            for point in  txt.strip().split(','):
+            for point in txt.strip().split(','):
                 point = point.strip().split(' ')
                 points.append((float(point[0]), float(point[1])))
-        except:
+        except (IndexError, TypeError, ValueError):
             raise Exception(ERR_MSG1)
         self.set_geometry(points)
 

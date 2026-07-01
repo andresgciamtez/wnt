@@ -160,7 +160,7 @@ class ConnectByDistanceAlgorithm(WntProcessingAlgorithm):
             return {}
 
         # OUTPUT LAYER
-        fields= QgsFields()
+        fields = QgsFields()
         fields.append(QgsField('source', QMetaType.QString))
         fields.append(QgsField('target', QMetaType.QString))
         fields.append(QgsField('distance', QMetaType.Double))

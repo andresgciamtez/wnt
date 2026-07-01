@@ -1,0 +1,28 @@
+[flake8]
+# Baseline for the legacy QGIS plugin code style. Keep pyflakes/bug checks active
+# while avoiding a risky package-wide reformat before release.
+max-line-length = 120
+extend-ignore =
+    E123,
+    E124,
+    E126,
+    E128,
+    E131,
+    E201,
+    E226,
+    E261,
+    E265,
+    E271,
+    E301,
+    E302,
+    E303,
+    E402,
+    E501,
+    W391,
+    W503
+exclude =
+    .git,
+    __pycache__,
+    .pytest_cache,
+    outputs,
+    video_pilots

@@ -78,62 +78,62 @@ Water Network Tools es un plugin de QGIS Processing para crear, editar, validar,
 
 Cada viñeta siguiente es un algoritmo de WNT en Processing. El texto posterior al nombre del algoritmo resume el flujo de trabajo que cubre.
 
-### Modelar
+### Construir
 
 Proceso disponible:
 
-- `Network from lines` - Genera capas de nodos y links con estructura EPANET a partir de líneas CAD/GIS. Soporta líneas multipart, fusión de extremos por tolerancia, elevaciones de nodo desde valores cero, valores Z de línea, rásteres MDE o una superficie TIN LandXML seleccionada, y campos opcionales de grado/topología.
+- `Red desde líneas` - Genera capas de nodos y links con estructura EPANET a partir de líneas CAD/GIS. Soporta líneas multipart, fusión de extremos por tolerancia, elevaciones de nodo desde valores cero, valores Z de línea, rásteres MDE o una superficie TIN LandXML seleccionada, y campos opcionales de grado/topología.
 
 ### Demanda
 
 Procesos disponibles:
 
-- `Assign demand` - Asigna uno o varios campos de demanda desde entidades de origen a los nodos de red más cercanos y crea líneas de asignación.
-- `Connect by distance` - Conecta entidades de origen y destino por distancia mínima, con límites opcionales de número de conexiones y distancia máxima.
-- `Update assignment` - Recalcula asignaciones de demanda después de editar manualmente las líneas de asignación.
+- `Asignar demanda` - Asigna uno o varios campos de demanda desde entidades de origen a los nodos de red más cercanos y crea líneas de asignación.
+- `Conectar por distancia` - Conecta entidades de origen y destino por distancia mínima, con límites opcionales de número de conexiones y distancia máxima.
+- `Actualizar asignación` - Recalcula asignaciones de demanda después de editar manualmente las líneas de asignación.
 
 ### Exportar
 
 Procesos disponibles:
 
-- `Network to epanet file (.inp)` - Escribe un modelo EPANET desde capas WNT de nodos y links. Puede fusionar la red seleccionada con un modelo `.inp` existente o crear un modelo nuevo desde la plantilla interna de EPANET, validando el grafo final antes de escribir.
-- `Demand to epanet scenario file (.scn)` - Escribe un escenario EPANET de demandas desde un campo de demanda de nodos seleccionado.
-- `Pipe propierties to epanet scenario file (.scn)` - Escribe un escenario EPANET de tuberías con valores de diámetro y rugosidad para links de tipo tubería.
-- `Network to XML` - Escribe WNT Network XML con datos de red versionados y conserva dominios de propiedades EPANET, SWMM, LandXML y personalizados, o escribe una red de tuberías LandXML 1.2.
-- `Network to pipesizing data file (.pro)` - Escribe datos de entrada para pipesizing con secciones `[SETTINGS]`, `[PRESSURES]`, `[FIRE_SCENARIOS]` y `[PIPES]`, incluyendo factores punta/incendio, presiones requeridas y escenarios opcionales de incendio a partir de pares de hidrantes.
-- `Network to pressure pipe optimization data file (.ext)` - Escribe datos de entrada para PPNO (`Pressurized Pipe Network Optimizer`) desde capas de red, un modelo EPANET `.inp` y un catálogo de tuberías `.cat`. Consulta https://github.com/andresgciamtez/ppno.
+- `Red a archivo EPANET (.inp)` - Escribe un modelo EPANET desde capas WNT de nodos y links. Puede fusionar la red seleccionada con un modelo `.inp` existente o crear un modelo nuevo desde la plantilla interna de EPANET, validando el grafo final antes de escribir.
+- `Demanda a archivo de escenario de EPANET (.scn)` - Escribe un escenario EPANET de demandas desde un campo de demanda de nodos seleccionado.
+- `Propiedades de tuberías a archivo de escenario de EPANET (.scn)` - Escribe un escenario EPANET de tuberías con valores de diámetro y rugosidad para links de tipo tubería.
+- `Red a XML` - Escribe WNT Network XML con datos de red versionados y conserva dominios de propiedades EPANET, SWMM, LandXML y personalizados, o escribe una red de tuberías LandXML 1.2.
+- `Red a archivo de datos pipesizing (.pro)` - Escribe datos de entrada para pipesizing con secciones `[SETTINGS]`, `[PRESSURES]`, `[FIRE_SCENARIOS]` y `[PIPES]`, incluyendo factores punta/incendio, presiones requeridas y escenarios opcionales de incendio a partir de pares de hidrantes.
+- `Red a archivo de datos para optimización de tuberías a presión (.ext)` - Escribe datos de entrada para PPNO (`Pressurized Pipe Network Optimizer`) desde capas de red, un modelo EPANET `.inp` y un catálogo de tuberías `.cat`. Consulta https://github.com/andresgciamtez/ppno.
 
 ### Incendio
 
 Proceso disponible:
 
-- `Hydrant pairs` - Genera pares de hidrantes/escenarios de cálculo desde una capa de hidrantes, excluyendo pares separados por una distancia mayor que la separación máxima. La salida puede usarse como escenarios de incendio en el exportador pipesizing `.pro`.
+- `Pares de hidrantes` - Genera pares de hidrantes/escenarios de cálculo desde una capa de hidrantes, excluyendo pares separados por una distancia mayor que la separación máxima. La salida puede usarse como escenarios de incendio en el exportador pipesizing `.pro`.
 
 ### Grafo
 
 Procesos disponibles:
 
-- `Classify` - Clasifica links como ramificados o mallados y asigna un `zone` globalmente único.
-- `Node degrees` - Calcula el grado de grafo de cada nodo de la red.
-- `Network to graph file` - Exporta la topología de la red a Trivial Graph Format (TGF).
-- `Validate` - Informa nodos huérfanos, nodos duplicados, links duplicados, links con extremos no definidos y bucles.
+- `Clasificar` - Clasifica links como ramificados o mallados y asigna un `zone` globalmente único.
+- `Grados de nodo` - Calcula el grado de grafo de cada nodo de la red.
+- `Red a archivo de grafo` - Exporta la topología de la red a Trivial Graph Format (TGF).
+- `Validar` - Informa nodos huérfanos, nodos duplicados, links duplicados, links con extremos no definidos y bucles.
 
 ### Importar
 
 Procesos disponibles:
 
-- `Configure EPANET lib` - Define la ruta de la biblioteca del toolkit de EPANET usada para importar resultados EPANET.
-- `Network from EPANET file` - Importa archivos EPANET `.inp` como capas WNT de nodos y links.
-- `Results from EPANET` - Importa resultados hidráulicos, resultados de calidad o ambos desde simulaciones EPANET.
-- `Network from XML` - Importa archivos WNT Network XML, incluidas versiones de red seleccionadas, o importa redes de tuberías LandXML 1.2 como capas WNT de nodos y links.
+- `Configurar biblioteca EPANET` - Define la ruta de la biblioteca del toolkit de EPANET usada para importar resultados EPANET.
+- `Red desde archivo de EPANET` - Importa archivos EPANET `.inp` como capas WNT de nodos y links.
+- `Resultados de EPANET` - Importa resultados hidráulicos, resultados de calidad o ambos desde simulaciones EPANET.
+- `Red desde XML` - Importa archivos WNT Network XML, incluidas versiones de red seleccionadas, o importa redes de tuberías LandXML 1.2 como capas WNT de nodos y links.
 
 ### Modificar
 
 Procesos disponibles:
 
-- `Node elevation from DEM` - Añade o actualiza elevaciones de nodos desde un ráster MDE.
-- `Node elevation from TIN (LandXML)` - Añade o actualiza elevaciones de nodos desde una superficie TIN LandXML seleccionada.
-- `Split lines at points` - Divide entidades de línea en posiciones de puntos.
-- `Merge networks` - Fusiona dos redes y valida el grafo final antes de crear las capas de salida.
+- `Elevación de nodos desde MDE` - Añade o actualiza elevaciones de nodos desde un ráster MDE.
+- `Elevación de nodos desde TIN (LandXML)` - Añade o actualiza elevaciones de nodos desde una superficie TIN LandXML seleccionada.
+- `Dividir líneas en puntos` - Divide entidades de línea en posiciones de puntos.
+- `Fusionar redes` - Fusiona dos redes y valida el grafo final antes de crear las capas de salida.
 
 Andres Garcia Martinez (ppnoptimizer@gmail.com)
