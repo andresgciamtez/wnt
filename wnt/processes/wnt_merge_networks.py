@@ -14,7 +14,8 @@ from qgis.core import (QgsCoordinateTransform,
                        QgsSpatialIndex,
                        QgsUnitTypes
                        )
-from .base import WntProcessingAlgorithm, missing_fields, require_projected_crs, set_progress
+from .base import (WntProcessingAlgorithm, missing_fields, problem_text,
+                   require_projected_crs, set_progress)
 from ..utils import utils_graph as graph
 from .messages import crs as log_crs
 from .messages import error, finish, info, start, warning
@@ -193,7 +194,7 @@ def nearest_node(point, nodes, index=None, by_feature_id=None):
 
 class MergeNetworksAlgorithm(WntProcessingAlgorithm):
     """
-    Built a network from lines.
+    Merge two WNT network layer pairs.
     """
 
     # DEFINE CONSTANTS
@@ -334,19 +335,16 @@ class MergeNetworksAlgorithm(WntProcessingAlgorithm):
         if crs == l1lay.sourceCrs() == n2lay.sourceCrs() == l2lay.sourceCrs():
 
             # SEND INFORMATION TO THE USER
-            if not require_projected_crs(output_crs, feedback):
-                return {}
+            require_projected_crs(output_crs, feedback)
             start(feedback, self.displayName())
             log_crs(feedback, output_crs)
         else:
             error(feedback, "Layers have different CRS")
-            return {}
 
         if feedback.isCanceled():
             return {}
         if tolerance < 0:
             error(feedback, "Tolerance distance must be zero or greater")
-            return {}
 
         for layer, layer_name, required_fields in (
             (n1lay, "First node layer", ['id']),
@@ -357,7 +355,6 @@ class MergeNetworksAlgorithm(WntProcessingAlgorithm):
             missing = missing_fields(layer, required_fields)
             if missing:
                 error(feedback, layer_name + " is missing required fields: " + ", ".join(missing))
-                return {}
 
         transform = None
         if crs != output_crs:
@@ -379,7 +376,6 @@ class MergeNetworksAlgorithm(WntProcessingAlgorithm):
         )
         if duplicate_link_ids:
             error(feedback, "Second network link ids already exist in first network: " + ", ".join(duplicate_link_ids))
-            return {}
 
         overlaps = []
         for link_2 in links_2:
@@ -389,7 +385,6 @@ class MergeNetworksAlgorithm(WntProcessingAlgorithm):
                     break
         if overlaps:
             error(feedback, "Second network links overlap first network links: " + ", ".join(overlaps))
-            return {}
 
         # Resolve second-network node connections before creating sinks.
         node_id_map = {}
@@ -426,10 +421,9 @@ class MergeNetworksAlgorithm(WntProcessingAlgorithm):
                 node_id_map.get(end_id, end_id),
             ))
         problems = graph.validate_records(final_node_ids, final_links)
-        problem_text = self._problem_text(problems)
-        if problem_text:
-            error(feedback, "Merged network is not valid: " + problem_text)
-            return {}
+        validation_text = problem_text(problems)
+        if validation_text:
+            error(feedback, "Merged network is not valid: " + validation_text)
 
         # GENERATE MERGED NODE LAYER
         node_fields = n1lay.fields()
@@ -528,11 +522,3 @@ class MergeNetworksAlgorithm(WntProcessingAlgorithm):
 
         # OUTPUT
         return {self.OUTPUT_NODES: node_id, self.OUTPUT_LINES: link_id}
-
-    @staticmethod
-    def _problem_text(problems):
-        parts = []
-        for name, values in problems.items():
-            if values:
-                parts.append("{}: {}".format(name, ", ".join(sorted(str(value) for value in values))))
-        return "; ".join(parts)

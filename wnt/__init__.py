@@ -1,4 +1,4 @@
-﻿"""QGIS plugin entry point."""
+"""QGIS plugin entry point."""
 
 # noinspection PyPep8Naming
 def classFactory(iface):  # pylint: disable=invalid-name

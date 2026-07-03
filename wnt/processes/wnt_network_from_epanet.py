@@ -12,7 +12,7 @@ from qgis.core import (                       QgsFields,
                        QgsGeometry,
                        QgsWkbTypes
                        )
-from .base import WntProcessingAlgorithm
+from .base import WntProcessingAlgorithm, set_output_layer_name
 from ..utils import utils_core as tools
 from ..utils.utils_parser import SectionedText, parse_tokens
 from .messages import crs as log_crs
@@ -258,20 +258,9 @@ def extra_epanet_properties(sections):
     return node_props, link_props
 
 
-def set_output_layer_name(context, layer_id, name):
-    """Set the display name for a generated Processing output layer."""
-    if context is None or not layer_id:
-        return
-    try:
-        details = context.layerToLoadOnCompletionDetails(layer_id)
-        details.name = name
-    except AttributeError:
-        pass
-
-
 class NetworkFromEpanetAlgorithm(WntProcessingAlgorithm):
     """
-    Built a network from an EPANET file.
+    Build a network from an EPANET file.
     """
 
     # DEFINE CONSTANTS
@@ -375,9 +364,8 @@ class NetworkFromEpanetAlgorithm(WntProcessingAlgorithm):
         network = tools.WntNetwork()
         try:
             network.from_epanet(epanetf)
-        except Exception as exc:
+        except (tools.WntError, OSError, ValueError, IndexError) as exc:
             error(feedback, str(exc))
-            return {}
         nodes = network.nodes()
         links = network.links()
         sections = read_epanet_sections(epanetf)
@@ -473,7 +461,7 @@ class NetworkFromEpanetAlgorithm(WntProcessingAlgorithm):
         info(feedback, "Links imported", lcnt)
         finish(feedback)
 
-        # PROCCES CANCELED
+        # PROCESS CANCELED
         if feedback.isCanceled():
             return {}
 

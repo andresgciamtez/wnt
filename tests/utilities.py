@@ -1,4 +1,4 @@
-﻿"""Shared QGIS test helpers."""
+"""Shared QGIS test helpers."""
 
 import sys
 import logging

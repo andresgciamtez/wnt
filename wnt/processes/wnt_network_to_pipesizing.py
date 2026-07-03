@@ -11,7 +11,7 @@ from qgis.core import (QgsProcessing,
                        QgsProcessingParameterFileDestination,
                        QgsProcessingParameterNumber)
 from .base import WntProcessingAlgorithm, missing_fields
-from .messages import error, finish, info, start
+from .messages import error, finish, info, start, warning
 
 
 class NetworkToPipesizingAlgorithm(WntProcessingAlgorithm):
@@ -281,40 +281,32 @@ class NetworkToPipesizingAlgorithm(WntProcessingAlgorithm):
 
         if nodes.sourceCrs() != links.sourceCrs():
             error(feedback, 'Layers have different CRS')
-            return {}
         missing = missing_fields(nodes, ['id']) + missing_fields(links, ['id'])
         if scenarios is not None:
             if nodes.sourceCrs() != scenarios.sourceCrs():
                 error(feedback, 'Layers have different CRS')
-                return {}
             missing += missing_fields(scenarios, ['hydrant_1', 'hydrant_2'])
         if missing:
             error(feedback, 'Missing required fields: ' + ', '.join(missing))
-            return {}
         try:
             self._validate_factor(peak_factor, 'Peak demand factor')
             self._validate_factor(fire_factor, 'Fire demand factor')
         except ValueError as exc:
             error(feedback, str(exc))
-            return {}
         if not Path(epanet_file).exists():
             error(feedback, 'EPANET file not found: ' + epanet_file)
-            return {}
         catalog_source = Path(catalog_input_file)
         if not catalog_source.exists():
             error(feedback, 'Pipesizing pipe catalog file not found: ' + catalog_input_file)
-            return {}
 
         try:
             catalog_bytes = catalog_source.read_bytes()
             if self._catalog_has_section_header(catalog_bytes):
                 error(feedback, 'Pipesizing pipe catalog must not contain section headers')
-                return {}
             known_series = self._catalog_series(catalog_bytes)
             network_path = self._relative_network_path(epanet_file, output_file)
         except (UnicodeDecodeError, ValueError) as exc:
             error(feedback, str(exc))
-            return {}
 
         pressure_lines = []
         for feature in nodes.getFeatures():
@@ -335,14 +327,12 @@ class NetworkToPipesizingAlgorithm(WntProcessingAlgorithm):
             pipe_lines.append('{}    {}'.format(feature['id'], series_name))
         if unknown_series:
             error(feedback, 'Pipes reference unknown series: ' + ', '.join(sorted(unknown_series)))
-            return {}
 
         fire_scenario_lines = []
         flow_names = set()
         if scenarios is not None:
             if fire_flow_value <= 0:
                 error(feedback, 'Fire flow value must be greater than zero when fire scenarios are selected')
-                return {}
             for feature in scenarios.getFeatures():
                 flow_name = feature[fire_flow_field] if fire_flow_field else self.DEFAULT_FIRE_FLOW_NAME
                 if flow_name in (None, ''):
@@ -356,6 +346,8 @@ class NetworkToPipesizingAlgorithm(WntProcessingAlgorithm):
                 ))
 
         catalog_file = Path(output_file).with_suffix('.cat')
+        if catalog_file.exists():
+            warning(feedback, f"Existing pipe catalog will be overwritten: {catalog_file}")
         lines = [
             '; File generated automatically by Water Network Tools',
             '',
@@ -383,7 +375,6 @@ class NetworkToPipesizingAlgorithm(WntProcessingAlgorithm):
             )
         except OSError as exc:
             error(feedback, str(exc))
-            return {}
 
         start(feedback, self.displayName())
         info(feedback, 'Nodes with minimum pressure', len(pressure_lines))

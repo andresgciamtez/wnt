@@ -215,7 +215,7 @@ def _pressure_node_type(struct):
     source = " ".join(
         filter(None, (struct.attrib.get("name"), struct.attrib.get("desc"), struct.attrib.get("type")))
     )
-    if re.search(r"tank|dep[oÃ³]sito", source, flags=re.IGNORECASE):
+    if re.search(r"tank|dep[oó]sito", source, flags=re.IGNORECASE):
         return "tank"
     if re.search(r"reservoir|embalse|fuente", source, flags=re.IGNORECASE):
         return "reservoir"
@@ -228,7 +228,7 @@ def _gravity_node_type(struct):
     )
     if re.search(r"outfall|outlet|descarga|salida", source, flags=re.IGNORECASE):
         return "outfall"
-    if re.search(r"storage|tank|dep[oÃ³]sito", source, flags=re.IGNORECASE):
+    if re.search(r"storage|tank|dep[oó]sito", source, flags=re.IGNORECASE):
         return "storage"
     return "manhole"
 
@@ -281,7 +281,7 @@ def _water_link_type(pipe):
     source = " ".join(filter(None, (pipe.attrib.get("name"), pipe.attrib.get("desc"), pipe.attrib.get("type"))))
     if re.search(r"pump|bomba", source, flags=re.IGNORECASE):
         return "pump"
-    if re.search(r"valve|v[aÃ¡]lvula", source, flags=re.IGNORECASE):
+    if re.search(r"valve|v[aá]lvula", source, flags=re.IGNORECASE):
         return "valve"
     return "pipe"
 
@@ -394,6 +394,8 @@ def network_from_xml(xmlfn):
                 continue
             node = _node_record(origin, net_type, node_id, struct)
             node["x"], node["y"] = _center_xy(struct)
+            if node["x"] is None or node["y"] is None:
+                continue
             if net_type in GRAVITY_TYPES:
                 inverts.update(_inverts_by_pipe(struct, node_id, node["invert_elv"], origin))
             nodes[node_id] = node
@@ -411,13 +413,18 @@ def network_from_xml(xmlfn):
                 continue
             links[link_id] = link
 
-        networks[origin] = {
+        network_key = origin
+        suffix = 2
+        while network_key in networks:
+            network_key = f"{origin}_{suffix}" if origin else f"network_{suffix}"
+            suffix += 1
+        networks[network_key] = {
             "nodes": nodes,
             "links": links,
             "net_type": net_type,
             "node_fields": node_fields,
             "link_fields": link_fields,
-            "layer_base": _layer_base_name(origin),
+            "layer_base": _layer_base_name(network_key),
         }
 
     data = {"networks": networks, "node_fields": NODE_FIELDS, "link_fields": LINK_FIELDS}

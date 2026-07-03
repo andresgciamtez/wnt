@@ -1,3 +1,3 @@
-﻿"""Tests for the Water Network Tools plugin."""
+"""Tests for the Water Network Tools plugin."""
 
 

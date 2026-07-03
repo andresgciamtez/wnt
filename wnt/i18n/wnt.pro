@@ -20,7 +20,7 @@ SOURCES = ../wnt.py \
           ../processes/wnt_network_to_pipesizing.py \
           ../processes/wnt_results_from_epanet.py \
           ../processes/wnt_demand_to_epanet_scenario.py \
-          ../processes/wnt_pipe_propierties_to_epanet_scenario.py \
+          ../processes/wnt_pipe_properties_to_epanet_scenario.py \
           ../processes/wnt_split_lines_at_points.py \
           ../processes/wnt_update_assignment.py \
           ../processes/wnt_validate.py

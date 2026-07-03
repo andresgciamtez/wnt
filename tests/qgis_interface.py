@@ -1,4 +1,4 @@
-﻿"""Minimal QGIS interface stub for tests."""
+"""Minimal QGIS interface stub for tests."""
 
 
 import logging

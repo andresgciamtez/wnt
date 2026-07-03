@@ -136,28 +136,22 @@ class ConnectByDistanceAlgorithm(WntProcessingAlgorithm):
         if crs == t_ly.sourceCrs():
 
             # SEND INFORMATION TO THE USER
-            if not require_projected_crs(crs, feedback):
-                return {}
+            require_projected_crs(crs, feedback)
             start(feedback, self.displayName())
             log_crs(feedback, crs)
         else:
             error(feedback, "Layers have different CRS")
-            return {}
 
         source_missing = missing_fields(s_ly, ['id'])
         if source_missing:
             error(feedback, "Source layer is missing required fields: " + ", ".join(source_missing))
-            return {}
         target_missing = missing_fields(t_ly, ['id'])
         if target_missing:
             error(feedback, "Target layer is missing required fields: " + ", ".join(target_missing))
-            return {}
         if max_con <= 0:
             error(feedback, "Max number of connections must be greater than zero")
-            return {}
         if max_dst < 0:
             error(feedback, "Max distance must be zero or greater")
-            return {}
 
         # OUTPUT LAYER
         fields = QgsFields()
@@ -193,6 +187,11 @@ class ConnectByDistanceAlgorithm(WntProcessingAlgorithm):
             return [target_features_by_id[fid] for fid in target_index.intersects(bbox)
                     if fid in target_features_by_id]
 
+        same_source = s_ly is t_ly
+        if not same_source and hasattr(s_ly, 'source') and hasattr(t_ly, 'source'):
+            source_uri = s_ly.source()
+            same_source = bool(source_uri) and source_uri == t_ly.source()
+
         cnt = 0
         total_source = s_ly.featureCount()
         for processed, source in enumerate(s_ly.getFeatures(), start=1):
@@ -201,6 +200,8 @@ class ConnectByDistanceAlgorithm(WntProcessingAlgorithm):
 
             possible_connections = []
             for target in candidate_targets(source):
+                if same_source and source.id() == target.id():
+                    continue
                 geometry = source.geometry().shortestLine(target.geometry())
                 distance = geometry.length()
                 if distance <= max_dst:

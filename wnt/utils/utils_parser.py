@@ -28,7 +28,7 @@ class SectionedText:
                 if not text:
                     continue
                 if text.startswith('[') and ']' in text:
-                    section_name = text[1:text.find(']')]
+                    section_name = text[1:text.find(']')].strip().upper()
                     if section_name == 'END':
                         break
                     self.sections[section_name] = []

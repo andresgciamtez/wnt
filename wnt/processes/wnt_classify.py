@@ -115,7 +115,6 @@ class ClassifyAlgorithm(WntProcessingAlgorithm):
         missing = missing_fields(links, ['id', 'start', 'end'])
         if missing:
             error(feedback, "Input link layer is missing required fields: " + ", ".join(missing))
-            return {}
 
         # CREATE NETWORK
         netg = gr.Graph()
@@ -126,7 +125,6 @@ class ClassifyAlgorithm(WntProcessingAlgorithm):
             link_id = feature['id']
             if link_id in seen_ids:
                 error(feedback, "Duplicate link id: " + str(link_id))
-                return {}
             seen_ids.add(link_id)
             netg.add_edge(link_id, feature['start'], feature['end'])
             if cnt % 100 == 0:
@@ -158,7 +156,6 @@ class ClassifyAlgorithm(WntProcessingAlgorithm):
                 )
             except RuntimeError as exc:
                 error(feedback, str(exc))
-                return {}
             link_id = getattr(links, 'id', lambda: self.INPUT_LINES)()
         else:
             newfields = links.fields()
@@ -198,7 +195,7 @@ class ClassifyAlgorithm(WntProcessingAlgorithm):
         info(feedback, "Output mode", OUTPUT_MODE_OPTIONS[output_mode])
         finish(feedback)
 
-        # PROCCES CANCELED
+        # PROCESS CANCELED
         if feedback.isCanceled():
             return {}
 

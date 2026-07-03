@@ -1,3 +1,3 @@
-﻿"""QGIS Processing algorithms provided by Water Network Tools."""
+"""QGIS Processing algorithms provided by Water Network Tools."""
 
 

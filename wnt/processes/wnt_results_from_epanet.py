@@ -151,40 +151,30 @@ class ResultsFromEpanetAlgorithm(WntProcessingAlgorithm):
             max_label_len = toolkit.constants.max_label_len
         except EpanetConfigurationError as exc:
             error(feedback, str(exc))
-            return {}
         except EpanetError as exc:
             error(feedback, exc.message)
-            return {}
 
-        # DEFINE NODE LAYER
-        newfields = self._hydraulic_node_fields(max_label_len)
-        (node_sink, nodes_id) = self.parameterAsSink(
-            parameters,
-            self.OUTPUT_NODES,
-            context,
-            newfields
+        node_sink = link_sink = None
+        nodes_id = links_id = None
+        if include_hydraulic:
+            node_sink, nodes_id = self.parameterAsSink(
+                parameters, self.OUTPUT_NODES, context,
+                self._hydraulic_node_fields(max_label_len)
+            )
+            link_sink, links_id = self.parameterAsSink(
+                parameters, self.OUTPUT_LINES, context,
+                self._hydraulic_link_fields(max_label_len)
             )
 
-        # DEFINE LINK LAYER
-        newfields = self._hydraulic_link_fields(max_label_len)
-        (link_sink, links_id) = self.parameterAsSink(
-            parameters,
-            self.OUTPUT_LINES,
-            context,
-            newfields
+        node_quality_sink = link_quality_sink = None
+        node_quality_id = link_quality_id = None
+        if include_quality:
+            quality_fields = self._quality_fields(max_label_len)
+            node_quality_sink, node_quality_id = self.parameterAsSink(
+                parameters, self.OUTPUT_NODE_QUALITY, context, quality_fields
             )
-        quality_fields = self._quality_fields(max_label_len)
-        (node_quality_sink, node_quality_id) = self.parameterAsSink(
-            parameters,
-            self.OUTPUT_NODE_QUALITY,
-            context,
-            quality_fields
-            )
-        (link_quality_sink, link_quality_id) = self.parameterAsSink(
-            parameters,
-            self.OUTPUT_LINK_QUALITY,
-            context,
-            quality_fields
+            link_quality_sink, link_quality_id = self.parameterAsSink(
+                parameters, self.OUTPUT_LINK_QUALITY, context, quality_fields
             )
 
         # SHOW TOOLKIT INFORMATION
@@ -200,7 +190,6 @@ class ResultsFromEpanetAlgorithm(WntProcessingAlgorithm):
                 results = toolkit.read_hydraulic_results(epanet_file)
             except EpanetError as exc:
                 error(feedback, exc.message)
-                return {}
 
             for node_result in results.node_rows:
                 f = QgsFeature()
@@ -222,10 +211,8 @@ class ResultsFromEpanetAlgorithm(WntProcessingAlgorithm):
                 quality_results = toolkit.read_quality_results(epanet_file)
             except EpanetConfigurationError as exc:
                 error(feedback, str(exc))
-                return {}
             except EpanetError as exc:
                 error(feedback, exc.message)
-                return {}
 
             for node_result in quality_results.node_rows:
                 f = QgsFeature()
@@ -247,7 +234,7 @@ class ResultsFromEpanetAlgorithm(WntProcessingAlgorithm):
         info(feedback, "Result type", self.RESULT_OPTIONS[result_type])
         finish(feedback)
 
-        # PROCCES CANCELED
+        # PROCESS CANCELED
         if feedback.isCanceled():
             return {}
 
@@ -257,7 +244,7 @@ class ResultsFromEpanetAlgorithm(WntProcessingAlgorithm):
     @staticmethod
     def _hydraulic_node_fields(max_label_len):
         fields = QgsFields()
-        fields.append(QgsField("time", QMetaType.QTime))
+        fields.append(QgsField("time", QMetaType.QString))
         fields.append(QgsField("id", QMetaType.QString, len=max_label_len))
         fields.append(QgsField("demand", QMetaType.Double))
         fields.append(QgsField("head", QMetaType.Double))
@@ -267,7 +254,7 @@ class ResultsFromEpanetAlgorithm(WntProcessingAlgorithm):
     @staticmethod
     def _hydraulic_link_fields(max_label_len):
         fields = QgsFields()
-        fields.append(QgsField("time", QMetaType.QTime))
+        fields.append(QgsField("time", QMetaType.QString))
         fields.append(QgsField("id", QMetaType.QString, len=max_label_len))
         fields.append(QgsField("flow", QMetaType.Double))
         fields.append(QgsField("velocity", QMetaType.Double))
@@ -280,7 +267,7 @@ class ResultsFromEpanetAlgorithm(WntProcessingAlgorithm):
     @staticmethod
     def _quality_fields(max_label_len):
         fields = QgsFields()
-        fields.append(QgsField("time", QMetaType.QTime))
+        fields.append(QgsField("time", QMetaType.QString))
         fields.append(QgsField("id", QMetaType.QString, len=max_label_len))
         fields.append(QgsField("quality", QMetaType.Double))
         return fields

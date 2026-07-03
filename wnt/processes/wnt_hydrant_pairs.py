@@ -21,7 +21,7 @@ from .messages import finish, info, start
 
 class HydrantPairsAlgorithm(WntProcessingAlgorithm):
     """
-    Built a network from lines.
+    Generate hydrant pairs within a maximum separation.
     """
 
     # DEFINE CONSTANTS
@@ -121,8 +121,7 @@ class HydrantPairsAlgorithm(WntProcessingAlgorithm):
         maxdist = self.parameterAsDouble(parameters, self.MAX_DISTANCE, context)
 
         crs = hydlayer.sourceCrs()
-        if not require_projected_crs(crs, feedback):
-            return {}
+        require_projected_crs(crs, feedback)
 
         # SEND INFORMATION TO THE USER
         start(feedback, self.displayName())
@@ -194,9 +193,9 @@ class HydrantPairsAlgorithm(WntProcessingAlgorithm):
         feedback.setProgress(50)
 
         # ADD FEATURES
-        f = QgsFeature()
         cnt = 0
         for pair in pairs:
+            f = QgsFeature(fields)
             p1 = QgsPoint(pair[0][1])
             p2 = QgsPoint(pair[1][1])
             f.setGeometry(QgsLineString([p1, p2]))
@@ -209,7 +208,7 @@ class HydrantPairsAlgorithm(WntProcessingAlgorithm):
         info(feedback, "Pairs", cnt)
         finish(feedback)
 
-        # PROCCES CANCELED
+        # PROCESS CANCELED
         if feedback.isCanceled():
             return {}
 

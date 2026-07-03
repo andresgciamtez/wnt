@@ -1,5 +1,6 @@
 """Base classes for Water Network Tools processing algorithms."""
 
+import math
 import re
 
 from qgis.PyQt.QtCore import QMetaType
@@ -7,6 +8,7 @@ from qgis.core import (
     QgsFeature,
     QgsField,
     QgsProcessingAlgorithm,
+    QgsProcessingException,
 )
 
 from ..i18n import tr
@@ -40,6 +42,27 @@ def field_names(source):
         return names
 
 
+def set_output_layer_name(context, layer_id, name):
+    """Set the display name for a generated Processing output layer."""
+    if context is None or not layer_id:
+        return
+    try:
+        context.layerToLoadOnCompletionDetails(layer_id).name = name
+    except AttributeError:
+        pass
+
+
+def problem_text(problems):
+    """Format non-empty validation problem groups."""
+    parts = []
+    for name, values in problems.items():
+        if values:
+            parts.append("{}: {}".format(
+                name, ", ".join(sorted(str(value) for value in values))
+            ))
+    return "; ".join(parts)
+
+
 def missing_fields(source, required_fields):
     """Return required fields that are not present in a vector source."""
     names = field_names(source)
@@ -58,16 +81,33 @@ def crs_is_geographic(crs):
 
 
 def require_projected_crs(crs, feedback, message=PROJECTED_CRS_ERROR):
-    """Report an error and return False when a distance operation uses a geographic CRS."""
+    """Raise a Processing error for distance operations in a geographic CRS."""
     if crs_is_geographic(crs):
-        feedback.reportError(f'ERROR: {message}')
-        return False
+        text = f'ERROR: {message}'
+        try:
+            feedback.reportError(text, fatalError=True)
+        except TypeError:
+            feedback.reportError(text)
+        raise QgsProcessingException(text)
     return True
 
 
 def set_progress(feedback, start, end, count, total):
-    if total:
+    if total and total > 0:
         feedback.setProgress(start + (end - start) * count / total)
+
+
+def numeric_value(value, field_name):
+    """Return a finite numeric attribute value, treating NULL/empty as zero."""
+    if value is None or value == '':
+        return 0.0
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Field '{field_name}' contains a non-numeric value: {value}") from exc
+    if not math.isfinite(number):
+        raise ValueError(f"Field '{field_name}' contains a non-finite value: {value}")
+    return number
 
 
 def parse_name_list(value):
@@ -259,6 +299,23 @@ def replace_layer_features(layer, features):
 
 class WntProcessingAlgorithm(QgsProcessingAlgorithm):
     """Processing algorithm base class with a shared translation context."""
+
+    def flags(self):
+        """Run WNT algorithms on the main thread for safe layer/project edits."""
+        flags = super().flags()
+        no_threading = getattr(QgsProcessingAlgorithm, "FlagNoThreading", None)
+        if no_threading is not None:
+            flags |= no_threading
+        return flags
+
+    def parameterAsSink(self, parameters, name, context, *args, **kwargs):
+        """Create a required sink or stop with QGIS' standard output error."""
+        sink, destination = super().parameterAsSink(
+            parameters, name, context, *args, **kwargs
+        )
+        if sink is None:
+            raise QgsProcessingException(self.invalidSinkError(parameters, name))
+        return sink, destination
 
     def tr(self, message):
         """Return a translated string."""

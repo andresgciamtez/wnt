@@ -4,6 +4,8 @@
 
 Water Network Tools is a QGIS Processing plugin for creating, editing, validating, importing and exporting pressurized water network data. It works with WNT node and link layers, EPANET `.inp` model files, EPANET scenario files, WNT XML, LandXML 1.2 pipe networks, LandXML TIN surfaces and pipe-sizing inputs.
 
+Requires QGIS 3.38 or later.
+
 ## Recipes
 
 Each bullet below is a WNT Processing algorithm. The text after the algorithm name summarizes the workflow it covers.
@@ -28,7 +30,7 @@ Available processes:
 
 - `Network to epanet file (.inp)` - Writes an EPANET model from WNT node and link layers. It can merge the selected network into an existing `.inp` model or create a new model from the internal EPANET template, validating the final graph before writing.
 - `Demand to epanet scenario file (.scn)` - Writes an EPANET demand scenario from a selected node demand field.
-- `Pipe propierties to epanet scenario file (.scn)` - Writes an EPANET pipe scenario with diameter and roughness values for pipe links.
+- `Pipe properties to EPANET scenario file (.scn)` - Writes an EPANET pipe scenario with diameter and roughness values for pipe links.
 - `Network to XML` - Writes WNT Network XML with versioned network data and preserved EPANET, SWMM, LandXML and custom property domains, or writes a LandXML 1.2 pipe-network file.
 - `Network to pipesizing data file (.pro)` - Writes pipesizing input data with `[SETTINGS]`, `[PRESSURES]`, `[FIRE_SCENARIOS]` and `[PIPES]` sections, including peak/fire factors, required pressures and optional hydrant-pair fire scenarios.
 - `Network to pressure pipe optimization data file (.ext)` - Writes PPNO (`Pressurized Pipe Network Optimizer`) input data from network layers, an EPANET `.inp` model and a pipe catalog `.cat` file. See https://github.com/andresgciamtez/ppno.
@@ -53,6 +55,7 @@ Available processes:
 Available processes:
 
 - `Configure EPANET lib` - Sets the EPANET toolkit library path used by EPANET result imports.
+  Configure only a trusted EPANET 2 toolkit library installed on your system.
 - `Network from EPANET file` - Imports EPANET `.inp` files as WNT node and link layers.
 - `Results from EPANET` - Imports hydraulic results, quality results or both from EPANET simulations.
 - `Network from XML` - Imports WNT Network XML files, including selected network versions, or imports LandXML 1.2 pipe networks as WNT node and link layers.
@@ -66,6 +69,14 @@ Available processes:
 - `Split lines at points` - Splits line features at point positions.
 - `Merge networks` - Merges two networks and validates the final graph before creating output layers.
 
+## Packaging
+
+Run from an activated development environment:
+
+```bash
+python package_wnt.py
+```
+
 Andres Garcia Martinez (ppnoptimizer@gmail.com)
 
 ===
@@ -73,6 +84,8 @@ Andres Garcia Martinez (ppnoptimizer@gmail.com)
 # Water Network Tools (WNT)
 
 Water Network Tools es un plugin de QGIS Processing para crear, editar, validar, importar y exportar datos de redes de agua a presión. Trabaja con capas WNT de nodos y links, archivos de modelo EPANET `.inp`, archivos de escenario EPANET, XML de WNT, redes de tuberías LandXML 1.2, superficies TIN LandXML y datos para dimensionamiento de tuberías.
+
+Requiere QGIS 3.38 o posterior.
 
 ## Recetas
 
@@ -123,6 +136,7 @@ Procesos disponibles:
 Procesos disponibles:
 
 - `Configurar biblioteca EPANET` - Define la ruta de la biblioteca del toolkit de EPANET usada para importar resultados EPANET.
+  Configura únicamente una biblioteca de confianza del toolkit EPANET 2 instalada en el sistema.
 - `Red desde archivo de EPANET` - Importa archivos EPANET `.inp` como capas WNT de nodos y links.
 - `Resultados de EPANET` - Importa resultados hidráulicos, resultados de calidad o ambos desde simulaciones EPANET.
 - `Red desde XML` - Importa archivos WNT Network XML, incluidas versiones de red seleccionadas, o importa redes de tuberías LandXML 1.2 como capas WNT de nodos y links.
@@ -135,5 +149,13 @@ Procesos disponibles:
 - `Elevación de nodos desde TIN (LandXML)` - Añade o actualiza elevaciones de nodos desde una superficie TIN LandXML seleccionada.
 - `Dividir líneas en puntos` - Divide entidades de línea en posiciones de puntos.
 - `Fusionar redes` - Fusiona dos redes y valida el grafo final antes de crear las capas de salida.
+
+## Empaquetado
+
+Ejecutar desde un entorno de desarrollo activo:
+
+```bash
+python package_wnt.py
+```
 
 Andres Garcia Martinez (ppnoptimizer@gmail.com)

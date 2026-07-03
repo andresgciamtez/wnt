@@ -38,3 +38,13 @@ def test_sectioned_text_round_trip(tmp_path):
         "JUNCTIONS": ["J1 10"],
     }
     assert "[END]" in target.read_text(encoding="latin-1")
+
+
+def test_sectioned_text_normalizes_section_names(tmp_path):
+    source = tmp_path / "mixed_case.inp"
+    source.write_text("[ Junctions ]\nJ1 10\n[end]\n", encoding="latin-1")
+
+    sectioned = SectionedText()
+    sectioned.read(source)
+
+    assert sectioned.sections == {"JUNCTIONS": ["J1 10"]}

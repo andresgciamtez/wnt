@@ -25,7 +25,7 @@ from qgis.core import (QgsFeature,
                        QgsUnitTypes,
                        QgsPointXY
                        )
-from .base import WntProcessingAlgorithm, require_projected_crs
+from .base import WntProcessingAlgorithm, require_projected_crs, set_output_layer_name
 from .widgets import LandXmlSurfaceWidgetWrapper
 from ..utils import utils_core as tools
 from ..utils import utils_graph as graph
@@ -56,17 +56,6 @@ PROGRESS_NODES = 70
 PROGRESS_LINKS = 95
 
 
-def set_output_layer_name(context, layer_id, name):
-    """Set the display name for a generated Processing output layer."""
-    if context is None or not layer_id:
-        return
-    try:
-        details = context.layerToLoadOnCompletionDetails(layer_id)
-        details.name = name
-    except AttributeError:
-        pass
-
-
 def layer_base_name(layer):
     """Return a stable base name for generated output layers."""
     for attribute in ('sourceName', 'name'):
@@ -78,7 +67,7 @@ def layer_base_name(layer):
 
 class NetworkFromLinesAlgorithm(WntProcessingAlgorithm):
     """
-    Built a network from lines.
+    Build a network from line features.
     """
 
     # DEFINE CONSTANTS
@@ -354,8 +343,7 @@ class NetworkFromLinesAlgorithm(WntProcessingAlgorithm):
         )
 
         # SEND INFORMATION TO THE USER
-        if not require_projected_crs(output_crs, feedback):
-            return {}
+        require_projected_crs(output_crs, feedback)
         log_start(feedback, self.displayName())
         log_crs(feedback, output_crs)
         self._log_options(
@@ -392,13 +380,11 @@ class NetworkFromLinesAlgorithm(WntProcessingAlgorithm):
             for line in self._line_parts(geom):
                 if len(line) < 2:
                     error(feedback, f"Invalid LineString geometry (FID: {feature.id()})")
-                    return {}
 
                 start = tools.xy(line[0])
                 end = tools.xy(line[-1])
-                if dist(start, end) < tol:
+                if dist(start, end) <= tol:
                     error(feedback, f"Looped LineString detected (FID: {feature.id()})")
-                    return {}
 
                 lines.append(line)
                 line_attrs.append(feature.attributes())
@@ -493,7 +479,19 @@ class NetworkFromLinesAlgorithm(WntProcessingAlgorithm):
         if add_link_topology:
             link_fields.append(QgsField("topology", QMetaType.QString))
             link_fields.append(QgsField("zone", QMetaType.Int))
-        link_fields.extend(linelayer.fields())
+        used_field_names = set(link_fields.names())
+        for source_field in linelayer.fields():
+            source_name = source_field.name()
+            output_name = source_name
+            suffix = 1
+            while output_name in used_field_names:
+                suffix_text = "_src" if suffix == 1 else f"_src{suffix}"
+                output_name = f"{source_name}{suffix_text}"
+                suffix += 1
+            copied_field = QgsField(source_field)
+            copied_field.setName(output_name)
+            link_fields.append(copied_field)
+            used_field_names.add(output_name)
         (link_sink, link_id) = self.parameterAsSink(
             parameters,
             self.OUTPUT_LINES,

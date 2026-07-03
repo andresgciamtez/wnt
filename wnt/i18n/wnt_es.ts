@@ -1117,8 +1117,12 @@
             <translation>Red a archivo de datos para optimización de tuberías a presión (.ext)</translation>
         </message>
         <message>
-            <source>Pipe propierties to epanet scenario file (.scn)</source>
+            <source>Pipe properties to EPANET scenario file (.scn)</source>
             <translation>Propiedades de tuberías a archivo de escenario de EPANET (.scn)</translation>
+        </message>
+        <message>
+            <source>Toolkit configuration file</source>
+            <translation>Archivo de configuración del toolkit</translation>
         </message>
         <message>
             <source>Update assignment</source>

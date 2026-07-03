@@ -1,4 +1,6 @@
-﻿"""Consistent Processing feedback messages."""
+"""Consistent Processing feedback messages."""
+
+from qgis.core import QgsProcessingException
 
 SEPARATOR = "-" * 48
 
@@ -36,10 +38,19 @@ def crs(feedback, crs_):
 
 def warning(feedback, text):
     """Write a warning message."""
-    feedback.pushInfo(f"WARNING: {text}")
+    push_warning = getattr(feedback, "pushWarning", None)
+    if push_warning is not None:
+        push_warning(text)
+    else:
+        feedback.pushInfo(f"WARNING: {text}")
 
 
 def error(feedback, text):
-    """Write an error message."""
-    feedback.reportError(f"ERROR: {text}")
+    """Report a fatal Processing error and stop algorithm execution."""
+    message = f"ERROR: {text}"
+    try:
+        feedback.reportError(message, fatalError=True)
+    except TypeError:
+        feedback.reportError(message)
+    raise QgsProcessingException(message)
 

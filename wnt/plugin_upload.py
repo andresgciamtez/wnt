@@ -1,12 +1,14 @@
 #!/usr/bin/env python
 """Upload a plugin package to the QGIS plugin repository."""
 
+import base64
 import sys
 import getpass
 from defusedxml.xmlrpc import monkey_patch
 # defusedxml monkey_patch() is applied before XML-RPC use.
 import xmlrpc.client  # nosec B411
 from optparse import OptionParser
+from urllib.parse import urlsplit, urlunsplit
 
 monkey_patch()
 
@@ -18,22 +20,30 @@ ENDPOINT = '/plugins/RPC2/'
 VERBOSE = False
 
 
-def main(parameters, arguments):
-    """Main entry point.
+class AuthSafeTransport(xmlrpc.client.SafeTransport):
+    """HTTPS XML-RPC transport using Basic auth without credentials in the URL."""
 
-    :param parameters: Command line parameters.
-    :param arguments: Command line arguments.
-    """
-    address = "{protocol}://{username}:{password}@{server}:{port}{endpoint}".format(
+    def __init__(self, username, password):
+        super().__init__()
+        token = f"{username}:{password}".encode("utf-8")
+        self.authorization = "Basic " + base64.b64encode(token).decode("ascii")
+
+    def send_headers(self, connection, headers):
+        connection.putheader("Authorization", self.authorization)
+        super().send_headers(connection, headers)
+
+
+def main(parameters, arguments):
+    """Upload one plugin archive using interactive credentials."""
+    address = "{protocol}://{server}:{port}{endpoint}".format(
         protocol=PROTOCOL,
-        username=parameters.username,
-        password=parameters.password,
         server=parameters.server,
         port=parameters.port,
         endpoint=ENDPOINT)
-    print("Connecting to: %s" % hide_password(address))
+    print("Connecting to: {} as {}".format(address, parameters.username))
 
-    server = xmlrpc.client.ServerProxy(address, verbose=VERBOSE)
+    transport = AuthSafeTransport(parameters.username, parameters.password)
+    server = xmlrpc.client.ServerProxy(address, transport=transport, verbose=VERBOSE)
 
     try:
         with open(arguments[0], 'rb') as handle:
@@ -54,27 +64,21 @@ def main(parameters, arguments):
 
 
 def hide_password(url, start=6):
-    """Returns the http url with password part replaced with '*'.
-
-    :param url: URL to upload the plugin to
-    :type url: str
-
-    :param start: Position of start of password
-    :type start: int
-    """
-    start_position = url.find(':', start) + 1
-    end_position = url.find('@')
-    return "%s%s%s" % (
-        url[:start_position],
-        '*' * (end_position - start_position),
-        url[end_position:])
+    """Return a URL with any user-info password masked."""
+    del start  # Kept for compatibility with callers of the historical helper.
+    parsed = urlsplit(url)
+    if "@" not in parsed.netloc:
+        return url
+    userinfo, host = parsed.netloc.rsplit("@", 1)
+    username, separator, password = userinfo.partition(":")
+    if not separator:
+        return url
+    safe_netloc = f"{username}:{'*' * len(password)}@{host}"
+    return urlunsplit((parsed.scheme, safe_netloc, parsed.path, parsed.query, parsed.fragment))
 
 
 if __name__ == "__main__":
     parser = OptionParser(usage="%prog [options] plugin.zip")
-    parser.add_option(
-        "-w", "--password", dest="password",
-        help="Password for plugin site", metavar="******")
     parser.add_option(
         "-u", "--username", dest="username",
         help="Username of plugin site", metavar="user")
@@ -103,7 +107,6 @@ if __name__ == "__main__":
             options.username = res
         else:
             options.username = username
-    if not options.password:
-        # interactive mode
-        options.password = getpass.getpass()
+    # Never accept passwords through argv, where they are visible to other processes.
+    options.password = getpass.getpass()
     main(options, args)

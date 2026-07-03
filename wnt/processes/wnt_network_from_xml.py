@@ -12,6 +12,7 @@ from qgis.core import (
     QgsLineString,
     QgsPoint,
     QgsPointXY,
+    QgsProcessingContext,
     QgsProject,
     QgsProcessingParameterFeatureSink,
     QgsProcessingParameterFile,
@@ -19,7 +20,7 @@ from qgis.core import (
     QgsVectorLayer,
     QgsWkbTypes,
 )
-from .base import WntProcessingAlgorithm, parse_name_list
+from .base import WntProcessingAlgorithm, parse_name_list, set_output_layer_name
 from .messages import crs as log_crs
 from .messages import error, finish, info, start
 from ..utils import utils_core as tools
@@ -100,17 +101,6 @@ def qfields(field_names, field_types):
     return fields
 
 
-def set_output_layer_name(context, layer_id, name):
-    """Set the display name for a generated Processing output layer."""
-    if context is None or not layer_id:
-        return
-    try:
-        details = context.layerToLoadOnCompletionDetails(layer_id)
-        details.name = name
-    except AttributeError:
-        pass
-
-
 def layer_name(network, suffix):
     """Return the QGIS layer name for one imported network."""
     return f"{network['layer_base']}_{suffix}"
@@ -137,8 +127,8 @@ def link_feature(network, link, fields):
     return feature
 
 
-def add_memory_layer(name, geometry, fields, crs, features):
-    """Add an additional per-network memory layer to the current QGIS project."""
+def add_memory_layer(name, geometry, fields, crs, features, context=None):
+    """Register an additional per-network memory layer for Processing output loading."""
     uri = geometry
     if crs and crs.isValid():
         uri = f"{uri}?crs={crs.authid()}"
@@ -147,7 +137,12 @@ def add_memory_layer(name, geometry, fields, crs, features):
     provider.addAttributes(list(fields))
     layer.updateFields()
     provider.addFeatures(features)
-    QgsProject.instance().addMapLayer(layer)
+    if context is not None and hasattr(context, "temporaryLayerStore"):
+        context.temporaryLayerStore().addMapLayer(layer)
+        details = QgsProcessingContext.LayerDetails(name, context.project(), name)
+        context.addLayerToLoadOnCompletion(layer.id(), details)
+    else:
+        QgsProject.instance().addMapLayer(layer)
     return layer
 
 
@@ -265,22 +260,18 @@ class NetworkFromXmlAlgorithm(WntProcessingAlgorithm):
         if root_name == "LandXML":
             return self._process_landxml(xml_file, network_names, parameters, context, feedback)
         error(feedback, "Unsupported XML format")
-        return {}
 
     def _process_wnt_xml(self, xml_file, version_id, selected_network_names, parameters, context, feedback):
         try:
             available_names = wnt_network_names(xml_file)
         except Exception as exc:
             error(feedback, str(exc))
-            return {}
         if not available_names:
             error(feedback, "WNT XML file does not contain networks")
-            return {}
         names_to_load = selected_network_names or available_names
         missing = [name for name in names_to_load if name not in available_names]
         if missing:
             error(feedback, "WNT XML networks not found: " + ", ".join(missing))
-            return {}
 
         start(feedback, self.displayName())
         netcnt = nodcnt = lnkcnt = 0
@@ -292,7 +283,6 @@ class NetworkFromXmlAlgorithm(WntProcessingAlgorithm):
                 network.from_xml(xml_file, version_id=version_id, network_id=name)
             except Exception as exc:
                 error(feedback, str(exc))
-                return {}
             node_fields, link_fields, node_features, link_features, crs = wnt_layer_data(network)
             if first_crs is None:
                 first_crs = crs
@@ -310,8 +300,8 @@ class NetworkFromXmlAlgorithm(WntProcessingAlgorithm):
                 for feature in link_features:
                     link_sink.addFeature(feature)
             else:
-                add_memory_layer(wnt_layer_name(network, "nodes"), "Point", node_fields, crs, node_features)
-                add_memory_layer(wnt_layer_name(network, "links"), "LineString", link_fields, crs, link_features)
+                add_memory_layer(wnt_layer_name(network, "nodes"), "Point", node_fields, crs, node_features, context)
+                add_memory_layer(wnt_layer_name(network, "links"), "LineString", link_fields, crs, link_features, context)
 
         feedback.setProgress(100)
         info(feedback, "Input file", xml_file)
@@ -332,7 +322,6 @@ class NetworkFromXmlAlgorithm(WntProcessingAlgorithm):
             imp_net = landxml.network_from_xml(xml_file)
         except Exception as exc:
             error(feedback, str(exc))
-            return {}
         networks = imp_net['networks']
         if 'epsg_code' in imp_net:
             epsg_code = imp_net['epsg_code']
@@ -348,7 +337,6 @@ class NetworkFromXmlAlgorithm(WntProcessingAlgorithm):
         log_crs(feedback, crs)
         if not networks:
             error(feedback, "No LandXML PipeNetwork definitions found")
-            return {}
 
         lookup = dict(networks)
         for network in networks.values():
@@ -357,7 +345,6 @@ class NetworkFromXmlAlgorithm(WntProcessingAlgorithm):
             missing = [name for name in selected_network_names if name not in lookup]
             if missing:
                 error(feedback, "LandXML networks not found: " + ", ".join(missing))
-                return {}
             selected_networks = [lookup[name] for name in selected_network_names]
             selected_names = selected_network_names
         else:
@@ -382,8 +369,8 @@ class NetworkFromXmlAlgorithm(WntProcessingAlgorithm):
             nodcnt += len(node_features)
             lnkcnt += len(link_features)
             if index > 0:
-                add_memory_layer(layer_name(network, "nodes"), "Point", qfields(node_fields, NODE_FIELD_TYPES), crs, node_features)
-                add_memory_layer(layer_name(network, "links"), "LineString", qfields(link_fields, LINK_FIELD_TYPES), crs, link_features)
+                add_memory_layer(layer_name(network, "nodes"), "Point", qfields(node_fields, NODE_FIELD_TYPES), crs, node_features, context)
+                add_memory_layer(layer_name(network, "links"), "LineString", qfields(link_fields, LINK_FIELD_TYPES), crs, link_features, context)
                 continue
             for feature in node_features:
                 node_sink.addFeature(feature)

@@ -7,7 +7,6 @@ import tempfile
 from configparser import ConfigParser
 from dataclasses import dataclass
 from pathlib import Path
-from time import gmtime, strftime
 
 
 @dataclass(frozen=True)
@@ -139,6 +138,13 @@ def write_toolkit_library_path(lib_path, config_path=None):
     return path
 
 
+def format_elapsed_time(seconds):
+    """Format elapsed simulation seconds without wrapping after 24 hours."""
+    hours, remainder = divmod(int(seconds), 3600)
+    minutes, seconds = divmod(remainder, 60)
+    return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+
+
 def format_toolkit_version(version):
     """Convert an EPANET integer version code into a readable string."""
     if version is None:
@@ -203,11 +209,14 @@ class EpanetToolkit:
 
     @classmethod
     def from_library_path(cls, lib_path):
+        path = Path(lib_path)
+        if not path.is_file():
+            raise EpanetConfigurationError(f"EPANET toolkit library not found: {lib_path}")
         try:
-            library = _load_library(lib_path)
+            library = _load_library(path)
         except OSError as exc:
             raise EpanetConfigurationError(str(exc)) from exc
-        return cls(library, lib_path)
+        return cls(library, path)
 
     @classmethod
     def from_config(cls, config_path=None):
@@ -261,7 +270,7 @@ class EpanetToolkit:
             self.init_hydraulics(self.constants.no_save)
             while True:
                 step_count += 1
-                current_time = strftime("%H:%M:%S", gmtime(self.run_hydraulics()))
+                current_time = format_elapsed_time(self.run_hydraulics())
                 for index in range(1, node_count + 1):
                     node_rows.append(
                         [
@@ -323,7 +332,7 @@ class EpanetToolkit:
             self.init_quality(self.constants.no_save)
             while True:
                 step_count += 1
-                current_time = strftime("%H:%M:%S", gmtime(self.run_quality()))
+                current_time = format_elapsed_time(self.run_quality())
                 for index in range(1, node_count + 1):
                     node_rows.append(
                         [
@@ -414,7 +423,7 @@ class EpanetToolkit:
     def getnodeid(self, index):
         node_id = ctypes.create_string_buffer(self.constants.max_label_len + 1)
         self._check(self._lib.ENgetnodeid(index, node_id))
-        return node_id.value.decode("utf-8")
+        return node_id.value.decode("latin-1")
 
     def getnodevalue(self, index, parameter):
         value = ctypes.c_float()
@@ -424,7 +433,7 @@ class EpanetToolkit:
     def getlinkid(self, index):
         link_id = ctypes.create_string_buffer(self.constants.max_label_len + 1)
         self._check(self._lib.ENgetlinkid(index, link_id))
-        return link_id.value.decode("utf-8")
+        return link_id.value.decode("latin-1")
 
     def getlinkvalue(self, index, parameter):
         value = ctypes.c_float()

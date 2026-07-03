@@ -8,7 +8,7 @@ from qgis.core import (QgsProcessing,
                        QgsProcessingParameterFeatureSource,
                        QgsProcessingParameterFile,
                        QgsProcessingParameterFileDestination)
-from .base import WntProcessingAlgorithm, missing_fields
+from .base import WntProcessingAlgorithm, missing_fields, problem_text
 from ..utils import utils_core as tools
 from ..utils import utils_graph as graph
 from .messages import crs as log_crs
@@ -182,13 +182,11 @@ class NetworkToEpanetAlgorithm(WntProcessingAlgorithm):
             log_crs(feedback, crs)
         else:
             error(feedback, "Layers have different CRS")
-            return {}
 
         missing = missing_fields(nodes, ['id', 'type', 'elevation'])
         missing += missing_fields(links, ['id', 'start', 'end', 'type', 'length'])
         if missing:
             error(feedback, "Missing required fields: " + ", ".join(missing))
-            return {}
 
         # OUTPUT
         EPANET = self.parameterAsFileOutput(
@@ -202,9 +200,14 @@ class NetworkToEpanetAlgorithm(WntProcessingAlgorithm):
 
         # NODES
         ncnt = 0
+        node_ids = set()
         for f in nodes.getFeatures():
             ncnt += 1
-            newnode = tools.WntNode(f['id'])
+            node_id = f['id']
+            if node_id in node_ids:
+                error(feedback, f"Duplicated node id: {node_id}")
+            node_ids.add(node_id)
+            newnode = tools.WntNode(node_id)
             newnode.from_wkt(f.geometry().asWkt())
             newnode.set_type(f['type'])
             newnode.set_elevation(f['elevation'])
@@ -216,15 +219,20 @@ class NetworkToEpanetAlgorithm(WntProcessingAlgorithm):
 
         # LINKS
         lcnt = 0
+        link_ids = set()
         for f in links.getFeatures():
             lcnt += 1
-            newlink = tools.WntLink(f['id'], f['start'], f['end'])
+            link_id = f['id']
+            if link_id in link_ids:
+                error(feedback, f"Duplicated link id: {link_id}")
+            link_ids.add(link_id)
+            newlink = tools.WntLink(link_id, f['start'], f['end'])
             newlink.from_wkt(f.geometry().asWkt())
             newlink.epanet['length'] = f['length']
             newlink.set_type(f['type'])
             newnet.add_link(newlink)
 
-            # SHOW POROGRESS
+            # SHOW PROGRESS
             if lcnt % 100 == 0:
                 feedback.setProgress(50+50*lcnt/links.featureCount())
 
@@ -234,17 +242,14 @@ class NetworkToEpanetAlgorithm(WntProcessingAlgorithm):
         if workflow == self.WORKFLOW_EXISTING:
             if not template_file:
                 error(feedback, "Existing EPANET model file is required for this output mode")
-                return {}
             try:
                 base_net = tools.WntNetwork()
                 base_net.from_epanet(template_file)
-            except Exception as exc:
+            except (tools.WntError, OSError, ValueError, IndexError) as exc:
                 error(feedback, "Could not read existing EPANET model file: " + str(exc))
-                return {}
             problems = self._network_problems([base_net, newnet])
             if self._has_graph_problems(problems):
-                error(feedback, "Merged EPANET network is not valid: " + self._problem_text(problems))
-                return {}
+                error(feedback, "Merged EPANET network is not valid: " + problem_text(problems))
             info(feedback, "Output mode", self.WORKFLOW_OPTIONS[self.WORKFLOW_EXISTING])
             info(feedback, "Existing EPANET model file", template_file)
         else:
@@ -254,7 +259,7 @@ class NetworkToEpanetAlgorithm(WntProcessingAlgorithm):
             cleanup_template = template_file
             problems = self._network_problems([newnet])
             if self._has_graph_problems(problems):
-                error(feedback, "EPANET network is not valid: " + self._problem_text(problems))
+                error(feedback, "EPANET network is not valid: " + problem_text(problems))
                 if cleanup_template:
                     try:
                         os.unlink(cleanup_template)
@@ -270,7 +275,6 @@ class NetworkToEpanetAlgorithm(WntProcessingAlgorithm):
             newnet.to_epanet(EPANET, template_file)
         except UnicodeEncodeError as exc:
             error(feedback, "Output contains characters that cannot be written with EPANET latin-1 encoding: " + str(exc))
-            return {}
         finally:
             if cleanup_template:
                 try:
@@ -284,7 +288,7 @@ class NetworkToEpanetAlgorithm(WntProcessingAlgorithm):
         info(feedback, "Output file", EPANET)
         finish(feedback)
 
-        # PROCCES CANCELED
+        # PROCESS CANCELED
         if feedback.isCanceled():
             return {}
 
@@ -304,14 +308,6 @@ class NetworkToEpanetAlgorithm(WntProcessingAlgorithm):
     @staticmethod
     def _has_graph_problems(problems):
         return any(bool(values) for values in problems.values())
-
-    @staticmethod
-    def _problem_text(problems):
-        parts = []
-        for name, values in problems.items():
-            if values:
-                parts.append("{}: {}".format(name, ", ".join(sorted(str(value) for value in values))))
-        return "; ".join(parts)
 
     @classmethod
     def _create_minimal_template(cls, version, flow_units):

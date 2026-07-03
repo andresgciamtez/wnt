@@ -13,7 +13,8 @@ from qgis.core import (QgsFeature,
                        QgsWkbTypes,
                        QgsSpatialIndex
                       )
-from .base import WntProcessingAlgorithm, missing_fields, set_progress
+from .base import (WntProcessingAlgorithm, missing_fields, numeric_value,
+                   require_projected_crs, set_progress)
 from .messages import crs as log_crs
 from .messages import error, finish, info, start
 
@@ -131,20 +132,17 @@ class AssignDemandAlgorithm(WntProcessingAlgorithm):
         crs = slayer.sourceCrs()
         if crs != tlayer.sourceCrs():
             error(feedback, "Layers have different CRS")
-            return {}
+        require_projected_crs(crs, feedback)
 
         if not sfields:
             error(feedback, "At least one source demand field is required")
-            return {}
 
         source_missing = missing_fields(slayer, ['id', *sfields])
         if source_missing:
             error(feedback, "Source layer is missing required fields: " + ", ".join(source_missing))
-            return {}
         target_missing = missing_fields(tlayer, ['id'])
         if target_missing:
             error(feedback, "Target layer is missing required fields: " + ", ".join(target_missing))
-            return {}
 
         # SEND INFORMATION TO THE USER
         start(feedback, self.displayName())
@@ -189,12 +187,10 @@ class AssignDemandAlgorithm(WntProcessingAlgorithm):
 
         def source_value(feature, field):
             value = feature.attributes()[s_field_indices[field]]
-            if value is None or value == '':
-                return 0.0
             try:
-                return float(value)
-            except (TypeError, ValueError):
-                error(feedback, "Source field '%s' contains a non-numeric value: %s" % (field, value))
+                return numeric_value(value, field)
+            except ValueError as exc:
+                error(feedback, str(exc))
                 return None
 
         # SPATIAL INDEX FOR TARGET LAYER
@@ -203,6 +199,16 @@ class AssignDemandAlgorithm(WntProcessingAlgorithm):
 
         # MAP FOR TARGET FEATURES (to avoid re-fetching)
         t_features = {f.id(): f for f in tlayer.getFeatures()}
+        target_ids = [feature.attributes()[t_id_idx] for feature in t_features.values()]
+        seen_ids = set()
+        duplicate_ids = set()
+        for target_id in target_ids:
+            if target_id in seen_ids:
+                duplicate_ids.add(target_id)
+            seen_ids.add(target_id)
+        duplicate_ids = sorted(duplicate_ids, key=str)
+        if duplicate_ids:
+            error(feedback, "Target layer contains duplicate ids: " + ", ".join(map(str, duplicate_ids)))
 
         # ASSIGN, ACCUMULATE AND WRITE ASSIGNMENT LAYER
         values = {} # key: (target_id, field_name)
@@ -218,6 +224,8 @@ class AssignDemandAlgorithm(WntProcessingAlgorithm):
                 return {}
 
             s_geom = sfeature.geometry()
+            if hasattr(s_geom, 'isMultipart') and s_geom.isMultipart():
+                error(feedback, f"Source feature {sfeature.id()} has multipart geometry")
             sxy = s_geom.asPoint()
 
             # Use spatial index to find the nearest neighbor

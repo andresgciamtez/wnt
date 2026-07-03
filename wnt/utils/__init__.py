@@ -1,3 +1,3 @@
-﻿"""Shared utility modules for Water Network Tools."""
+"""Shared utility modules for Water Network Tools."""
 
 

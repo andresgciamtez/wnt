@@ -287,17 +287,14 @@ class SplitLinesAtPointsAlgorithm(WntProcessingAlgorithm):
         if crs == linlayer.sourceCrs():
 
             # SEND INFORMATION TO THE USER
-            if not require_projected_crs(output_crs, feedback):
-                return {}
+            require_projected_crs(output_crs, feedback)
             start(feedback, self.displayName())
             log_crs(feedback, output_crs)
         else:
             error(feedback, "Layers have different CRS")
-            return {}
 
         if output_mode == OUTPUT_MODE_UPDATE and output_crs != linlayer.sourceCrs():
             error(feedback, "Update input layer requires the selected CRS to match the input line layer CRS")
-            return {}
 
         if output_mode == OUTPUT_MODE_NEW:
             # OUTPUT
@@ -385,7 +382,6 @@ class SplitLinesAtPointsAlgorithm(WntProcessingAlgorithm):
                 replace_layer_features(linlayer, replacement_features)
             except RuntimeError as exc:
                 error(feedback, str(exc))
-                return {}
 
         info(feedback, "Input lines", tot)
         info(feedback, "Output lines", cnt)

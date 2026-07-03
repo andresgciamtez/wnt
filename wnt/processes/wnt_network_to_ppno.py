@@ -10,7 +10,7 @@ from qgis.core import (QgsProcessing,
                        QgsProcessingParameterFileDestination)
 from .base import WntProcessingAlgorithm, missing_fields
 from ..utils import utils_parser as parser
-from .messages import error, finish, info, start
+from .messages import error, finish, info, start, warning
 
 class NetworkToPpnoAlgorithm(WntProcessingAlgorithm):
     """
@@ -182,24 +182,22 @@ class NetworkToPpnoAlgorithm(WntProcessingAlgorithm):
         # CHECK CRS
         if nodes.sourceCrs() != links.sourceCrs():
             error(feedback, "Layers have different CRS")
-            return {}
         missing = missing_fields(nodes, ['id', pfield]) + missing_fields(links, ['id', sfield])
         if missing:
             error(feedback, "Missing required fields: " + ", ".join(missing))
-            return {}
 
         # PIPE CATALOG SECTION
         catalog_source = Path(catalog_input_file)
         if not catalog_source.exists():
             error(feedback, 'PPNO pipe catalog file not found: ' + catalog_input_file)
-            return {}
 
         catalog_bytes = catalog_source.read_bytes()
         if self._catalog_has_section_header(catalog_bytes):
             error(feedback, 'PPNO pipe catalog must not contain section headers')
-            return {}
 
         catalog_file = Path(extfile).with_suffix('.cat')
+        if catalog_file.exists():
+            warning(feedback, f"Existing pipe catalog will be overwritten: {catalog_file}")
         catalog_file.write_bytes(catalog_bytes)
 
         # BUILD EXT FILE
@@ -234,7 +232,6 @@ class NetworkToPpnoAlgorithm(WntProcessingAlgorithm):
             ppnof.write(extfile)
         except UnicodeEncodeError as exc:
             error(feedback, "Output contains characters that cannot be written with PPNO latin-1 encoding: " + str(exc))
-            return {}
 
         # SHOW INFO
         start(feedback, self.displayName())
@@ -243,7 +240,7 @@ class NetworkToPpnoAlgorithm(WntProcessingAlgorithm):
         info(feedback, "Pipe catalog file", catalog_file)
         info(feedback, "Output file", extfile)
         finish(feedback)
-        # PROCCES CANCELED
+        # PROCESS CANCELED
         if feedback.isCanceled():
             return {}
 

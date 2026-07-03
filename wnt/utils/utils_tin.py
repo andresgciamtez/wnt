@@ -89,6 +89,8 @@ class TIN:
         self._triangles = []
         self._spatial_index = QgsSpatialIndex()
         self.surface_name = ''
+        self.crs_authid = ''
+        self.crs_wkt = ''
 
     def from_landxml(self, file, surfname=''):
         '''Load a TIN surface from a LandXML file.
@@ -100,6 +102,14 @@ class TIN:
         '''
         tree = safe_xml_parse(file)
         root = tree.getroot()
+        coordinate_system = root.find(xmlname('CoordinateSystem'))
+        crs_authid = ''
+        crs_wkt = ''
+        if coordinate_system is not None:
+            crs_authid = str(coordinate_system.attrib.get('epsgCode') or '').strip()
+            if crs_authid.isdigit():
+                crs_authid = f"EPSG:{crs_authid}"
+            crs_wkt = str(coordinate_system.attrib.get('ogcWktCode') or '').strip()
         for surface in root.iter(xmlname('Surface')):
             definition = surface.find(xmlname('Definition'))
             if definition is None or definition.attrib.get('surfType') != 'TIN':
@@ -143,9 +153,11 @@ class TIN:
             self._triangles = new_triangles
             self._spatial_index = new_spatial_index
             self.surface_name = surface.attrib.get('name', '')
+            self.crs_authid = crs_authid
+            self.crs_wkt = crs_wkt
             break
         else:
-            raise Exception('Incorrect name or none surface found.')
+            raise ValueError('Requested TIN surface was not found.')
 
     def elevations(self, points):
         '''Return elevations [z1,..] from points [(x1, y1)..].

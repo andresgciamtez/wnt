@@ -1,19 +1,30 @@
 """Graph utilities for network topology analysis."""
 
+from collections import defaultdict, deque
+
 
 def graph_from_records(node_ids, links, path):
-    """Export topology records to Trivial Graph Format (TGF)."""
+    """Export validated topology records to Trivial Graph Format (TGF)."""
+    node_ids = list(node_ids)
+    links = list(links)
     node_index = {}
+    for index, node_id in enumerate(node_ids):
+        node_index.setdefault(node_id, index)
+    undefined = [
+        link_id for link_id, start_id, end_id in links
+        if start_id not in node_index or end_id not in node_index
+    ]
+    if undefined:
+        raise ValueError("Links reference undefined nodes: " + ", ".join(map(str, undefined)))
+
     with open(path, 'w', encoding='utf-8') as graph_file:
         for index, node_id in enumerate(node_ids):
-            node_index.setdefault(node_id, index)
             graph_file.write('{} {} \n'.format(index, node_id))
         graph_file.write('# \n')
-
         for link_id, start_id, end_id in links:
-            start_index = node_index.get(start_id)
-            end_index = node_index.get(end_id)
-            graph_file.write('{} {} {} \n'.format(start_index, end_index, link_id))
+            graph_file.write('{} {} {} \n'.format(
+                node_index[start_id], node_index[end_id], link_id
+            ))
 
 
 def node_degrees_from_records(node_ids, links):
@@ -86,6 +97,7 @@ class Graph():
         self._nodes = set()
         self._updated = False
         self._degrees = {}
+        self._incident = defaultdict(set)
 
 
     def add_edge(self, label, start, end):
@@ -94,6 +106,8 @@ class Graph():
             self.edges[label] = (start, end)
             self._nodes.add(start)
             self._nodes.add(end)
+            self._incident[start].add(label)
+            self._incident[end].add(label)
             self._updated = False
         else:
             msg = 'Edge: {} exists!'.format(label)
@@ -104,20 +118,15 @@ class Graph():
         return list(self._nodes)
 
     def get_incident_edges(self, nodelabel):
-        """Return the incident edge labels to a node"""
-        incidentedges = set()
-        for key, value in self.edges.items():
-            if nodelabel in value:
-                incidentedges.add(key)
-        return incidentedges
+        """Return the incident edge labels to a node."""
+        return set(self._incident.get(nodelabel, ()))
 
     def get_contiguous_edges(self, label):
-        """Return the contiguous edges labels to another"""
+        """Return labels of edges sharing an endpoint with an edge."""
         contiguous = set()
-        for n in self.edges[label][:]:
-            for e in self.get_incident_edges(n):
-                if e != label:
-                    contiguous.add(e)
+        for node in self.edges[label]:
+            contiguous.update(self._incident.get(node, ()))
+        contiguous.discard(label)
         return contiguous
 
     def node_count(self):
@@ -146,65 +155,52 @@ class Graph():
         return self._degrees
 
     def classify(self):
-        '''Return subgraphs enumerating trees and meshes'''
+        """Classify edges as branched trees or meshed two-core components."""
+        incident = {node: set(labels) for node, labels in self._incident.items()}
+        degrees = {node: 0 for node in self._nodes}
+        for start, end in self.edges.values():
+            degrees[start] += 1
+            degrees[end] += 1
 
-        # BRANCHED AND MESHED
+        queue = deque(node for node, degree in degrees.items() if degree == 1)
         branched = set()
-        if not self._updated:
-            self.calculate_degrees()
-        self._updated = False
-        while 1 in self._degrees.values():
-            self._degrees.keys()
-            for key, value in self._degrees.items():
-                if value == 1:
-                    for label in self.get_incident_edges(key):
-                        branched.add(label)
-                        for node in self.edges[label][:]:
-                            self._degrees[node] -= 1
-        meshed = set()
-        for label in self.edges:
-            if label not in branched:
-                meshed.add(label)
+        while queue:
+            node = queue.popleft()
+            if degrees[node] != 1:
+                continue
+            for label in tuple(incident.get(node, ())):
+                if label in branched:
+                    continue
+                branched.add(label)
+                for endpoint in self.edges[label]:
+                    incident[endpoint].discard(label)
+                    degrees[endpoint] -= 1
+                    if degrees[endpoint] == 1:
+                        queue.append(endpoint)
 
-        # SEPARATE TREES AND MESH
-        trees = {}
-        meshes = {}
-        for graphtype in ['TREE', 'MESH']:
-            cnt = 0
-            if graphtype == 'TREE':
-                initial = branched
-            else:
-                initial = meshed
-            while initial:
-                cnt += 1
-                pre = set()
-                new = set()
-                sub = set()
-                pre.add(initial.pop())
-                while pre:
-                    sub.update(pre)
-                    for e in pre:
-                        for ce in self.get_contiguous_edges(e):
-                            if ce in initial:
-                                initial.discard(ce)
-                                new.add(ce)
-                    sub.update(new)
-                    pre = new.copy()
-                    new = set()
-                if graphtype == 'TREE':
-                    trees[cnt] = sub
-                else:
-                    meshes[cnt] = sub
+        meshed = set(self.edges) - branched
 
-        # RECLASSIFY
+        def components(labels):
+            remaining = set(labels)
+            groups = []
+            while remaining:
+                seed = min(remaining, key=str)
+                remaining.remove(seed)
+                component = {seed}
+                pending = [seed]
+                while pending:
+                    label = pending.pop()
+                    for endpoint in self.edges[label]:
+                        neighbors = self._incident.get(endpoint, set()) & remaining
+                        remaining.difference_update(neighbors)
+                        component.update(neighbors)
+                        pending.extend(neighbors)
+                groups.append(component)
+            return groups
+
         classified = {}
-        for graphtype in ['BRANCHED', 'MESHED']:
-            if graphtype == 'BRANCHED':
-                g = trees
-            else:
-                g = meshes
-            for key, value in g.items():
-                for label in value:
-                    classified[label] = (graphtype, key)
+        for topology, labels in (("BRANCHED", branched), ("MESHED", meshed)):
+            for zone, component in enumerate(components(labels), start=1):
+                for label in component:
+                    classified[label] = (topology, zone)
         return classified
-

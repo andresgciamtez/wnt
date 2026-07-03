@@ -144,6 +144,44 @@ def test_processing_toolbox_entries_use_spanish_catalog():
 
     assert translator.load(str(file_path))
     expected_names = {
+        'processes/wnt_assign_demand.py': ('Assign demand', 'Asignar demanda'),
+        'processes/wnt_config_toolkit.py': (
+            'Configure EPANET lib',
+            'Configurar biblioteca EPANET',
+        ),
+        'processes/wnt_connect_by_distance.py': (
+            'Connect by distance',
+            'Conectar por distancia',
+        ),
+        'processes/wnt_demand_to_epanet_scenario.py': (
+            'Demand to epanet scenario file (.scn)',
+            'Demanda a archivo de escenario de EPANET (.scn)',
+        ),
+        'processes/wnt_network_from_epanet.py': (
+            'Network from EPANET file',
+            'Red desde archivo de EPANET',
+        ),
+        'processes/wnt_network_from_lines.py': (
+            'Network from lines',
+            'Red desde l\u00edneas',
+        ),
+        'processes/wnt_network_to_graph.py': (
+            'Network to graph file',
+            'Red a archivo de grafo',
+        ),
+        'processes/wnt_network_to_ppno.py': (
+            'Network to pressure pipe optimization data file (.ext)',
+            'Red a archivo de datos para optimizaci\u00f3n de tuber\u00edas a presi\u00f3n (.ext)',
+        ),
+        'processes/wnt_pipe_properties_to_epanet_scenario.py': (
+            'Pipe properties to EPANET scenario file (.scn)',
+            'Propiedades de tuber\u00edas a archivo de escenario de EPANET (.scn)',
+        ),
+        'processes/wnt_update_assignment.py': (
+            'Update assignment',
+            'Actualizar asignaci\u00f3n',
+        ),
+        'processes/wnt_validate.py': ('Validate', 'Validar'),
         'processes/wnt_network_to_epanet.py': (
             'Network to epanet file (.inp)',
             'Red a archivo EPANET (.inp)',
@@ -250,8 +288,8 @@ def test_processing_toolbox_entries_use_spanish_ts_fallback(monkeypatch):
             'Network to pressure pipe optimization data file (.ext)',
             'Red a archivo de datos para optimización de tuberías a presión (.ext)',
         ),
-        'processes/wnt_pipe_propierties_to_epanet_scenario.py': (
-            'Pipe propierties to epanet scenario file (.scn)',
+        'processes/wnt_pipe_properties_to_epanet_scenario.py': (
+            'Pipe properties to EPANET scenario file (.scn)',
             'Propiedades de tuberías a archivo de escenario de EPANET (.scn)',
         ),
         'processes/wnt_update_assignment.py': (

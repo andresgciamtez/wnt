@@ -106,11 +106,9 @@ class NetworkToGraphAlgorithm(WntProcessingAlgorithm):
         node_missing = missing_fields(nodes, ['id'])
         if node_missing:
             error(feedback, "Node layer is missing required fields: " + ", ".join(node_missing))
-            return {}
         link_missing = missing_fields(links, ['id', 'start', 'end'])
         if link_missing:
             error(feedback, "Link layer is missing required fields: " + ", ".join(link_missing))
-            return {}
 
         node_ids = [feature['id'] for feature in nodes.getFeatures()]
         link_records = [
@@ -122,7 +120,6 @@ class NetworkToGraphAlgorithm(WntProcessingAlgorithm):
             values = sorted(problems[problem_name])
             if values:
                 error(feedback, "%s: %s" % (problem_name, ", ".join(str(value) for value in values)))
-                return {}
 
         # OUTPUT
         graphfile = self.parameterAsFileOutput(parameters, self.OUTPUT, context)

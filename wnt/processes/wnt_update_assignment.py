@@ -5,7 +5,8 @@ from qgis.core import (QgsProcessing,
                        QgsProcessingParameterFeatureSource,
                        QgsWkbTypes
                        )
-from .base import WntProcessingAlgorithm, missing_fields, require_projected_crs
+from .base import (WntProcessingAlgorithm, missing_fields, numeric_value,
+                   require_projected_crs)
 from .messages import crs as log_crs
 from .messages import error, finish, info, message, start
 
@@ -121,28 +122,23 @@ class UpdateAssignmentAlgorithm(WntProcessingAlgorithm):
         # CHECK CRS
         crs = slayer.sourceCrs()
         if crs == tlayer.sourceCrs() == alayer.sourceCrs():
-            if not require_projected_crs(crs, feedback):
-                return {}
+            require_projected_crs(crs, feedback)
 
             # SEND INFORMATION TO THE USER
             start(feedback, self.displayName())
             log_crs(feedback, crs)
         else:
             error(feedback, "Layers have different CRS")
-            return {}
 
         assignment_missing = missing_fields(alayer, ['source', 'target'])
         if assignment_missing:
             error(feedback, "Assignment layer is missing required fields: " + ", ".join(assignment_missing))
-            return {}
         source_missing = missing_fields(slayer, ['id'])
         if source_missing:
             error(feedback, "Source layer is missing required fields: " + ", ".join(source_missing))
-            return {}
         target_missing = missing_fields(tlayer, ['id'])
         if target_missing:
             error(feedback, "Target layer is missing required fields: " + ", ".join(target_missing))
-            return {}
 
         # OUTPUT LAYERS
         (assign_sink, assign_id) = self.parameterAsSink(
@@ -167,15 +163,12 @@ class UpdateAssignmentAlgorithm(WntProcessingAlgorithm):
         field_names = [name for name in field_names if name not in ("source", "target")]
         if not field_names:
             error(feedback, "Assignment layer must contain at least one demand field")
-            return {}
         source_missing = missing_fields(slayer, field_names)
         if source_missing:
             error(feedback, "Source layer is missing required fields: " + ", ".join(source_missing))
-            return {}
         target_missing = missing_fields(tlayer, field_names)
         if target_missing:
             error(feedback, "Target layer is missing required fields: " + ", ".join(target_missing))
-            return {}
 
         def assignment_endpoints(feature):
             geometry = feature.geometry()
@@ -200,21 +193,21 @@ class UpdateAssignmentAlgorithm(WntProcessingAlgorithm):
         for f in slayer.getFeatures():
             src_pos[f["id"]] = f.geometry().asPoint()
             for name in field_names:
-                src_fds[(f["id"], name)] = f[name]
+                try:
+                    src_fds[(f["id"], name)] = numeric_value(f[name], name)
+                except ValueError as exc:
+                    error(feedback, str(exc))
         for f in alayer.getFeatures():
             source_id = f["source"]
             if source_id not in src_pos:
                 error(feedback, f"Assignment references unknown source: {source_id}")
-                return {}
             try:
                 start_point, _ = assignment_endpoints(f)
             except ValueError as exc:
                 error(feedback, str(exc))
-                return {}
             if start_point.distance(src_pos[source_id]) > POS_TOLERANCE:
                 msg = f'Source point misplaced: {source_id}'
                 error(feedback, msg)
-                return {}
             for name in field_names:
                 f[name] = src_fds[(source_id, name)]
             assignments.append(f)
@@ -235,12 +228,10 @@ class UpdateAssignmentAlgorithm(WntProcessingAlgorithm):
             target_id = f["target"]
             if target_id not in tar_pos:
                 error(feedback, f"Assignment references unknown target: {target_id}")
-                return {}
             try:
                 _, end_point = assignment_endpoints(f)
             except ValueError as exc:
                 error(feedback, str(exc))
-                return {}
             if end_point.distance(tar_pos[target_id]) > POS_TOLERANCE:
                 for id_, point in tar_pos.items():
                     if end_point.distance(point) <= POS_TOLERANCE:
@@ -255,11 +246,13 @@ class UpdateAssignmentAlgorithm(WntProcessingAlgorithm):
                     msg = f'Misassignment. Source: {f["source"]}'
                     msg += f' target: {target_id}'
                     error(feedback, msg)
-                    return {}
             for name in field_names:
-                values[(target_id, name)] += f[name]
+                try:
+                    values[(target_id, name)] += numeric_value(f[name], name)
+                except ValueError as exc:
+                    error(feedback, str(exc))
         info(feedback, "Updated targets", cnt)
-        # WRITE ASSIGNEMENT LAYER
+        # WRITE ASSIGNMENT LAYER
         for f in assignments:
             assign_sink.addFeature(f)
 
@@ -278,7 +271,7 @@ class UpdateAssignmentAlgorithm(WntProcessingAlgorithm):
         info(feedback, "Assignment features", alayer.featureCount())
         finish(feedback)
 
-        # PROCCES CANCELED
+        # PROCESS CANCELED
         if feedback.isCanceled():
             return {}
 

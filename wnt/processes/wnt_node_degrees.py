@@ -151,7 +151,6 @@ class NodeDegreesAlgorithm(WntProcessingAlgorithm):
                 fields = add_missing_fields(nodelay, [field_def])
             except RuntimeError as exc:
                 error(feedback, str(exc))
-                return {}
             degree_idx = field_index(fields, 'degree')
             updates = {}
             for cnt, feature in enumerate(node_features, start=1):
@@ -162,7 +161,6 @@ class NodeDegreesAlgorithm(WntProcessingAlgorithm):
                 update_layer_attributes(nodelay, updates)
             except RuntimeError as exc:
                 error(feedback, str(exc))
-                return {}
             node_id = getattr(nodelay, 'id', lambda: self.INPUT_NODES)()
         else:
             newfields = nodelay.fields()
@@ -196,7 +194,7 @@ class NodeDegreesAlgorithm(WntProcessingAlgorithm):
         info(feedback, "Output mode", OUTPUT_MODE_OPTIONS[output_mode])
         finish(feedback)
 
-        # PROCCES CANCELED
+        # PROCESS CANCELED
         if feedback.isCanceled():
             return {}
 

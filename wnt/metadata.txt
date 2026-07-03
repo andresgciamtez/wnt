@@ -1,6 +1,6 @@
 [general]
 name=Water Network Tools
-qgisMinimumVersion=3.28
+qgisMinimumVersion=3.38
 description=Water Network Modelling Utilities
 version=1.4.2
 author=Andrés García Martínez
@@ -17,6 +17,18 @@ deprecated=False
 server=False
 about=<p>A set of processes for modeling water networks. Starting from scratch or expanding an existing network, it is possible to import and export models, scenarios and other files for network analysis and optimization.</p><p>Get Started: <a href="https://www.youtube.com/playlist?list=PLzE4DxrnNT-Fg0Ztku6jbIG8QEEOHqYEH">Youtube tutorial</a>. Autor: Andrés García Martínez <a href="https://bit.ly/2m8otrB">LinkedIn</a></p>
 changelog=
+    1.4.2
+        Require QGIS 3.38 or later for supported field type APIs.
+        Run Processing algorithms on the main thread for safe layer and project updates.
+        Harden EPANET import/export for sparse templates, missing coordinates, optional pipe fields and elapsed times over 24 hours.
+        Reject duplicate network ids, looped lines at the configured tolerance and self-connections.
+        Harden LandXML import for accented types, missing centers and repeated network names.
+        Validate projected demand assignment, numeric demand values, output sinks and EPANET toolkit paths.
+        Raise Processing exceptions for fatal errors and report provider load failures in the QGIS log.
+        Classify branched and meshed graph components in linear time using cached adjacency.
+        Prevent ambiguous copied fields, unsafe upload credentials and silent catalog replacement.
+        Validate TGF references, support WKT M/ZM and warn when LandXML CRS is missing or mismatched.
+        Consolidate Processing helpers, expose toolkit configuration output and normalize source encoding.
     1.4.1
         Add multiversion WNT XML import/export for network node and link layers.
         Preserve EPANET, SWMM, LandXML and custom properties in XML property domains.

@@ -101,19 +101,16 @@ def test_wnt_xml_rejects_entity_expansion(tmp_path):
         WntNetwork().from_xml(xml_file)
 
 
-def test_label_indexes_preserve_first_duplicate():
-    """Label lookups preserve the previous first-match behavior."""
+def test_network_rejects_duplicate_labels():
     network = WntNetwork()
 
-    first = WntNode("N1")
-    second = WntNode("N1")
-    network.add_node(first)
-    network.add_node(second)
+    network.add_node(WntNode("N1"))
+    with pytest.raises(ValueError, match="Duplicated node id: N1"):
+        network.add_node(WntNode("N1"))
 
-    first = WntLink("L1", "N1", "N2")
-    second = WntLink("L1", "N2", "N3")
-    network.add_link(first)
-    network.add_link(second)
+    network.add_link(WntLink("L1", "N1", "N2"))
+    with pytest.raises(ValueError, match="Duplicated link id: L1"):
+        network.add_link(WntLink("L1", "N2", "N3"))
 
     assert network.get_nodeindex("N1") == 0
     assert network.get_linkindex("L1") == 0

@@ -136,7 +136,6 @@ class ElevationFromRasterAlgorithm(WntProcessingAlgorithm):
         missing = missing_fields(nodelayer, [efield])
         if missing:
             error(feedback, "Node layer is missing required fields: " + ", ".join(missing))
-            return {}
 
         # CHECK CRS
         crs = nodelayer.sourceCrs()
@@ -147,7 +146,6 @@ class ElevationFromRasterAlgorithm(WntProcessingAlgorithm):
             log_crs(feedback, crs)
         else:
             error(feedback, "Layers have different CRS")
-            return {}
 
         if output_mode == OUTPUT_MODE_NEW:
             # OUTPUT
@@ -211,7 +209,6 @@ class ElevationFromRasterAlgorithm(WntProcessingAlgorithm):
                 update_layer_attributes(nodelayer, updates)
             except RuntimeError as exc:
                 error(feedback, str(exc))
-                return {}
 
         info(feedback, "Processed nodes", pcnt)
         info(feedback, "Skipped nodes", scnt)

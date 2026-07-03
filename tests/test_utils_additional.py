@@ -5,6 +5,8 @@ import textwrap
 import pytest
 
 from wnt.utils.utils_core import (
+    WntFormatError,
+    WntGeometryError,
     WntLink,
     WntNetwork,
     WntNode,
@@ -58,6 +60,8 @@ def test_net_from_linestrings_error_and_union_branches():
         net_from_linestrings([[(0, 0), (0, 0)]], 0)
     with pytest.raises(Exception, match="Looped"):
         net_from_linestrings([[(0, 0), (0.001, 0)]], 0.01)
+    with pytest.raises(Exception, match="Looped"):
+        net_from_linestrings([[(0, 0), (0.01, 0)]], 0.01)
 
     nodes, links = net_from_linestrings(
         [
@@ -78,6 +82,8 @@ def test_node_validation_and_wkt_parsing():
 
     assert node.name() == "J1"
     node.from_wkt('Point Z (1 2 3)')
+    node.from_wkt('Point M (1 2 99)')
+    node.from_wkt('Point ZM (1 2 3 99)')
     node.set_elevation("12.5")
     node.set_type("junction")
 
@@ -93,7 +99,7 @@ def test_node_validation_and_wkt_parsing():
         node.set_type("unknown")
     with pytest.raises(Exception, match="Incorrect type"):
         node.set_type(None)
-    with pytest.raises(Exception, match="Incorrect WKT"):
+    with pytest.raises(WntFormatError, match="Incorrect WKT"):
         node.from_wkt("not a point")
 
 
@@ -104,6 +110,8 @@ def test_link_validation_wkt_and_accessors():
     assert link.start() == "J1"
     assert link.end() == "J2"
     link.from_wkt('LineString Z (0 0 0, 1 0 0, 1 1 0)')
+    link.from_wkt('LineString M (0 0 7, 1 0 8, 1 1 9)')
+    link.from_wkt('LineString ZM (0 0 1 7, 1 0 2 8, 1 1 3 9)')
     link.set_type("pipe")
 
     assert link.get_geometry()[0] == (0.0, 0.0)
@@ -113,7 +121,7 @@ def test_link_validation_wkt_and_accessors():
     assert polyline_length(link.get_geometry()) == pytest.approx(2.0)
     assert link.get_type() == "PIPE"
 
-    with pytest.raises(Exception, match="at least 2 points"):
+    with pytest.raises(WntGeometryError, match="at least 2 points"):
         link.set_geometry([(0, 0)])
     with pytest.raises(Exception, match="Looped"):
         link.set_geometry([(0, 0), (0, 0)])
@@ -123,7 +131,7 @@ def test_link_validation_wkt_and_accessors():
         link.set_type("bad")
     with pytest.raises(Exception, match="Bad type"):
         link.set_type(None)
-    with pytest.raises(Exception, match="Multi-geometry"):
+    with pytest.raises(WntFormatError, match="Multi-geometry"):
         link.from_wkt("MultiLineString((0 0, 1 1))")
     with pytest.raises(Exception, match="Incorrect WKT"):
         link.from_wkt(None)
@@ -149,7 +157,8 @@ def test_network_validation_and_exports(tmp_path):
     network.add_node(j1)
     network.add_node(j2)
     network.add_node(j3)
-    network.add_node(duplicate)
+    with pytest.raises(ValueError, match="Duplicated node id: J2"):
+        network.add_node(duplicate)
 
     pipe = WntLink("P1", "J1", "J2")
     pipe.set_type("CVPIPE")
@@ -161,18 +170,19 @@ def test_network_validation_and_exports(tmp_path):
     valve = WntLink("V1", "J3", "J3")
     valve.set_type("PRV")
     valve.set_geometry([(2, 0), (2, 1)])
-    missing = WntLink("P1", "J3", "MISSING")
-    missing.set_geometry([(2, 0), (3, 0)])
+    duplicate_link = WntLink("P1", "J3", "MISSING")
+    duplicate_link.set_geometry([(2, 0), (3, 0)])
     network.add_link(pipe)
     network.add_link(pump)
     network.add_link(valve)
-    network.add_link(missing)
+    with pytest.raises(ValueError, match="Duplicated link id: P1"):
+        network.add_link(duplicate_link)
 
     assert network.nodes()[0] is j1
     assert network.links()[0] is pipe
     with pytest.raises(Exception, match="Bad type"):
         network.add_node(object())
-    with pytest.raises(Exception, match="Bad type"):
+    with pytest.raises(Exception, match="Must be Link"):
         network.add_link(object())
 
     template = tmp_path / "template.inp"
@@ -228,16 +238,16 @@ def test_graph_module_record_helpers(tmp_path):
     )["undefined node links"] == {"P1"}
 
     tgf = tmp_path / "network.tgf"
-    graph_from_records(node_ids, links, tgf)
+    with pytest.raises(ValueError, match="undefined nodes: L1"):
+        graph_from_records(node_ids, links, tgf)
+    assert not tgf.exists()
+
+    graph_from_records(["N1", "N2"], [("L1", "N1", "N2")], tgf)
     assert tgf.read_text(encoding="utf-8").splitlines() == [
         "0 N1 ",
         "1 N2 ",
-        "2 ORPHAN ",
-        "3 N1 ",
         "# ",
         "0 1 L1 ",
-        "1 None L1 ",
-        "0 0 LOOP ",
     ]
 
 
@@ -286,6 +296,28 @@ def test_epanet_import_covers_all_supported_sections(tmp_path):
     ]
     assert [link.get_type() for link in network.links()] == ["CVPIPE", "PIPE", "PUMP", "PRV"]
     assert network.links()[0].get_vertices() == [(0.5, 0.5)]
+
+
+def test_epanet_import_parses_optional_pipe_status_and_validates_columns(tmp_path):
+    inp = tmp_path / "pipes.inp"
+    inp.write_text(
+        "[PIPES]\nP1 N1 N2 10 100 120 CV\nP2 N2 N3 20 150 130 0.5 CLOSED\n[END]\n",
+        encoding="latin-1",
+    )
+
+    network = WntNetwork()
+    network.from_epanet(inp)
+
+    first, second = network.links()
+    assert first.get_type() == "CVPIPE"
+    assert first.epanet["minor_loss"] is None
+    assert first.epanet["status"] == "CV"
+    assert second.epanet["minor_loss"] == "0.5"
+    assert second.epanet["status"] == "CLOSED"
+
+    inp.write_text("[PIPES]\nBROKEN N1 N2 10 100\n[END]\n", encoding="latin-1")
+    with pytest.raises(ValueError, match="Invalid EPANET pipe definition"):
+        WntNetwork().from_epanet(inp)
 
 
 def test_epanet_import_skips_link_geometry_when_nodes_are_missing(tmp_path):
@@ -347,6 +379,60 @@ def test_epanet_export_elevation_truthy_branches(tmp_path):
     assert "KEEP" in text
 
 
+def test_epanet_export_adds_missing_template_sections(tmp_path):
+    network = WntNetwork()
+    start = WntNode("J1")
+    start.set_type("JUNCTION")
+    start.set_geometry((0, 0))
+    network.add_node(start)
+    end = WntNode("J2")
+    end.set_type("JUNCTION")
+    end.set_geometry((2, 0))
+    network.add_node(end)
+    link = WntLink("P1", "J1", "J2")
+    link.set_geometry([(0, 0), (1, 1), (2, 0)])
+    network.add_link(link)
+
+    template = tmp_path / "sparse.inp"
+    output = tmp_path / "output.inp"
+    template.write_text("[OPTIONS]\nUNITS LPS\n[END]\n", encoding="latin-1")
+
+    network.to_epanet(output, template)
+    text = output.read_text(encoding="latin-1")
+
+    assert "[JUNCTIONS]" in text
+    assert "[PIPES]" in text
+    assert "[COORDINATES]" in text
+    assert "[VERTICES]" in text
+    assert "P1    1.0    1.0" in text
+    assert "[BACKDROP]" in text
+    assert "DIMENSIONS" in text
+    assert "[TITLE]" in text
+
+
+def test_epanet_export_without_coordinates_preserves_backdrop(tmp_path):
+    network = WntNetwork()
+    node = WntNode("J1")
+    node.set_type("JUNCTION")
+    network.add_node(node)
+
+    template = tmp_path / "no_coordinates.inp"
+    output = tmp_path / "output.inp"
+    template.write_text(
+        "[BACKDROP]\nDIMENSIONS 1 2 3 4\nKEEP\n[END]\n",
+        encoding="latin-1",
+    )
+
+    network.to_epanet(output, template)
+    text = output.read_text(encoding="latin-1")
+
+    assert "J1    0.0    0.0" in text
+    assert "[COORDINATES]" not in text
+    assert "DIMENSIONS 1 2 3 4" in text
+    assert "KEEP" in text
+    assert "1000000000000" not in text
+
+
 def test_epanet_export_reservoir_without_elevation(tmp_path):
     network = WntNetwork()
     reservoir = WntNode("R0")
@@ -404,6 +490,39 @@ def test_graph_classifies_tree_and_mesh_edges():
     }
 
 
+def test_graph_classification_uses_linear_adjacency_and_stable_components(monkeypatch):
+    graph = Graph()
+    for label, start, end in [
+        ("T1", "A", "B"),
+        ("T2", "B", "C"),
+        ("U1", "X", "Y"),
+        ("M1", "D", "E"),
+        ("M2", "E", "F"),
+        ("M3", "F", "D"),
+        ("N1", "G", "H"),
+        ("N2", "H", "I"),
+        ("N3", "I", "G"),
+    ]:
+        graph.add_edge(label, start, end)
+
+    monkeypatch.setattr(
+        graph, "get_incident_edges",
+        lambda *_: (_ for _ in ()).throw(AssertionError("quadratic scan used")),
+    )
+    monkeypatch.setattr(
+        graph, "get_contiguous_edges",
+        lambda *_: (_ for _ in ()).throw(AssertionError("quadratic scan used")),
+    )
+
+    classified = graph.classify()
+
+    assert classified["T1"] == ("BRANCHED", 1)
+    assert classified["T2"] == ("BRANCHED", 1)
+    assert classified["U1"] == ("BRANCHED", 2)
+    assert {classified[label] for label in ("M1", "M2", "M3")} == {("MESHED", 1)}
+    assert {classified[label] for label in ("N1", "N2", "N3")} == {("MESHED", 2)}
+
+
 def test_tin_triangle_and_landxml_loading(tmp_path):
     TIN, Triangle, _surface_names = tin_helpers()
     triangle = Triangle((0, 0, 1), (1, 0, 2), (0, 1, 3))
@@ -442,7 +561,7 @@ def test_tin_triangle_and_landxml_loading(tmp_path):
 
     assert tin.elevations([(0.25, 0.25), (5, 5)]) == [pytest.approx(1.75), None]
 
-    with pytest.raises(Exception, match="Incorrect name"):
+    with pytest.raises(ValueError, match="Requested TIN surface was not found"):
         TIN().from_landxml(xml, "Missing")
 
 
@@ -686,6 +805,39 @@ def test_landxml_pipe_network_parser(tmp_path):
     assert pressure["nodes"]["N1"]["demand"] == 0.0
     assert pressure["links"]["P1"]["diameter"] == 300.0
     assert pressure["links"]["P1"]["status"] == "open"
+
+
+def test_landxml_parser_handles_accents_missing_centers_and_duplicate_names(tmp_path):
+    xml = tmp_path / "duplicate_networks.xml"
+    xml.write_text(
+        textwrap.dedent(
+            """
+            <LandXML xmlns="http://www.landxml.org/schema/LandXML-1.2">
+              <PipeNetwork name="Agua" pipeNetType="water">
+                <Struct name="Depósito 1"><Center>0 0</Center></Struct>
+                <Struct name="N2"><Center>1 0</Center></Struct>
+                <Struct name="NoCenter" />
+                <Pipe name="Válvula 1" refStart="Depósito 1" refEnd="N2" length="1" />
+                <Pipe name="Discarded" refStart="NoCenter" refEnd="N2" length="1" />
+              </PipeNetwork>
+              <PipeNetwork name="Agua" pipeNetType="water">
+                <Struct name="N3"><Center>2 0</Center></Struct>
+              </PipeNetwork>
+            </LandXML>
+            """
+        ).strip(),
+        encoding="utf-8",
+    )
+
+    data = network_from_xml(xml)
+
+    assert list(data["networks"]) == ["Agua", "Agua_2"]
+    first = data["networks"]["Agua"]
+    assert first["nodes"]["Depósito_1"]["type"] == "tank"
+    assert "NoCenter" not in first["nodes"]
+    assert first["links"]["Válvula_1"]["type"] == "valve"
+    assert "Discarded" not in first["links"]
+    assert data["networks"]["Agua_2"]["layer_base"] == "Agua_2"
 
 
 def test_landxml_parser_handles_optional_crs_desc_and_inverts(tmp_path):

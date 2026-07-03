@@ -1,4 +1,4 @@
-﻿"""Tests for plugin metadata."""
+"""Tests for plugin metadata."""
 
 
 import logging

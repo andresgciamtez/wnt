@@ -1,6 +1,7 @@
 """Core network model and EPANET file helpers."""
 
 import json
+import re
 # XML parsing uses safe_xml_parse; ElementTree only builds XML output.
 import xml.etree.ElementTree as ET  # nosec B405
 from collections import defaultdict
@@ -13,6 +14,22 @@ from .safe_xml import parse as safe_xml_parse
 
 XML_SCHEMA_VERSION = "1.0"
 XML_DOMAIN_ORDER = ("epanet", "swmm", "landxml", "custom")
+
+
+class WntError(Exception):
+    """Base exception for WNT network data errors."""
+
+
+class WntGeometryError(WntError):
+    """Raised when network geometry is invalid."""
+
+
+class WntFormatError(WntError):
+    """Raised when an external network representation is malformed."""
+
+
+class WntValidationError(WntError):
+    """Raised when network identifiers or relationships are invalid."""
 
 
 def pairwise(points):
@@ -190,12 +207,12 @@ def net_from_linestrings(linestrings, tol):
     endpoints = []
     for index, line in enumerate(linestrings):
         if polyline_length(line) == 0:
-            raise Exception(ERR_MSG1)
+            raise WntGeometryError(ERR_MSG1)
 
         start = xy(line[0])
         end = xy(line[-1])
-        if dist(start, end) < tol:
-            raise Exception(ERR_MSG2)
+        if dist(start, end) <= tol:
+            raise WntGeometryError(ERR_MSG2)
 
         endpoints.append((-(index + 1), start))
         endpoints.append((index + 1, end))
@@ -284,7 +301,7 @@ class WntNode:
     def __init__(self, name):
         # ERR_MSG = 'Name too long. MAX LEN = {}.'.format(WntNode.MAX_NAME_LEN)
         # if len(name) > WntNode.MAX_NAME_LEN:
-        #     raise Exception(ERR_MSG)
+        #     raise WntValidationError(ERR_MSG)
         self._name = name
         self._x = None
         self._y = None
@@ -326,7 +343,7 @@ class WntNode:
             self._x = float(coor[0])
             self._y = float(coor[1])
         except (IndexError, TypeError, ValueError):
-            raise Exception(ERR_MSG)
+            raise WntValidationError(ERR_MSG)
 
     def get_geometry(self):
         """Get node geometry as a float tuple (x, y)."""
@@ -338,7 +355,7 @@ class WntNode:
         try:
             self._elevation = float(z)
         except (TypeError, ValueError):
-            raise Exception(ERR_MSG)
+            raise WntValidationError(ERR_MSG)
 
     def get_elevation(self):
         """Get node elevation."""
@@ -350,27 +367,32 @@ class WntNode:
         try:
             self._type = nodetype.upper()
         except AttributeError:
-            raise Exception(ERR_MSG)
+            raise WntValidationError(ERR_MSG)
         if self._type not in WntNode.NODE_TYPES:
             self._type = None
-            raise Exception(ERR_MSG)
+            raise WntValidationError(ERR_MSG)
 
     def get_type(self):
         """Get node type if it is defined, otherwise None."""
         return self._type
 
     def from_wkt(self, wkt):
-        """Set geometry from a WKT format point, 'Point(x y).'"""
-        ERR_MSG = "Incorrect WKT point format, it must be 'Point[z](x y [z]).'"
+        """Set geometry from a WKT POINT, including Z, M and ZM variants."""
+        err_msg = "Incorrect WKT point format, expected POINT [Z|M|ZM] (x y ...)."
+        if not isinstance(wkt, str):
+            raise WntFormatError(err_msg)
+        match = re.fullmatch(
+            r"\s*POINT\s*(?:Z|M|ZM)?\s*\(([^()]*)\)\s*",
+            wkt,
+            flags=re.IGNORECASE,
+        )
+        if match is None:
+            raise WntFormatError(err_msg)
         try:
-            point = wkt.upper()
-            for clean in ['POINT', 'Z', '(', ')', '"', '\n']:
-                point = point.replace(clean, '')
-            point = point.strip().split()
-            point = float(point[0]), float(point[1])
-            self.set_geometry(point)
-        except (AttributeError, IndexError, TypeError, ValueError):
-            raise Exception(ERR_MSG)
+            values = match.group(1).split()
+            self.set_geometry((float(values[0]), float(values[1])))
+        except (IndexError, TypeError, ValueError) as exc:
+            raise WntFormatError(err_msg) from exc
 
     def to_wkt(self):
         """Return the node geometry in WKT format, 'Point (x y).'"""
@@ -388,7 +410,7 @@ class WntLink:
     def __init__(self, name, start, end):
         # ERR_MSG = 'Name too long. MAX LEN = {}.'.format(WntNode.MAX_NAME_LEN)
         # if max([len(str(n)) for n in [name, start, end]]) > WntNode.MAX_NAME_LEN:
-        #     raise Exception(ERR_MSG)
+        #     raise WntValidationError(ERR_MSG)
         self._name = name
         self._start = start
         self._end = end
@@ -447,16 +469,16 @@ class WntLink:
         ERR_MSG3 = 'Bad geometry, it must be a list [(x, y) ...].'
         ERR_MSG4 = 'Linestring has zero length.'
         if len(linestring) < 2:
-            raise Exception(ERR_MSG1)
+            raise WntGeometryError(ERR_MSG1)
         if linestring[0] == linestring[-1]:
-            raise Exception(ERR_MSG2)
+            raise WntGeometryError(ERR_MSG2)
         try:
             self._linestring = [(float(x), float(y)) for x, y in linestring]
         except (TypeError, ValueError):
-            raise Exception(ERR_MSG3)
+            raise WntGeometryError(ERR_MSG3)
         if polyline_length(self._linestring) == 0:
             self._linestring = None
-            raise Exception(ERR_MSG4)
+            raise WntGeometryError(ERR_MSG4)
 
     def get_geometry(self):
         """Return link geometry as a list of coordinate tuples [(x, y) ...]."""
@@ -475,34 +497,36 @@ class WntLink:
             linktype = linktype.upper()
             self._type = linktype
         except AttributeError:
-            raise Exception(ERR_MSG)
+            raise WntValidationError(ERR_MSG)
         if self._type not in WntLink.LINK_TYPES:
             self._type = None
-            raise Exception(ERR_MSG)
+            raise WntValidationError(ERR_MSG)
 
     def get_type(self):
         """Get link type if it is defined, otherwise None."""
         return self._type
 
     def from_wkt(self, wkt):
-        """Set the geometry from a WKT format line, 'LineString(x y, ...)'."""
-        ERR_MSG1 = "Incorrect WKT format, it must be 'LineString[z](x y[z], ...)'."
-        ERR_MSG2 = " Multi-geometry is not supported."
+        """Set geometry from a WKT LINESTRING, including Z, M and ZM variants."""
+        err_msg = "Incorrect WKT format, expected LINESTRING [Z|M|ZM] (x y, ...)."
+        if not isinstance(wkt, str):
+            raise WntFormatError(err_msg)
+        if re.match(r"\s*MULTI", wkt, flags=re.IGNORECASE):
+            raise WntFormatError("Multi-geometry is not supported.")
+        match = re.fullmatch(
+            r"\s*LINESTRING\s*(?:Z|M|ZM)?\s*\(([^()]*)\)\s*",
+            wkt,
+            flags=re.IGNORECASE,
+        )
+        if match is None:
+            raise WntFormatError(err_msg)
         try:
-            txt = wkt.upper()
-        except AttributeError:
-            raise Exception(ERR_MSG1)
-        if 'MULTI' in txt:
-            raise Exception(ERR_MSG2)
-        try:
-            for clean in ['LINESTRING', 'Z', '(', ')', '"', '\n']:
-                txt = txt.replace(clean, '')
             points = []
-            for point in txt.strip().split(','):
-                point = point.strip().split(' ')
-                points.append((float(point[0]), float(point[1])))
-        except (IndexError, TypeError, ValueError):
-            raise Exception(ERR_MSG1)
+            for coordinate in match.group(1).split(','):
+                values = coordinate.split()
+                points.append((float(values[0]), float(values[1])))
+        except (IndexError, TypeError, ValueError) as exc:
+            raise WntFormatError(err_msg) from exc
         self.set_geometry(points)
 
     def to_wkt(self):
@@ -539,18 +563,20 @@ class WntNetwork:
         """Add a node to the network."""
         ERR_MSG = 'Bad type. Must be Node.'
         if not isinstance(node, WntNode):
-            raise Exception(ERR_MSG)
-        if node.name() not in self._node_map:
-            self._node_map[node.name()] = len(self._nodes)
+            raise WntValidationError(ERR_MSG)
+        if node.name() in self._node_map:
+            raise ValueError(f'Duplicated node id: {node.name()}')
+        self._node_map[node.name()] = len(self._nodes)
         self._nodes.append(node)
 
     def add_link(self, link):
         """Add a link to the network."""
-        ERR_MSG = 'Bad type. Must be Node.'
+        ERR_MSG = 'Bad type. Must be Link.'
         if not isinstance(link, WntLink):
-            raise Exception(ERR_MSG)
-        if link.name() not in self._link_map:
-            self._link_map[link.name()] = len(self._links)
+            raise WntValidationError(ERR_MSG)
+        if link.name() in self._link_map:
+            raise ValueError(f'Duplicated link id: {link.name()}')
+        self._link_map[link.name()] = len(self._links)
         self._links.append(link)
 
     def get_nodeindex(self, nodeid):
@@ -569,7 +595,7 @@ class WntNetwork:
             tree = safe_xml_parse(str(xml_path))
             root = tree.getroot()
             if root.tag != "wntNetworkStore":
-                raise Exception("Invalid WNT XML file: expected wntNetworkStore root.")
+                raise WntFormatError("Invalid WNT XML file: expected wntNetworkStore root.")
             root.set("schemaVersion", root.get("schemaVersion", XML_SCHEMA_VERSION))
             return tree, root
         root = ET.Element("wntNetworkStore", {"schemaVersion": XML_SCHEMA_VERSION})
@@ -580,13 +606,13 @@ class WntNetwork:
         networks = root.findall("network")
         if network_id is None:
             if not networks:
-                raise Exception("WNT XML file does not contain networks.")
+                raise WntFormatError("WNT XML file does not contain networks.")
             return networks[0]
         network_id = str(network_id)
         for network in networks:
             if network.get("id") == network_id:
                 return network
-        raise Exception("Network not found in WNT XML file: {}".format(network_id))
+        raise WntError("Network not found in WNT XML file: {}".format(network_id))
 
     @staticmethod
     def _get_or_create_network_element(root, network_id, crs=None, metadata=None):
@@ -606,14 +632,14 @@ class WntNetwork:
     def _select_version_element(network, version_id=None):
         versions = network.findall("version")
         if not versions:
-            raise Exception("Network does not contain versions.")
+            raise WntFormatError("Network does not contain versions.")
         if version_id in (None, ""):
             return versions[-1]
         version_id = str(version_id)
         for version in versions:
             if version.get("id") == version_id:
                 return version
-        raise Exception("Network version not found in WNT XML file: {}".format(version_id))
+        raise WntFormatError("Network version not found in WNT XML file: {}".format(version_id))
 
     def to_xml(
         self,
@@ -627,7 +653,7 @@ class WntNetwork:
     ):
         """Store the network in a multiversion WNT XML file."""
         if not version_id:
-            raise Exception("Version id is required.")
+            raise WntFormatError("Version id is required.")
         metadata = dict(metadata or {})
         tree, root = self._read_or_create_xml(xml_file)
         network = self._get_or_create_network_element(root, network_id, crs, metadata)
@@ -636,7 +662,7 @@ class WntNetwork:
             if version.get("id") != str(version_id):
                 continue
             if not replace:
-                raise Exception("Network version already exists: {}".format(version_id))
+                raise WntFormatError("Network version already exists: {}".format(version_id))
             network.remove(version)
 
         version = ET.Element(
@@ -654,14 +680,14 @@ class WntNetwork:
         nodes_element = ET.SubElement(version, "nodes")
         for node in sorted(self.nodes(), key=lambda item: item.name()):
             if node.name() in node_ids:
-                raise Exception("Duplicated node id in network: {}".format(node.name()))
+                raise WntValidationError("Duplicated node id in network: {}".format(node.name()))
             node_ids[node.name()] = node
             node_type = node.get_type()
             if not node_type:
-                raise Exception("Node has no type: {}".format(node.name()))
+                raise WntValidationError("Node has no type: {}".format(node.name()))
             x, y = node.get_geometry()
             if x is None or y is None:
-                raise Exception("Node has no geometry: {}".format(node.name()))
+                raise WntValidationError("Node has no geometry: {}".format(node.name()))
             attributes = {"id": str(node.name()), "type": str(node_type), "x": str(x), "y": str(y)}
             if node.get_elevation() is not None:
                 attributes["elevation"] = str(node.get_elevation())
@@ -672,13 +698,13 @@ class WntNetwork:
         links_element = ET.SubElement(version, "links")
         for link in sorted(self.links(), key=lambda item: item.name()):
             if link.name() in link_ids:
-                raise Exception("Duplicated link id in network: {}".format(link.name()))
+                raise WntValidationError("Duplicated link id in network: {}".format(link.name()))
             link_ids.add(link.name())
             if link.start() not in node_ids or link.end() not in node_ids:
-                raise Exception("Link references undefined nodes: {}".format(link.name()))
+                raise WntValidationError("Link references undefined nodes: {}".format(link.name()))
             link_type = link.get_type()
             if not link_type:
-                raise Exception("Link has no type: {}".format(link.name()))
+                raise WntValidationError("Link has no type: {}".format(link.name()))
             geometry = link.get_geometry()
             if not geometry:
                 geometry = [node_ids[link.start()].get_geometry(), node_ids[link.end()].get_geometry()]
@@ -702,7 +728,7 @@ class WntNetwork:
         tree = safe_xml_parse(str(xml_file))
         root = tree.getroot()
         if root.tag != "wntNetworkStore":
-            raise Exception("Invalid WNT XML file: expected wntNetworkStore root.")
+            raise WntFormatError("Invalid WNT XML file: expected wntNetworkStore root.")
         network = self._find_network_element(root, network_id)
         version = self._select_version_element(network, version_id)
 
@@ -715,11 +741,11 @@ class WntNetwork:
 
         nodes_element = version.find("nodes")
         if nodes_element is None:
-            raise Exception("Network version does not contain nodes.")
+            raise WntError("Network version does not contain nodes.")
         for node_element in nodes_element.findall("node"):
             node_id = node_element.get("id")
             if not node_id:
-                raise Exception("Node without id in WNT XML file.")
+                raise WntValidationError("Node without id in WNT XML file.")
             node = WntNode(node_id)
             if node_element.get("type"):
                 node.set_type(node_element.get("type"))
@@ -731,15 +757,15 @@ class WntNetwork:
 
         links_element = version.find("links")
         if links_element is None:
-            raise Exception("Network version does not contain links.")
+            raise WntError("Network version does not contain links.")
         for link_element in links_element.findall("link"):
             link_id = link_element.get("id")
             start = link_element.get("start")
             end = link_element.get("end")
             if not link_id or not start or not end:
-                raise Exception("Link without id, start or end in WNT XML file.")
+                raise WntValidationError("Link without id, start or end in WNT XML file.")
             if self.get_nodeindex(start) is None or self.get_nodeindex(end) is None:
-                raise Exception("Link references undefined nodes: {}".format(link_id))
+                raise WntValidationError("Link references undefined nodes: {}".format(link_id))
             link = WntLink(link_id, start, end)
             if link_element.get("type"):
                 link.set_type(link_element.get("type"))
@@ -828,20 +854,25 @@ class WntNetwork:
 
         # INPUT PIPES # ID Node1 Node2 Length Diameter Roughness MinorLoss
         # Status
-        for line in  sections.get('PIPES', []):
-            tmp = parse_tokens(line)
-            lid, n1, n2 = tmp[0:3]
-            s = tmp[-1]
+        for line in sections.get('PIPES', []):
+            tmp = list(parse_tokens(line))
+            if len(tmp) < 6:
+                raise ValueError(f"Invalid EPANET pipe definition: {line}")
+            lid, n1, n2, length, diameter, roughness = tmp[:6]
+            optional = tmp[6:]
+            status = None
+            if optional and optional[-1].upper() in ('CV', 'OPEN', 'CLOSED'):
+                status = optional.pop().upper()
+            minor_loss = optional[0] if optional else None
+            if len(optional) > 1:
+                raise ValueError(f"Invalid EPANET pipe definition: {line}")
             pipe = WntLink(lid, n1, n2)
-            if s == "CV":
-                pipe.set_type('CVPIPE')
-            else:
-                pipe.set_type('PIPE')
-            pipe.epanet['length'] = tmp[3]
-            pipe.epanet['diameter'] = tmp[4]
-            pipe.epanet['roughness'] = tmp[5]
-            pipe.epanet['minor_loss'] = tmp[6] if len(tmp) > 6 else None
-            pipe.epanet['status'] = tmp[7] if len(tmp) > 7 else None
+            pipe.set_type('CVPIPE' if status == 'CV' else 'PIPE')
+            pipe.epanet['length'] = length
+            pipe.epanet['diameter'] = diameter
+            pipe.epanet['roughness'] = roughness
+            pipe.epanet['minor_loss'] = minor_loss
+            pipe.epanet['status'] = status
             self.add_link(pipe)
 
         # INPUT PUMPS #  # ID Node1 Node2 Parameters
@@ -941,25 +972,27 @@ class WntNetwork:
                     tmp = (node.name(), node.get_elevation(), 0.0)
                 else:
                     tmp = (node.name(), 0.0, 0.0)
-                sections['JUNCTIONS'].append(format_tokens(tmp))
+                sections.setdefault('JUNCTIONS', []).append(format_tokens(tmp))
 
             if nodetype == 'RESERVOIR':
                 if node.get_elevation():
                     tmp = (node.name(), node.get_elevation())
                 else:
                     tmp = (node.name(), 0.0)
-                sections['RESERVOIRS'].append(format_tokens(tmp))
+                sections.setdefault('RESERVOIRS', []).append(format_tokens(tmp))
 
             if nodetype == 'TANK':
                 if node.get_elevation():
                     tmp = (node.name(), node.get_elevation(), 0.0, 0.0, 0.0, 0.0, 0.0)
                 else:
                     tmp = (node.name(), 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
-                sections['TANKS'].append(format_tokens(tmp))
+                sections.setdefault('TANKS', []).append(format_tokens(tmp))
 
-            x, y = node.get_geometry()
-            line = format_tokens((node.name(), x, y))
-            sections['COORDINATES'].append(line)
+            geometry = node.get_geometry()
+            if geometry is not None and None not in geometry:
+                x, y = geometry
+                line = format_tokens((node.name(), x, y))
+                sections.setdefault('COORDINATES', []).append(line)
 
         # ADD LINKS/VERTICES TO SECTION
         for link in self.links():
@@ -983,55 +1016,69 @@ class WntNetwork:
                     tmp = tmp + ('CV',)
                 else:
                     tmp = tmp + ('Open',)
-                sections['PIPES'].append(format_tokens(tmp))
+                sections.setdefault('PIPES', []).append(format_tokens(tmp))
 
             elif linktype == 'PUMP':
                 tmp = (link.name(), link.start(), link.end())
-                sections['PUMPS'].append(format_tokens(tmp))
+                sections.setdefault('PUMPS', []).append(format_tokens(tmp))
 
             elif linktype in ['PRV', 'PSV', 'PBV', 'FCV', 'TCV', 'GPV']:
                 tmp = (link.name(), link.start(), link.end(), 0.0, linktype)
                 tmp = tmp + (0.0, 0.0)
-                sections['VALVES'].append(format_tokens(tmp))
+                sections.setdefault('VALVES', []).append(format_tokens(tmp))
 
             vertices = link.get_vertices()
             if vertices:
                 for vertice in vertices:
                     tmp = (link.name(), vertice[0], vertice[1])
-                    sections['VERTICES'].append(format_tokens(tmp))
+                    sections.setdefault('VERTICES', []).append(format_tokens(tmp))
 
         # RESIZE [BACKDROP]
-        x1, y1, x2, y2 = 1e12, 1e12, -1e12, -1e12
+        bounds = None
+
+        def add_bound(point):
+            nonlocal bounds
+            if point is None or None in point:
+                return
+            x, y = point[0:2]
+            if bounds is None:
+                bounds = [x, y, x, y]
+            else:
+                bounds[0] = min(bounds[0], x)
+                bounds[1] = min(bounds[1], y)
+                bounds[2] = max(bounds[2], x)
+                bounds[3] = max(bounds[3], y)
+
         for node in self.nodes():
-            x, y = node.get_geometry()
-            x1 = min(x1, x)
-            x2 = max(x2, x)
-            y1 = min(y1, y)
-            y2 = max(y2, y)
+            add_bound(node.get_geometry())
         for link in self.links():
             vertices = link.get_vertices()
             for vertex in vertices:
-                x, y = vertex[0:2]
-                x1 = min(x1, x)
-                x2 = max(x2, x)
-                y1 = min(y1, y)
-                y2 = max(y2, y)
-        dx, dy = x2-x1, y2-y1
-        x1, y1, x2, y2 = x1-0.1*dx, y1-0.1*dy, x2+0.1*dx, y2+0.1*dy
+                add_bound(vertex)
 
-        # WRITE BACKDROP SECTION
-        newsection = []
-        for line in sections['BACKDROP']:
-            # SERCH DIMENSIONS
-            if 'DIMENSIONS' in line:
-                newline = 'DIMENSIONS  {}  {}  {}  {}'.format(x1, y1, x2, y2)
-            # BYPASS
-            else:
-                newline = line
-            newsection.append(newline)
-        sections['BACKDROP'] = newsection
+        if bounds is not None:
+            x1, y1, x2, y2 = bounds
+            dx, dy = x2-x1, y2-y1
+            x1, y1, x2, y2 = x1-0.1*dx, y1-0.1*dy, x2+0.1*dx, y2+0.1*dy
+
+            # WRITE BACKDROP SECTION
+            backdrop = sections.setdefault('BACKDROP', ['DIMENSIONS 0 0 0 0'])
+            newsection = []
+            has_dimensions = False
+            for line in backdrop:
+                # SEARCH DIMENSIONS
+                if 'DIMENSIONS' in line:
+                    newline = 'DIMENSIONS  {}  {}  {}  {}'.format(x1, y1, x2, y2)
+                    has_dimensions = True
+                # BYPASS
+                else:
+                    newline = line
+                newsection.append(newline)
+            if not has_dimensions:
+                newsection.append('DIMENSIONS  {}  {}  {}  {}'.format(x1, y1, x2, y2))
+            sections['BACKDROP'] = newsection
 
         # WRITE EPANET INP FILE
-        ERR_MSG = '; File generated automatically by Water Network Tools \n'
-        sections['TITLE'].append(ERR_MSG)
+        HEADER_COMMENT = '; File generated automatically by Water Network Tools \n'
+        sections.setdefault('TITLE', []).append(HEADER_COMMENT)
         htext.write(inpf)

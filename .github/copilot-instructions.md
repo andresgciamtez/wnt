@@ -55,9 +55,9 @@ class ExampleAlgorithm(QgsProcessingAlgorithm):
 ## Development Workflow
 
 ### Setup
-1. Install QGIS 3.0+ with Python support
+1. Install QGIS 3.38+ with Python support
 2. Configure EPANET toolkit path in `toolkit.ini`
-3. Run tests: `python -m unittest test.test_*`
+3. Run tests: `pytest`
 
 ### Building & Deployment
 - **Plugin Package**: Use pb_tool with `pb_tool.cfg` configuration
@@ -66,9 +66,9 @@ class ExampleAlgorithm(QgsProcessingAlgorithm):
 - **Upload**: Use `plugin_upload.py` to QGIS plugin repository
 
 ### Testing
-- Unit tests in `test/` directory using unittest
+- Tests in `tests/` directory using pytest
 - Mock QGIS interface with `qgis_interface.py`
-- Test data: Sample rasters, geometries in test directory
+- Test data: Sample rasters, geometries and fixtures in the tests directory
 
 ## Common Tasks
 
@@ -90,7 +90,7 @@ class ExampleAlgorithm(QgsProcessingAlgorithm):
 - Handle encoding: `latin-1` for EPANET files
 
 ## Dependencies & Environment
-- **Runtime**: QGIS 3.0+, EPANET 2.x toolkit library
+- **Runtime**: QGIS 3.38+, EPANET 2.x toolkit library
 - **Development**: Python 3.6+, ctypes for EPANET binding
 - **Build**: pb_tool for packaging, Sphinx for docs
 - **Linting**: pylint with custom config disabling C0103, locally-disabled

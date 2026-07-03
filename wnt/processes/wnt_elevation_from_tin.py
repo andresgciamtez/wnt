@@ -1,6 +1,7 @@
 """Set node elevations from LandXML TIN surfaces."""
 
-from qgis.core import (QgsProcessing,
+from qgis.core import (QgsCoordinateReferenceSystem,
+                       QgsProcessing,
                        QgsFeatureSink,
                        QgsProcessingParameterEnum,
                        QgsProcessingParameterFile,
@@ -15,7 +16,7 @@ from .base import (OUTPUT_MODE_NEW, OUTPUT_MODE_UPDATE, OUTPUT_MODE_OPTIONS,
 from .widgets import LandXmlSurfaceWidgetWrapper
 from ..utils.utils_tin import TIN
 from .messages import crs as log_crs
-from .messages import error, finish, info, start
+from .messages import error, finish, info, start, warning
 
 class ElevationFromTINAlgorithm(WntProcessingAlgorithm):
     """
@@ -155,7 +156,6 @@ class ElevationFromTINAlgorithm(WntProcessingAlgorithm):
         missing = missing_fields(nodelayer, [efield])
         if nodelayer.fields().names() and missing:
             error(feedback, "Node layer is missing required fields: " + ", ".join(missing))
-            return {}
 
         using_default_surface = not selected_surface_name
 
@@ -184,10 +184,25 @@ class ElevationFromTINAlgorithm(WntProcessingAlgorithm):
         try:
             surface = TIN()
             surface.from_landxml(tinlayer, selected_surface_name)
+            declared_crs = None
+            if surface.crs_authid:
+                declared_crs = QgsCoordinateReferenceSystem(surface.crs_authid)
+            elif surface.crs_wkt:
+                declared_crs = QgsCoordinateReferenceSystem()
+                declared_crs.createFromWkt(surface.crs_wkt)
+            if declared_crs is not None and declared_crs.isValid() and crs != declared_crs:
+                warning(
+                    feedback,
+                    "LandXML CRS {} differs from node layer CRS {}".format(
+                        declared_crs.authid() or "custom WKT",
+                        crs.authid() or "unknown",
+                    ),
+                )
+            elif not surface.crs_authid and not surface.crs_wkt:
+                warning(feedback, "LandXML does not declare a CRS; coordinates are assumed to match the node layer")
             surface_elevations = surface.elevations(point_tuples)
         except Exception as exc:
             error(feedback, str(exc))
-            return {}
 
         # SHOW PROGRESS
         info(feedback, "Input nodes", len(points))
@@ -222,7 +237,6 @@ class ElevationFromTINAlgorithm(WntProcessingAlgorithm):
                 update_layer_attributes(nodelayer, updates)
             except RuntimeError as exc:
                 error(feedback, str(exc))
-                return {}
 
         # SHOW PROGRESS
         info(feedback, "Skipped nodes", skipped)

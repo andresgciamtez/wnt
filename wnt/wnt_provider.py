@@ -2,7 +2,7 @@
 
 from importlib import import_module
 
-from qgis.core import QgsProcessingProvider
+from qgis.core import Qgis, QgsMessageLog, QgsProcessingProvider
 
 
 ALGORITHM_SPECS = (
@@ -14,7 +14,7 @@ ALGORITHM_SPECS = (
     ('.processes.wnt_elevation_from_tin', 'ElevationFromTINAlgorithm'),
     ('.processes.wnt_network_to_epanet', 'NetworkToEpanetAlgorithm'),
     ('.processes.wnt_demand_to_epanet_scenario', 'DemandToEpanetScenarioAlgorithm'),
-    ('.processes.wnt_pipe_propierties_to_epanet_scenario', 'PipePropiertiesToEpanetScenarioAlgorithm'),
+    ('.processes.wnt_pipe_properties_to_epanet_scenario', 'PipePropertiesToEpanetScenarioAlgorithm'),
     ('.processes.wnt_network_to_xml', 'NetworkToXmlAlgorithm'),
     ('.processes.wnt_network_to_graph', 'NetworkToGraphAlgorithm'),
     ('.processes.wnt_hydrant_pairs', 'HydrantPairsAlgorithm'),
@@ -59,7 +59,13 @@ class WaterNetworkToolsProvider(QgsProcessingProvider):
                 algorithm_class = getattr(module, class_name)
                 self.addAlgorithm(algorithm_class())
             except Exception as exc:
-                self.load_errors.append((class_name, str(exc)))
+                message = str(exc)
+                self.load_errors.append((class_name, message))
+                QgsMessageLog.logMessage(
+                    f"Failed to load {class_name}: {message}",
+                    "Water Network Tools",
+                    Qgis.Warning,
+                )
 
     def id(self):
         """

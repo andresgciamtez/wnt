@@ -103,17 +103,15 @@ class DemandToEpanetScenarioAlgorithm(WntProcessingAlgorithm):
         # IF NO FIELD WAS SELECTED RETURN {}
         if not defields:
             error(feedback, "Field containing demand is required")
-            return {}
         missing = missing_fields(nodes, ['id', 'type', *defields])
         if missing:
             error(feedback, "Node layer is missing required fields: " + ", ".join(missing))
-            return {}
 
         # WRITE FILE
         cnt = 0
         scnfn = self.parameterAsFileOutput(parameters, self.OUTPUT, context)
         try:
-            with open(scnfn, 'w', encoding='utf-8') as file:
+            with open(scnfn, 'w', encoding='latin-1') as file:
                 file.write('; File generated automatically by Water Network Tools \n')
                 file.write('[DEMANDS] \n')
                 file.write(';Node    Demand    Pattern \n')
@@ -129,7 +127,6 @@ class DemandToEpanetScenarioAlgorithm(WntProcessingAlgorithm):
                             file.write(line)
         except UnicodeEncodeError as exc:
             error(feedback, "Output contains characters that cannot be written: " + str(exc))
-            return {}
 
         # SHOW INFO
         start(feedback, self.displayName())
@@ -138,7 +135,7 @@ class DemandToEpanetScenarioAlgorithm(WntProcessingAlgorithm):
         info(feedback, "Output file", scnfn)
         finish(feedback)
 
-        # PROCCES CANCELED
+        # PROCESS CANCELED
         if feedback.isCanceled():
             return {}
 

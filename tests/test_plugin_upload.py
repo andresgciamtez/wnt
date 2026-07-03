@@ -56,13 +56,24 @@ def test_main_uploads_binary_and_prints_ids(monkeypatch, tmp_path, capsys):
     archive.write_bytes(b"zip-bytes")
     uploader = FakeUploader()
 
-    monkeypatch.setattr(plugin_upload.xmlrpc.client, "ServerProxy", lambda *args, **kwargs: FakeServer(uploader))
+    captured = {}
+
+    def server_proxy(address, **kwargs):
+        captured["address"] = address
+        captured.update(kwargs)
+        return FakeServer(uploader)
+
+    monkeypatch.setattr(plugin_upload.xmlrpc.client, "ServerProxy", server_proxy)
 
     plugin_upload.main(parameters(), [str(archive)])
 
     assert uploader.payload == b"zip-bytes"
+    assert captured["address"] == "https://plugins.example:443/plugins/RPC2/"
+    assert "secret" not in captured["address"]
+    assert isinstance(captured["transport"], plugin_upload.AuthSafeTransport)
+    assert captured["transport"].authorization.startswith("Basic ")
     output = capsys.readouterr().out
-    assert "Connecting to: https://user:******@plugins.example:443/plugins/RPC2/" in output
+    assert "Connecting to: https://plugins.example:443/plugins/RPC2/ as user" in output
     assert "Plugin ID: 123" in output
     assert "Version ID: 456" in output
 
@@ -140,13 +151,15 @@ def test_cli_accepts_typed_username(monkeypatch, tmp_path, capsys):
     archive.write_bytes(b"zip-bytes")
     uploader = FakeUploader()
 
-    monkeypatch.setattr(sys, "argv", ["plugin_upload.py", "-w", "typed-password", str(archive)])
+    monkeypatch.setattr(sys, "argv", ["plugin_upload.py", str(archive)])
     monkeypatch.setattr(plugin_upload.xmlrpc.client, "ServerProxy", lambda *args, **kwargs: FakeServer(uploader))
     monkeypatch.setattr(plugin_upload.getpass, "getuser", lambda: "default-user")
+    monkeypatch.setattr(plugin_upload.getpass, "getpass", lambda: "typed-password")
     monkeypatch.setattr(builtins, "input", lambda: "typed-user")
 
     runpy.run_path(PLUGIN_UPLOAD_PATH, run_name="__main__")
 
     assert uploader.payload == b"zip-bytes"
     output = capsys.readouterr().out
-    assert "https://typed-user:**************@plugins.qgis.org:443/plugins/RPC2/" in output
+    assert "https://plugins.qgis.org:443/plugins/RPC2/ as typed-user" in output
+    assert "typed-password" not in output

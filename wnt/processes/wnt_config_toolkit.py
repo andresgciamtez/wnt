@@ -1,6 +1,7 @@
 """Configure the EPANET toolkit library path."""
 
 from qgis.core import (
+                       QgsProcessingOutputString,
                        QgsProcessingParameterFile
                        )
 from .base import WntProcessingAlgorithm
@@ -15,11 +16,12 @@ from ..utils.utils_epanet_api import (
 
 class ConfigToolkitAlgorithm(WntProcessingAlgorithm):
     """
-    Set EPANET lib path in tookit.ini file.
+    Set the EPANET library path in toolkit.ini.
     """
 
     # DEFINE CONSTANTS
     INPUT = 'INPUT'
+    OUTPUT = 'OUTPUT'
 
 
     def createInstance(self):
@@ -76,6 +78,9 @@ class ConfigToolkitAlgorithm(WntProcessingAlgorithm):
                 self.tr('EPANET lib')
                 )
             )
+        self.addOutput(QgsProcessingOutputString(
+            self.OUTPUT, self.tr('Toolkit configuration file')
+        ))
 
     def processAlgorithm(self, parameters, context, feedback):
         """
@@ -93,10 +98,8 @@ class ConfigToolkitAlgorithm(WntProcessingAlgorithm):
             toolkit_info = toolkit.info()
         except EpanetConfigurationError as exc:
             error(feedback, str(exc))
-            return {}
         except EpanetError as exc:
             error(feedback, exc.message)
-            return {}
 
         # OUTPUT
         init_file = write_toolkit_library_path(lib_file, toolkit_config_path())
@@ -109,10 +112,10 @@ class ConfigToolkitAlgorithm(WntProcessingAlgorithm):
         info(feedback, "EPANET toolkit API", toolkit_info.api)
         finish(feedback)
 
-        # PROCCES CANCELED
+        # PROCESS CANCELED
         if feedback.isCanceled():
             return {}
 
         # OUTPUT
-        return {}
+        return {self.OUTPUT: str(init_file)}
 

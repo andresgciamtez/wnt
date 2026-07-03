@@ -136,7 +136,7 @@ def test_export_group_starts_with_epanet_exports():
     assert export_names[:3] == [
         "Network to epanet file (.inp)",
         "Demand to epanet scenario file (.scn)",
-        "Pipe propierties to epanet scenario file (.scn)",
+        "Pipe properties to EPANET scenario file (.scn)",
     ]
 
 

@@ -17,3 +17,6 @@ help/
 
 # Local EPANET toolkit configuration
 toolkit.ini
+
+# Local platform wrappers
+package_wnt.bat

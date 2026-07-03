@@ -205,7 +205,6 @@ class ValidateAlgorithm(WntProcessingAlgorithm):
                 ])
             except RuntimeError as exc:
                 error(feedback, str(exc))
-                return {}
             node_id = getattr(nodelay, 'id', lambda: self.INPUT_NODES)()
             link_id = getattr(linklay, 'id', lambda: self.INPUT_LINES)()
         else:
@@ -260,7 +259,7 @@ class ValidateAlgorithm(WntProcessingAlgorithm):
         info(feedback, "Output mode", OUTPUT_MODE_OPTIONS[output_mode])
         finish(feedback)
 
-        # PROCCES CANCELED
+        # PROCESS CANCELED
         if feedback.isCanceled():
             return {}
 

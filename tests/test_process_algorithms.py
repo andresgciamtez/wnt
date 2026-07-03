@@ -5,7 +5,8 @@ import xml.etree.ElementTree as ET
 import pytest
 
 pytest.importorskip("qgis")
-from qgis.core import QgsGeometry, QgsLineString, QgsMultiLineString, QgsPoint, QgsPointXY
+from qgis.core import (QgsGeometry, QgsLineString, QgsMultiLineString, QgsPoint,
+                       QgsPointXY, QgsProcessingException)
 
 from wnt.processes import messages
 from wnt.processes.wnt_assign_demand import AssignDemandAlgorithm
@@ -27,7 +28,7 @@ from wnt.processes.wnt_network_to_ppno import NetworkToPpnoAlgorithm
 from wnt.processes.wnt_network_to_pipesizing import NetworkToPipesizingAlgorithm
 from wnt.processes.wnt_results_from_epanet import ResultsFromEpanetAlgorithm
 from wnt.processes.wnt_demand_to_epanet_scenario import DemandToEpanetScenarioAlgorithm
-from wnt.processes.wnt_pipe_propierties_to_epanet_scenario import PipePropiertiesToEpanetScenarioAlgorithm
+from wnt.processes.wnt_pipe_properties_to_epanet_scenario import PipePropertiesToEpanetScenarioAlgorithm
 from wnt.processes.wnt_split_lines_at_points import SplitLinesAtPointsAlgorithm
 from wnt.processes.wnt_update_assignment import UpdateAssignmentAlgorithm
 from wnt.processes.wnt_validate import ValidateAlgorithm
@@ -35,6 +36,7 @@ from wnt.utils.utils_core import WntLink, WntNetwork, WntNode
 from wnt.utils.utils_epanet_api import (
     constants_for_version,
     EpanetConfigurationError,
+    format_elapsed_time,
     EpanetToolkit,
     ToolkitInfo,
 )
@@ -72,10 +74,13 @@ class FakeFields(list):
 
 class FakeNamedField:
     def __init__(self, name):
-        self._name = name
+        self._name = name.name() if hasattr(name, "name") else name
 
     def name(self):
         return self._name
+
+    def setName(self, name):
+        self._name = name
 
 
 def fake_fields(*names):
@@ -197,13 +202,15 @@ class FakeFeedback:
         self.canceled = canceled
         self.info = []
         self.errors = []
+        self.fatal_errors = []
         self.progress = []
 
     def pushInfo(self, text):
         self.info.append(text)
 
-    def reportError(self, text):
+    def reportError(self, text, fatalError=False):
         self.errors.append(text)
+        self.fatal_errors.append(fatalError)
 
     def setProgress(self, value):
         self.progress.append(value)
@@ -420,12 +427,14 @@ def test_messages_cover_all_branches():
     messages.crs(feedback, FakeCrs("EPSG:4326"))
     messages.crs(feedback, "")
     messages.warning(feedback, "careful")
-    messages.error(feedback, "broken")
+    with pytest.raises(QgsProcessingException, match="ERROR: broken"):
+        messages.error(feedback, "broken")
 
     assert "Process: Title" in feedback.info
     assert "CRS: EPSG:4326" in feedback.info
     assert "WARNING: CRS is not set" in feedback.info
     assert feedback.errors == ["ERROR: broken"]
+    assert feedback.fatal_errors == [True]
 
 
 def test_network_to_graph_writes_tgf_and_handles_cancel(monkeypatch, tmp_path):
@@ -466,7 +475,9 @@ def test_network_to_graph_rejects_undefined_link_nodes(monkeypatch, tmp_path):
 
     feedback = FakeFeedback()
 
-    assert algorithm.processAlgorithm({}, None, feedback) == {}
+    with pytest.raises(QgsProcessingException):
+
+        algorithm.processAlgorithm({}, None, feedback)
     assert feedback.errors == ["ERROR: undefined node links: L1"]
     assert not output.exists()
 
@@ -559,8 +570,34 @@ def test_connect_by_distance_writes_nearest_connections_and_crs_error(monkeypatc
     )
     feedback = FakeFeedback()
 
-    assert algorithm.processAlgorithm({}, None, feedback) == {}
+    with pytest.raises(QgsProcessingException):
+
+        algorithm.processAlgorithm({}, None, feedback)
     assert feedback.errors == ["ERROR: Layers have different CRS"]
+
+
+def test_connect_by_distance_skips_self_when_source_and_target_are_same(monkeypatch):
+    algorithm = ConnectByDistanceAlgorithm()
+    monkeypatch.setattr("wnt.processes.wnt_connect_by_distance.QgsFeature", FakeOutputFeature)
+    layer = FakeSource(
+        [
+            FakeFeature({"id": "N1"}, FakeGeometry(0, 0), fid=1),
+            FakeFeature({"id": "N2"}, FakeGeometry(1, 0), fid=2),
+        ],
+        fields=fake_fields("id"),
+    )
+    sinks = bind_common_parameters(
+        monkeypatch,
+        algorithm,
+        sources={algorithm.INPUT_SOURCE: layer, algorithm.INPUT_TARGET: layer},
+        fields={algorithm.MAX_CONNECTIONS: 1, algorithm.MAX_DISTANCE: 2},
+    )
+
+    result = algorithm.processAlgorithm({}, None, FakeFeedback())
+
+    assert result == {algorithm.OUTPUT_CONNECTIONS: f"{algorithm.OUTPUT_CONNECTIONS}_id"}
+    attrs = [feature.attributes_value for feature in sinks[algorithm.OUTPUT_CONNECTIONS].features]
+    assert attrs == [["N1", "N2", 1.0, 1], ["N2", "N1", 1.0, 1]]
 
 
 def test_elevation_from_raster_processes_and_skips_nodes(monkeypatch):
@@ -597,7 +634,9 @@ def test_elevation_from_raster_processes_and_skips_nodes(monkeypatch):
     )
     feedback = FakeFeedback()
 
-    assert algorithm.processAlgorithm({}, None, feedback) == {}
+    with pytest.raises(QgsProcessingException):
+
+        algorithm.processAlgorithm({}, None, feedback)
     assert feedback.errors == ["ERROR: Layers have different CRS"]
 
 
@@ -613,6 +652,7 @@ def test_elevation_from_tin_interpolates_nodes(monkeypatch, tmp_path):
     xml.write_text(
         """
         <LandXML xmlns="http://www.landxml.org/schema/LandXML-1.2">
+          <CoordinateSystem epsgCode="EPSG:4326" />
           <Surfaces>
             <Surface name="Ground">
               <Metadata />
@@ -638,11 +678,13 @@ def test_elevation_from_tin_interpolates_nodes(monkeypatch, tmp_path):
         files={algorithm.INPUT_TIN: xml},
     )
 
-    result = algorithm.processAlgorithm({}, None, FakeFeedback())
+    feedback = FakeFeedback()
+    result = algorithm.processAlgorithm({}, None, feedback)
 
     assert result == {algorithm.OUTPUT: f"{algorithm.OUTPUT}_id"}
     assert sinks[algorithm.OUTPUT].features[0]["elevation"] == pytest.approx(1.75)
     assert sinks[algorithm.OUTPUT].features[1]["elevation"] is None
+    assert any("LandXML CRS EPSG:4326 differs" in line for line in feedback.info)
     assert algorithm.processAlgorithm({}, None, FakeFeedback(canceled=True)) == {}
 
 
@@ -757,7 +799,8 @@ def test_network_to_xml_writes_wnt_xml_and_validates_inputs(monkeypatch, tmp_pat
         files={algorithm.OUTPUT: output},
     )
     feedback = FakeFeedback()
-    assert algorithm.processAlgorithm({}, None, feedback) == {}
+    with pytest.raises(QgsProcessingException):
+        algorithm.processAlgorithm({}, None, feedback)
     assert feedback.errors == ["ERROR: Layers have different CRS"]
 
     bad_nodes = FakeSource([], fields=fake_fields("id"))
@@ -769,7 +812,8 @@ def test_network_to_xml_writes_wnt_xml_and_validates_inputs(monkeypatch, tmp_pat
         files={algorithm.OUTPUT: output},
     )
     feedback = FakeFeedback()
-    assert algorithm.processAlgorithm({}, None, feedback) == {}
+    with pytest.raises(QgsProcessingException):
+        algorithm.processAlgorithm({}, None, feedback)
     assert feedback.errors == ["ERROR: Missing required fields: type"]
 
 
@@ -941,8 +985,34 @@ def test_network_to_epanet_exports_file_and_rejects_crs(monkeypatch, tmp_path):
     )
     feedback = FakeFeedback()
 
-    assert algorithm.processAlgorithm({}, None, feedback) == {}
+    with pytest.raises(QgsProcessingException):
+
+        algorithm.processAlgorithm({}, None, feedback)
     assert feedback.errors == ["ERROR: Layers have different CRS"]
+
+
+def test_network_to_epanet_reports_duplicate_ids(monkeypatch, tmp_path):
+    algorithm = NetworkToEpanetAlgorithm()
+    template = tmp_path / "template.inp"
+    output = tmp_path / "model.inp"
+    template.write_text(epanet_template_text(), encoding="latin-1")
+    nodes = FakeSource([
+        FakeFeature({"id": "J1", "type": "JUNCTION", "elevation": 0}, FakeGeometry(0, 0)),
+        FakeFeature({"id": "J1", "type": "JUNCTION", "elevation": 0}, FakeGeometry(1, 0)),
+    ])
+    links = FakeSource([], fields=fake_fields("id", "start", "end", "type", "length"))
+    bind_common_parameters(
+        monkeypatch, algorithm,
+        sources={algorithm.INPUT_NODES: nodes, algorithm.INPUT_LINES: links},
+        files={algorithm.INPUT_TEMPLATE: template, algorithm.OUTPUT: output},
+    )
+    feedback = FakeFeedback()
+
+    with pytest.raises(QgsProcessingException):
+
+        algorithm.processAlgorithm({}, None, feedback)
+    assert feedback.errors == ["ERROR: Duplicated node id: J1"]
+    assert feedback.fatal_errors == [True]
 
 
 def test_network_to_epanet_creates_file_from_scratch(monkeypatch, tmp_path):
@@ -1024,9 +1094,9 @@ def test_network_to_epanet_aborts_invalid_merged_network(monkeypatch, tmp_path):
     )
     feedback = FakeFeedback()
 
-    result = algorithm.processAlgorithm({}, None, feedback)
+    with pytest.raises(QgsProcessingException):
+        algorithm.processAlgorithm({}, None, feedback)
 
-    assert result == {}
     assert not output.exists()
     assert any("Merged EPANET network is not valid" in line for line in feedback.errors)
 
@@ -1339,7 +1409,8 @@ def test_network_from_xml_reports_missing_landxml_pipe_networks(monkeypatch, tmp
     bind_common_parameters(monkeypatch, algorithm, files={algorithm.INPUT: xml})
 
     feedback = FakeFeedback()
-    assert algorithm.processAlgorithm({}, None, feedback) == {}
+    with pytest.raises(QgsProcessingException):
+        algorithm.processAlgorithm({}, None, feedback)
     assert feedback.errors == ["ERROR: No LandXML PipeNetwork definitions found"]
 
 def test_network_from_xml_imports_landxml_features(monkeypatch, tmp_path):
@@ -1347,7 +1418,7 @@ def test_network_from_xml_imports_landxml_features(monkeypatch, tmp_path):
     extra_layers = {}
     monkeypatch.setattr(
         "wnt.processes.wnt_network_from_xml.add_memory_layer",
-        lambda name, geometry, fields, crs, features: extra_layers.setdefault(
+        lambda name, geometry, fields, crs, features, context=None: extra_layers.setdefault(
             name, [geometry, fields, features]
         ),
     )
@@ -1516,8 +1587,62 @@ def test_assign_demand_accumulates_nearest_target(monkeypatch):
         fields={algorithm.FIELDS_SOURCE: ["base"]},
     )
     feedback = FakeFeedback()
-    assert algorithm.processAlgorithm({}, None, feedback) == {}
+    with pytest.raises(QgsProcessingException):
+        algorithm.processAlgorithm({}, None, feedback)
     assert feedback.errors == ["ERROR: Layers have different CRS"]
+
+
+def test_assign_demand_rejects_geographic_crs_and_duplicate_target_ids(monkeypatch):
+    algorithm = AssignDemandAlgorithm()
+    patch_lightweight_qgis_feature_classes(monkeypatch, "wnt.processes.wnt_assign_demand")
+    monkeypatch.setattr("wnt.processes.wnt_assign_demand.QgsSpatialIndex", FakeSpatialIndex)
+    geographic = FakeCrs("EPSG:4326")
+    sources = FakeSource(
+        [FakeFeature({"id": "S1", "base": 1.0}, FakeGeometry(0, 0))],
+        fields=fake_fields("id", "base"),
+        crs=geographic,
+    )
+    targets = FakeSource(
+        [FakeFeature({"id": "T1"}, FakeGeometry(1, 0))],
+        fields=fake_fields("id"),
+        crs=geographic,
+    )
+    bind_common_parameters(
+        monkeypatch, algorithm,
+        sources={algorithm.INPUT_SOURCE: sources, algorithm.INPUT_TARGET: targets},
+        fields={algorithm.FIELDS_SOURCE: ["base"]},
+    )
+    feedback = FakeFeedback()
+
+    with pytest.raises(QgsProcessingException):
+
+        algorithm.processAlgorithm({}, None, feedback)
+    assert feedback.errors == [
+        "ERROR: Use a projected CRS with linear units for distance-based operations"
+    ]
+
+    projected_sources = FakeSource(
+        [FakeFeature({"id": "S1", "base": 1.0}, FakeGeometry(0, 0))],
+        fields=fake_fields("id", "base"),
+    )
+    duplicate_targets = FakeSource(
+        [
+            FakeFeature({"id": "T1"}, FakeGeometry(1, 0), fid=1),
+            FakeFeature({"id": "T1"}, FakeGeometry(2, 0), fid=2),
+        ],
+        fields=fake_fields("id"),
+    )
+    bind_common_parameters(
+        monkeypatch, algorithm,
+        sources={algorithm.INPUT_SOURCE: projected_sources, algorithm.INPUT_TARGET: duplicate_targets},
+        fields={algorithm.FIELDS_SOURCE: ["base"]},
+    )
+    feedback = FakeFeedback()
+
+    with pytest.raises(QgsProcessingException):
+
+        algorithm.processAlgorithm({}, None, feedback)
+    assert feedback.errors == ["ERROR: Target layer contains duplicate ids: T1"]
 
 
 def test_update_assignment_updates_moved_target_and_errors(monkeypatch):
@@ -1582,9 +1707,43 @@ def test_update_assignment_updates_moved_target_and_errors(monkeypatch):
         },
     )
     feedback = FakeFeedback()
-    assert algorithm.processAlgorithm({}, None, feedback) == {}
+    with pytest.raises(QgsProcessingException):
+        algorithm.processAlgorithm({}, None, feedback)
     assert feedback.errors == ["ERROR: Source point misplaced: S1"]
 
+
+
+def test_update_assignment_treats_null_demand_as_zero(monkeypatch):
+    algorithm = UpdateAssignmentAlgorithm()
+    fields = fake_fields("source", "target", "base")
+    sources = FakeSource(
+        [FakeFeature({"id": "S1", "base": None}, FakeGeometry(0, 0))],
+        fields=fake_fields("id", "base"),
+    )
+    targets = FakeSource(
+        [FakeFeature({"id": "T1", "base": 5.0}, FakeGeometry(1, 0))],
+        fields=fake_fields("id", "base"),
+    )
+    assignments = FakeSource(
+        [FakeFeature(
+            {"source": "S1", "target": "T1", "base": None},
+            FakeGeometry(0, 0, polyline=[FakePoint(0, 0), FakePoint(1, 0)]),
+        )],
+        fields=fields,
+    )
+    sinks = bind_common_parameters(
+        monkeypatch, algorithm,
+        sources={
+            algorithm.INPUT_SOURCE: sources,
+            algorithm.INPUT_TARGET: targets,
+            algorithm.INPUT_ASSIGNMENTS: assignments,
+        },
+    )
+
+    result = algorithm.processAlgorithm({}, None, FakeFeedback())
+
+    assert result[algorithm.OUTPUT_TARGETS] == f"{algorithm.OUTPUT_TARGETS}_id"
+    assert sinks[algorithm.OUTPUT_TARGETS].features[0]["base"] == 0.0
 
 
 def test_update_assignment_validates_schema_and_geometry(monkeypatch):
@@ -1611,7 +1770,8 @@ def test_update_assignment_validates_schema_and_geometry(monkeypatch):
         },
     )
     feedback = FakeFeedback()
-    assert algorithm.processAlgorithm({}, None, feedback) == {}
+    with pytest.raises(QgsProcessingException):
+        algorithm.processAlgorithm({}, None, feedback)
     assert feedback.errors == ["ERROR: Assignment layer is missing required fields: target"]
 
     empty_geometry = FakeSource(
@@ -1628,7 +1788,8 @@ def test_update_assignment_validates_schema_and_geometry(monkeypatch):
         },
     )
     feedback = FakeFeedback()
-    assert algorithm.processAlgorithm({}, None, feedback) == {}
+    with pytest.raises(QgsProcessingException):
+        algorithm.processAlgorithm({}, None, feedback)
     assert feedback.errors == ["ERROR: Assignment geometry must be a LineString with at least two vertices"]
 
 
@@ -1669,7 +1830,8 @@ def test_split_lines_at_points_splits_and_keeps_original(monkeypatch):
         fields={algorithm.TOLERANCE: 0.01},
     )
     feedback = FakeFeedback()
-    assert algorithm.processAlgorithm({}, None, feedback) == {}
+    with pytest.raises(QgsProcessingException):
+        algorithm.processAlgorithm({}, None, feedback)
     assert feedback.errors == ["ERROR: Layers have different CRS"]
 
 
@@ -1767,7 +1929,8 @@ def test_merge_networks_merges_near_nodes_snaps_links_and_reports_counts(monkeyp
         fields={algorithm.TOLERANCE: 0.01},
     )
     feedback = FakeFeedback()
-    assert algorithm.processAlgorithm({}, None, feedback) == {}
+    with pytest.raises(QgsProcessingException):
+        algorithm.processAlgorithm({}, None, feedback)
     assert feedback.errors == ["ERROR: Layers have different CRS"]
 
 
@@ -1810,7 +1973,9 @@ def test_merge_networks_rejects_second_link_duplicate_id(monkeypatch):
     )
     feedback = FakeFeedback()
 
-    assert algorithm.processAlgorithm({}, None, feedback) == {}
+    with pytest.raises(QgsProcessingException):
+
+        algorithm.processAlgorithm({}, None, feedback)
     assert feedback.errors == ["ERROR: Second network link ids already exist in first network: L1"]
 
 
@@ -1852,7 +2017,9 @@ def test_merge_networks_aborts_invalid_final_network(monkeypatch):
     )
     feedback = FakeFeedback()
 
-    assert algorithm.processAlgorithm({}, None, feedback) == {}
+    with pytest.raises(QgsProcessingException):
+
+        algorithm.processAlgorithm({}, None, feedback)
     assert any("orphan nodes: N3" in line for line in feedback.errors)
 
 
@@ -1895,7 +2062,9 @@ def test_merge_networks_rejects_second_link_endpoint_overlap_reversed(monkeypatc
     )
     feedback = FakeFeedback()
 
-    assert algorithm.processAlgorithm({}, None, feedback) == {}
+    with pytest.raises(QgsProcessingException):
+
+        algorithm.processAlgorithm({}, None, feedback)
     assert feedback.errors == ["ERROR: Second network links overlap first network links: L2 overlaps L1"]
     assert sinks == {}
 
@@ -2088,15 +2257,18 @@ def test_network_from_lines_writes_link_type_degree_and_topology(monkeypatch):
     patch_lightweight_qgis_feature_classes(monkeypatch, "wnt.processes.wnt_network_from_lines")
     monkeypatch.setattr("wnt.processes.wnt_network_from_lines.QgsPointXY", lambda x, y: FakePoint(x, y))
     monkeypatch.setattr("wnt.processes.wnt_network_from_lines.QgsGeometry", FakeQgsGeometry)
-    fields = FakeFields([FakeNamedField("link_type"), FakeNamedField("material")])
+    fields = FakeFields([
+        FakeNamedField("link_type"), FakeNamedField("material"),
+        FakeNamedField("id"), FakeNamedField("length"),
+    ])
     lines = FakeSource(
         [
             FakeFeature(
-                {"link_type": "VALVE", "material": "PVC"},
+                {"link_type": "VALVE", "material": "PVC", "id": "old-1", "length": 99},
                 FakeGeometry(0, 0, polyline=[FakePoint(0, 0), FakePoint(1, 0)]),
             ),
             FakeFeature(
-                {"link_type": "PUMP", "material": "DI"},
+                {"link_type": "PUMP", "material": "DI", "id": "old-2", "length": 98},
                 FakeGeometry(1, 0, polyline=[FakePoint(1, 0), FakePoint(2, 0)]),
             ),
         ],
@@ -2135,6 +2307,9 @@ def test_network_from_lines_writes_link_type_degree_and_topology(monkeypatch):
     link_field_names = sinks[algorithm.OUTPUT_LINES].fields.names()
     assert "zone" in link_field_names
     assert "zones" not in link_field_names
+    assert "id_src" in link_field_names
+    assert "length_src" in link_field_names
+    assert len(link_field_names) == len(set(link_field_names))
     assert "Link type field: link_type" in feedback.info
     assert "Add node_degree: True" in feedback.info
     assert "Add topology/zone: True" in feedback.info
@@ -2249,8 +2424,8 @@ def test_network_from_lines_rejects_missing_dem(monkeypatch):
     )
 
     feedback = FakeFeedback()
-    assert algorithm.processAlgorithm({}, FakeProcessingContext(), feedback) == {}
-
+    with pytest.raises(QgsProcessingException):
+        algorithm.processAlgorithm({}, FakeProcessingContext(), feedback)
     assert feedback.errors == [
         "ERROR: DEM raster layer is required for the selected elevation source"
     ]
@@ -2294,8 +2469,8 @@ def test_network_from_lines_rejects_invalid_dem_elevations(monkeypatch):
         )
 
         feedback = FakeFeedback()
-        assert algorithm.processAlgorithm({}, FakeProcessingContext(), feedback) == {}
-
+        with pytest.raises(QgsProcessingException):
+            algorithm.processAlgorithm({}, FakeProcessingContext(), feedback)
         assert feedback.errors == [
             "ERROR: DEM raster does not provide a valid elevation for all network nodes"
         ]
@@ -2373,8 +2548,8 @@ def test_network_from_lines_rejects_missing_landxml(monkeypatch):
     )
 
     feedback = FakeFeedback()
-    assert algorithm.processAlgorithm({}, FakeProcessingContext(), feedback) == {}
-
+    with pytest.raises(QgsProcessingException):
+        algorithm.processAlgorithm({}, FakeProcessingContext(), feedback)
     assert feedback.errors == [
         "ERROR: LandXML file is required for the selected elevation source"
     ]
@@ -2420,8 +2595,8 @@ def test_network_from_lines_rejects_invalid_landxml_elevations(monkeypatch, tmp_
     )
 
     feedback = FakeFeedback()
-    assert algorithm.processAlgorithm({}, FakeProcessingContext(), feedback) == {}
-
+    with pytest.raises(QgsProcessingException):
+        algorithm.processAlgorithm({}, FakeProcessingContext(), feedback)
     assert feedback.errors == [
         "ERROR: LandXML TIN does not provide a valid elevation for all network nodes"
     ]
@@ -2472,7 +2647,8 @@ def test_network_from_lines_rejects_conflicting_z_elevations(monkeypatch):
     )
 
     feedback = FakeFeedback()
-    assert algorithm.processAlgorithm({}, None, feedback) == {}
+    with pytest.raises(QgsProcessingException):
+        algorithm.processAlgorithm({}, None, feedback)
     assert feedback.errors == [
         "ERROR: Line endpoint elevations merged into a node differ more than tolerance"
     ]
@@ -2506,7 +2682,8 @@ def test_network_from_lines_rejects_missing_line_z_elevations(monkeypatch):
     )
 
     feedback = FakeFeedback()
-    assert algorithm.processAlgorithm({}, None, feedback) == {}
+    with pytest.raises(QgsProcessingException):
+        algorithm.processAlgorithm({}, None, feedback)
     assert feedback.errors == [
         "ERROR: Line endpoint Z elevation source requires every input line endpoint to have a valid Z value"
     ]
@@ -2530,7 +2707,8 @@ def test_network_from_lines_rejects_invalid_and_looped(monkeypatch):
         },
     )
     feedback = FakeFeedback()
-    assert algorithm.processAlgorithm({}, None, feedback) == {}
+    with pytest.raises(QgsProcessingException):
+        algorithm.processAlgorithm({}, None, feedback)
     assert feedback.errors == ["ERROR: Invalid LineString geometry (FID: 7)"]
 
     looped = FakeSource(
@@ -2557,14 +2735,18 @@ def test_network_from_lines_rejects_invalid_and_looped(monkeypatch):
         },
     )
     feedback = FakeFeedback()
-    assert algorithm.processAlgorithm({}, None, feedback) == {}
+    with pytest.raises(QgsProcessingException):
+        algorithm.processAlgorithm({}, None, feedback)
     assert feedback.errors == ["ERROR: Looped LineString detected (FID: 8)"]
 
 
 class FakeEpanetLibrary:
-    def __init__(self, error_at=None, link_status=1.0):
+    def __init__(self, error_at=None, link_status=1.0, run_time=0, node_id=b"N1", link_id=b"L1"):
         self.error_at = error_at
         self.link_status = link_status
+        self.run_time = run_time
+        self.node_id = node_id
+        self.link_id = link_id
         self.calls = {}
         self.next_calls = 0
         self.next_quality_calls = 0
@@ -2612,7 +2794,7 @@ class FakeEpanetLibrary:
         err = self._err("ENrunH")
         if err:
             return err
-        out._obj.value = self.next_calls * 3600
+        out._obj.value = self.run_time + self.next_calls * 3600
         return 0
 
     def ENgetnodeid(self, index, out):
@@ -2620,9 +2802,9 @@ class FakeEpanetLibrary:
         if err:
             return err
         if hasattr(out, "_obj"):
-            out._obj.value = b"N1"
+            out._obj.value = self.node_id
         else:
-            out.value = b"N1"
+            out.value = self.node_id
         return 0
 
     def ENgetnodevalue(self, index, parameter, out):
@@ -2637,9 +2819,9 @@ class FakeEpanetLibrary:
         if err:
             return err
         if hasattr(out, "_obj"):
-            out._obj.value = b"L1"
+            out._obj.value = self.link_id
         else:
-            out.value = b"L1"
+            out.value = self.link_id
         return 0
 
     def ENgetlinkvalue(self, index, parameter, out):
@@ -2754,6 +2936,27 @@ def test_results_from_epanet_loads_node_and_link_results(monkeypatch, tmp_path):
     ]
 
 
+def test_epanet_results_preserve_elapsed_hours_and_latin1_ids(monkeypatch, tmp_path):
+    algorithm = ResultsFromEpanetAlgorithm()
+    inp = tmp_path / "model.inp"
+    inp.write_text("[END]\n", encoding="latin-1")
+    library = FakeEpanetLibrary(run_time=25 * 3600, node_id=b"N\xf3", link_id=b"L\xe1")
+    patch_results_algorithm(monkeypatch, library)
+    sinks = bind_common_parameters(monkeypatch, algorithm, files={algorithm.INPUT: inp})
+
+    algorithm.processAlgorithm({}, FakeProcessingContext(), FakeFeedback())
+
+    assert sinks[algorithm.OUTPUT_NODES].features[0].attributes_value[:2] == ["25:00:00", "Nó"]
+    assert sinks[algorithm.OUTPUT_LINES].features[0].attributes_value[:2] == ["25:00:00", "Lá"]
+    assert format_elapsed_time(49 * 3600 + 61) == "49:01:01"
+
+
+def test_epanet_toolkit_rejects_missing_library_path(tmp_path):
+    missing = tmp_path / "missing-epanet.dll"
+    with pytest.raises(EpanetConfigurationError, match="EPANET toolkit library not found"):
+        EpanetToolkit.from_library_path(missing)
+
+
 def test_epanet_constants_are_resolved_by_toolkit_version():
     assert constants_for_version(20012).max_label_len == 15
     assert constants_for_version(20200).max_label_len == 31
@@ -2815,14 +3018,18 @@ def test_results_from_epanet_reports_configuration_and_toolkit_errors(monkeypatc
     bind_common_parameters(monkeypatch, algorithm, files={algorithm.INPUT: inp})
     feedback = FakeFeedback()
 
-    assert algorithm.processAlgorithm({}, None, feedback) == {}
+    with pytest.raises(QgsProcessingException):
+
+        algorithm.processAlgorithm({}, None, feedback)
     assert feedback.errors == ["ERROR: Configure EPANET toolkit library"]
 
     patch_results_algorithm(monkeypatch, FakeEpanetLibrary(error_at="ENopen"))
     bind_common_parameters(monkeypatch, algorithm, files={algorithm.INPUT: inp})
     feedback = FakeFeedback()
 
-    assert algorithm.processAlgorithm({}, None, feedback) == {}
+    with pytest.raises(QgsProcessingException):
+
+        algorithm.processAlgorithm({}, None, feedback)
     assert feedback.errors == ["ERROR: EPANET toolkit error 77"]
 
 
@@ -2851,7 +3058,9 @@ def test_results_from_epanet_reports_toolkit_errors_at_each_step(monkeypatch, tm
     bind_common_parameters(monkeypatch, algorithm, files={algorithm.INPUT: inp})
     feedback = FakeFeedback()
 
-    assert algorithm.processAlgorithm({}, None, feedback) == {}
+    with pytest.raises(QgsProcessingException):
+
+        algorithm.processAlgorithm({}, None, feedback)
     assert feedback.errors == ["ERROR: EPANET toolkit error 77"]
 
 
@@ -2890,7 +3099,8 @@ def test_config_toolkit_writes_ini(monkeypatch, tmp_path):
     bind_common_parameters(monkeypatch, algorithm, files={algorithm.INPUT: tmp_path / "epanet.dll"})
 
     feedback = FakeFeedback()
-    assert algorithm.processAlgorithm({}, None, feedback) == {}
+    result = algorithm.processAlgorithm({}, None, feedback)
+    assert result == {algorithm.OUTPUT: str(ini)}
     assert "epanet.dll" in ini.read_text(encoding="utf-8")
     assert "Platform: Windows AMD64" in feedback.info
     assert "EPANET toolkit version: 2.2.0" in feedback.info
@@ -2982,6 +3192,10 @@ def test_network_to_pipesizing_writes_pro_with_external_catalog(monkeypatch, tmp
     assert "L1    S1" in text
     assert "[SERIES]" not in text
     assert output_catalog.read_text(encoding="utf-8") == "S1    100.0    120.0\n"
+    output_catalog.write_text("old catalog", encoding="utf-8")
+    feedback = FakeFeedback()
+    algorithm.processAlgorithm({}, None, feedback)
+    assert any("Existing pipe catalog will be overwritten" in line for line in feedback.info)
 
     unknown_links = FakeSource(
         [FakeFeature({"id": "L1", "group": "UNKNOWN"})],
@@ -3003,7 +3217,9 @@ def test_network_to_pipesizing_writes_pro_with_external_catalog(monkeypatch, tmp
     )
     feedback = FakeFeedback()
 
-    assert algorithm.processAlgorithm({}, None, feedback) == {}
+    with pytest.raises(QgsProcessingException):
+
+        algorithm.processAlgorithm({}, None, feedback)
     assert feedback.errors == ["ERROR: Pipes reference unknown series: UNKNOWN"]
 
 def test_network_to_ppno_writes_ext_from_catalog_and_rejects_crs(monkeypatch, tmp_path):
@@ -3034,6 +3250,10 @@ def test_network_to_ppno_writes_ext_from_catalog_and_rejects_crs(monkeypatch, tm
     assert "N1    20" in text
     assert "L1    S1" in text
     assert output_catalog.read_text(encoding="latin-1") == "S1    100.0    0.1    10.0\n"
+    output_catalog.write_text("old catalog", encoding="latin-1")
+    feedback = FakeFeedback()
+    algorithm.processAlgorithm({}, None, feedback)
+    assert any("Existing pipe catalog will be overwritten" in line for line in feedback.info)
 
     bad_links = FakeSource([], crs=FakeCrs("EPSG:4326"))
     bind_common_parameters(
@@ -3046,7 +3266,9 @@ def test_network_to_ppno_writes_ext_from_catalog_and_rejects_crs(monkeypatch, tm
     )
     feedback = FakeFeedback()
 
-    assert algorithm.processAlgorithm({}, None, feedback) == {}
+    with pytest.raises(QgsProcessingException):
+
+        algorithm.processAlgorithm({}, None, feedback)
     assert feedback.errors == ["ERROR: Layers have different CRS"]
 
     catalog_with_header = tmp_path / "bad.cat"
@@ -3061,7 +3283,9 @@ def test_network_to_ppno_writes_ext_from_catalog_and_rejects_crs(monkeypatch, tm
     )
     feedback = FakeFeedback()
 
-    assert algorithm.processAlgorithm({}, None, feedback) == {}
+    with pytest.raises(QgsProcessingException):
+
+        algorithm.processAlgorithm({}, None, feedback)
     assert feedback.errors == ["ERROR: PPNO pipe catalog must not contain section headers"]
 
 
@@ -3077,10 +3301,11 @@ def test_scenario_exporters_validate_required_fields(monkeypatch, tmp_path):
         files={demand.OUTPUT: output},
     )
     feedback = FakeFeedback()
-    assert demand.processAlgorithm({}, None, feedback) == {}
+    with pytest.raises(QgsProcessingException):
+        demand.processAlgorithm({}, None, feedback)
     assert feedback.errors == ["ERROR: Node layer is missing required fields: type"]
 
-    pipe = PipePropiertiesToEpanetScenarioAlgorithm()
+    pipe = PipePropertiesToEpanetScenarioAlgorithm()
     links = FakeSource([FakeFeature({"id": "P1", "type": "PIPE", "diameter": 100})])
     bind_common_parameters(
         monkeypatch,
@@ -3090,7 +3315,8 @@ def test_scenario_exporters_validate_required_fields(monkeypatch, tmp_path):
         files={pipe.OUTPUT: output},
     )
     feedback = FakeFeedback()
-    assert pipe.processAlgorithm({}, None, feedback) == {}
+    with pytest.raises(QgsProcessingException):
+        pipe.processAlgorithm({}, None, feedback)
     assert feedback.errors == ["ERROR: Link layer is missing required fields: roughness"]
 
 
@@ -3101,7 +3327,7 @@ def test_demand_to_epanet_scenario_writes_selected_junction_demands(monkeypatch,
         [
             FakeFeature({"id": "J1", "type": "JUNCTION", "base": 1.2, "fire": 0}),
             FakeFeature({"id": "R1", "type": "RESERVOIR", "base": 9.9, "fire": 1}),
-            FakeFeature({"id": "J2", "type": "JUNCTION", "base": 2.5, "fire": 3.5}),
+            FakeFeature({"id": "Jó", "type": "JUNCTION", "base": 2.5, "fire": 3.5}),
         ]
     )
     bind_common_parameters(
@@ -3115,10 +3341,11 @@ def test_demand_to_epanet_scenario_writes_selected_junction_demands(monkeypatch,
     result = algorithm.processAlgorithm({}, None, FakeFeedback())
 
     assert result == {algorithm.OUTPUT: str(output)}
-    text = output.read_text(encoding="utf-8")
+    text = output.read_text(encoding="latin-1")
     assert "J1  1.2  base" in text
-    assert "J2  2.5  base" in text
-    assert "J2  3.5  fire" in text
+    assert "Jó  2.5  base" in text
+    assert "Jó  3.5  fire" in text
+    assert b"J\xf3" in output.read_bytes()
     assert "R1" not in text
 
     bind_common_parameters(
@@ -3130,12 +3357,14 @@ def test_demand_to_epanet_scenario_writes_selected_junction_demands(monkeypatch,
     )
     feedback = FakeFeedback()
 
-    assert algorithm.processAlgorithm({}, None, feedback) == {}
+    with pytest.raises(QgsProcessingException):
+
+        algorithm.processAlgorithm({}, None, feedback)
     assert feedback.errors == ["ERROR: Field containing demand is required"]
 
 
-def test_pipe_propierties_to_epanet_scenario_writes_only_pipes(monkeypatch, tmp_path):
-    algorithm = PipePropiertiesToEpanetScenarioAlgorithm()
+def test_pipe_properties_to_epanet_scenario_writes_only_pipes(monkeypatch, tmp_path):
+    algorithm = PipePropertiesToEpanetScenarioAlgorithm()
     output = tmp_path / "scenario.scn"
     links = FakeSource(
         [
@@ -3155,7 +3384,7 @@ def test_pipe_propierties_to_epanet_scenario_writes_only_pipes(monkeypatch, tmp_
     result = algorithm.processAlgorithm({}, None, FakeFeedback())
 
     assert result == {algorithm.OUTPUT: str(output)}
-    text = output.read_text(encoding="utf-8")
+    text = output.read_text(encoding="latin-1")
     assert "P1    100" in text
     assert "P2    150" in text
     assert "V1" not in text

@@ -7,7 +7,7 @@ from qgis.core import (QgsProcessing,
 from .base import WntProcessingAlgorithm, missing_fields
 from .messages import error, finish, info, start
 
-class PipePropiertiesToEpanetScenarioAlgorithm(WntProcessingAlgorithm):
+class PipePropertiesToEpanetScenarioAlgorithm(WntProcessingAlgorithm):
     """
     Build an EPANET scenary file from pipe diameter and roughness.
     """
@@ -24,12 +24,13 @@ class PipePropiertiesToEpanetScenarioAlgorithm(WntProcessingAlgorithm):
         """
         Create a instance and return a new copy of algorithm.
         """
-        return PipePropiertiesToEpanetScenarioAlgorithm()
+        return PipePropertiesToEpanetScenarioAlgorithm()
 
     def name(self):
         """
         Returns the unique algorithm name, used for identifying the algorithm.
         """
+        # Keep the historical ID so saved Processing models remain compatible.
         return 'network_to_epanet_pipe_propierties_scenario'
 
     def displayName(self):
@@ -37,7 +38,7 @@ class PipePropiertiesToEpanetScenarioAlgorithm(WntProcessingAlgorithm):
         Returns the translated algorithm name, which should be used for any
         user-visible display of the algorithm name.
         """
-        return self.tr('Pipe propierties to epanet scenario file (.scn)')
+        return self.tr('Pipe properties to EPANET scenario file (.scn)')
 
     def group(self):
         """
@@ -115,7 +116,6 @@ class PipePropiertiesToEpanetScenarioAlgorithm(WntProcessingAlgorithm):
         missing = missing_fields(links, ['id', 'type', dfield, rfield])
         if missing:
             error(feedback, "Link layer is missing required fields: " + ", ".join(missing))
-            return {}
 
         # OUTPUT
         scnfile = self.parameterAsFileOutput(parameters, self.OUTPUT, context)
@@ -127,7 +127,7 @@ class PipePropiertiesToEpanetScenarioAlgorithm(WntProcessingAlgorithm):
             if str(feature['type'] or '').upper() in ['PIPE', 'CVPIPE']
         ]
         try:
-            with open(scnfile, 'w', encoding='utf-8') as file:
+            with open(scnfile, 'w', encoding='latin-1') as file:
                 file.write('; File generated automatically by Water Network Tools \n')
                 file.write('[DIAMETERS] \n')
                 file.write(';Pipe    Diameter \n')
@@ -144,7 +144,6 @@ class PipePropiertiesToEpanetScenarioAlgorithm(WntProcessingAlgorithm):
                     file.write('{}    {} \n'.format(feature['id'], feature[rfield]))
         except UnicodeEncodeError as exc:
             error(feedback, "Output contains characters that cannot be written: " + str(exc))
-            return {}
 
         # SHOW INFO
         start(feedback, self.displayName())
@@ -152,7 +151,7 @@ class PipePropiertiesToEpanetScenarioAlgorithm(WntProcessingAlgorithm):
         info(feedback, "Output file", scnfile)
         finish(feedback)
 
-        # PROCCES CANCELED
+        # PROCESS CANCELED
         if feedback.isCanceled():
             return {}
 

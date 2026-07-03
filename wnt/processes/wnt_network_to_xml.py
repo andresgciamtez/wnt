@@ -11,7 +11,7 @@ from qgis.core import (
     QgsProcessingParameterFileDestination,
     QgsProcessingParameterString,
 )
-from .base import WntProcessingAlgorithm
+from .base import WntProcessingAlgorithm, field_names, missing_fields
 from .messages import crs as log_crs
 from .messages import error, finish, info, start
 from ..utils import utils_core as tools
@@ -26,20 +26,6 @@ NODE_COMMON_FIELDS = {"id", "type", "elevation"}
 LINK_COMMON_FIELDS = {"id", "start", "end", "type", "length"}
 LANDXML_NODE_FIELDS = set(landxml.NODE_FIELDS)
 LANDXML_LINK_FIELDS = set(landxml.LINK_FIELDS)
-
-
-def field_names(source):
-    """Return feature source field names."""
-    fields = source.fields()
-    if hasattr(fields, "names"):
-        return list(fields.names())
-    return [field.name() for field in fields]
-
-
-def missing_fields(source, required):
-    """Return required fields missing from a feature source."""
-    names = set(field_names(source))
-    return [field for field in required if field not in names]
 
 
 def crs_label(crs):
@@ -123,11 +109,6 @@ def add_if_set(attributes, name, value):
         attributes[name] = value
 
 
-def network_type_for_export(network_type):
-    """Return the selected LandXML pipeNetworkType."""
-    return network_type
-
-
 def section_element(pipe_element, link, fields, properties):
     """Add a LandXML pipe section element when dimensions are available."""
     shape = str(field_value(link, fields, properties, "geom_shape", "") or "").lower()
@@ -150,7 +131,7 @@ def write_landxml(path, nodes, links, node_fields, link_fields, network_name, ne
     """Write network layers as a LandXML 1.2 pipe network."""
     node_features = list(nodes.getFeatures())
     link_features = list(links.getFeatures())
-    net_type = network_type_for_export(network_type)
+    net_type = network_type
     root = ET.Element("LandXML", {"xmlns": "http://www.landxml.org/schema/LandXML-1.2"})
     authid = crs_label(crs)
     if authid.upper().startswith("EPSG:"):
@@ -270,12 +251,10 @@ class NetworkToXmlAlgorithm(WntProcessingAlgorithm):
 
         if nodes.sourceCrs() != links.sourceCrs():
             error(feedback, "Layers have different CRS")
-            return {}
         node_missing = missing_fields(nodes, ("id", "type"))
         link_missing = missing_fields(links, ("id", "start", "end", "type"))
         if node_missing or link_missing:
             error(feedback, "Missing required fields: {}".format(", ".join(node_missing + link_missing)))
-            return {}
 
         start(feedback, self.displayName())
         log_crs(feedback, nodes.sourceCrs())
@@ -331,9 +310,8 @@ class NetworkToXmlAlgorithm(WntProcessingAlgorithm):
                 )
                 node_count = len(network.nodes())
                 link_count = len(network.links())
-        except (Exception, ValueError) as exc:
+        except (tools.WntError, OSError, TypeError, ValueError) as exc:
             error(feedback, str(exc))
-            return {}
 
         info(feedback, "Output file", output)
         info(feedback, "Output format", self.OUTPUT_FORMATS[output_format])
