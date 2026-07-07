@@ -77,7 +77,7 @@ Run from an activated development environment:
 python package_wnt.py
 ```
 
-Andres Garcia Martinez (ppnoptimizer@gmail.com)
+Andrés García Martínez (ppnoptimizer@gmail.com)
 
 ===
 
@@ -158,4 +158,4 @@ Ejecutar desde un entorno de desarrollo activo:
 python package_wnt.py
 ```
 
-Andres Garcia Martinez (ppnoptimizer@gmail.com)
+Andrés García Martínez (ppnoptimizer@gmail.com)
