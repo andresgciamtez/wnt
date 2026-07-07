@@ -90,7 +90,7 @@ def package(argv=None):
     if not ts_file.is_file():
         raise PackageError(f"Translation catalog not found: {ts_file}")
 
-    for module in ("pytest", "bandit", "flake8"):
+    for module in ("pytest", "bandit", "flake8", "defusedxml"):
         require_module(module)
 
     pb_paths, lrelease_paths, archive_paths = executable_locations()
