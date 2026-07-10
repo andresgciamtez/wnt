@@ -178,6 +178,13 @@ def _link_property_length(link):
     if geometry:
         return polyline_length(geometry)
 
+def _epanet_tokens(line, section, minimum):
+    """Return EPANET line tokens after validating the required column count."""
+    tokens = parse_tokens(line)
+    if len(tokens) < minimum:
+        raise ValueError(f"Invalid EPANET {section} definition: {line}")
+    return tokens
+
 def format_id(number, mask):
     '''Format n: int. Mask: "prefix$$$suffix". $ = 1 decimal positions.'''
     if '$' not in mask:
@@ -395,9 +402,9 @@ class WntNode:
             raise WntFormatError(err_msg) from exc
 
     def to_wkt(self):
-        """Return the node geometry in WKT format, 'Point (x y).'"""
+        """Return the node geometry in OGC WKT format, 'POINT (x y)'."""
         if self._x is not None and self._y is not None:
-            return 'Point({} {})'.format(self._x, self._y)
+            return 'POINT ({} {})'.format(self._x, self._y)
 
 
 class WntLink:
@@ -530,14 +537,10 @@ class WntLink:
         self.set_geometry(points)
 
     def to_wkt(self):
-        """Return the link geometry in WKT format. 'LineString(x y, ...)'."""
+        """Return the link geometry in OGC WKT format. 'LINESTRING (x y, ...)'."""
         if self._linestring:
-            txt = 'LineString('
-            for point in self._linestring[0:-1]:
-                txt += str(point[0]) + ' ' + str(point[1]) + ','
-            point = self._linestring[-1]
-            txt += str(point[0]) + ' ' + str(point[1]) + ')'
-            return txt
+            points = ['{} {}'.format(point[0], point[1]) for point in self._linestring]
+            return 'LINESTRING ({})'.format(', '.join(points))
 
 class WntNetwork:
     """WntNetwork class."""
@@ -811,7 +814,7 @@ class WntNetwork:
 
         # INPUT JUNCTIONS # ID Elev Demand Pattern
         for line in  sections.get('JUNCTIONS', []):
-            tmp = parse_tokens(line)
+            tmp = _epanet_tokens(line, 'junction', 2)
             junction = WntNode(tmp[0])
             junction.set_type('JUNCTION')
             junction.set_elevation(tmp[1])
@@ -821,7 +824,7 @@ class WntNetwork:
 
         # INPUT RESERVOIRS # ID Head Pattern
         for line in sections.get('RESERVOIRS', []):
-            tmp = parse_tokens(line)
+            tmp = _epanet_tokens(line, 'reservoir', 2)
             reservoir = WntNode(tmp[0])
             reservoir.set_type('RESERVOIR')
             reservoir.set_elevation(tmp[1])
@@ -832,7 +835,7 @@ class WntNetwork:
         # INPUT TANKS # ID Elevation InitLevel MinLevel MaxLevel
         # Diameter MinVol VolCurve
         for line in  sections.get('TANKS', []):
-            tmp = parse_tokens(line)
+            tmp = _epanet_tokens(line, 'tank', 2)
             tank = WntNode(tmp[0])
             tank.set_type('TANK')
             tank.set_elevation(tmp[1])
@@ -846,7 +849,8 @@ class WntNetwork:
 
         # COORDINATES
         for line in sections.get('COORDINATES', []):
-            nid, x, y = parse_tokens(line)
+            tmp = _epanet_tokens(line, 'coordinate', 3)
+            nid, x, y = tmp[:3]
             index = self.get_nodeindex(nid)
             if index is None:
                 continue
@@ -877,7 +881,7 @@ class WntNetwork:
 
         # INPUT PUMPS #  # ID Node1 Node2 Parameters
         for line in  sections.get('PUMPS', []):
-            tmp = parse_tokens(line)
+            tmp = _epanet_tokens(line, 'pump', 3)
             lid, n1, n2 = tmp[0:3]
             pump = WntLink(lid, n1, n2)
             pump.set_type('PUMP')
@@ -896,7 +900,7 @@ class WntNetwork:
 
         # INPUT VALVES # ID Node1 Node2 Diameter Type Setting MinorLoss
         for line in  sections.get('VALVES', []):
-            tmp = parse_tokens(line)
+            tmp = _epanet_tokens(line, 'valve', 5)
             lid, n1, n2 = tmp[0:3]
             t = tmp[4]
             valve = WntLink(lid, n1, n2)
@@ -919,7 +923,8 @@ class WntNetwork:
             link.set_geometry([start_geometry, end_geometry])
 
         for line in sections.get('VERTICES', []):
-            nid, x, y = parse_tokens(line)
+            tmp = _epanet_tokens(line, 'vertex', 3)
+            nid, x, y = tmp[:3]
             index = self.get_linkindex(nid)
             if index is None:
                 continue
@@ -968,21 +973,21 @@ class WntNetwork:
                 continue
 
             if nodetype == 'JUNCTION':
-                if node.get_elevation():
+                if node.get_elevation() is not None:
                     tmp = (node.name(), node.get_elevation(), 0.0)
                 else:
                     tmp = (node.name(), 0.0, 0.0)
                 sections.setdefault('JUNCTIONS', []).append(format_tokens(tmp))
 
             if nodetype == 'RESERVOIR':
-                if node.get_elevation():
+                if node.get_elevation() is not None:
                     tmp = (node.name(), node.get_elevation())
                 else:
                     tmp = (node.name(), 0.0)
                 sections.setdefault('RESERVOIRS', []).append(format_tokens(tmp))
 
             if nodetype == 'TANK':
-                if node.get_elevation():
+                if node.get_elevation() is not None:
                     tmp = (node.name(), node.get_elevation(), 0.0, 0.0, 0.0, 0.0, 0.0)
                 else:
                     tmp = (node.name(), 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)

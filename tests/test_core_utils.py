@@ -12,7 +12,7 @@ def test_node_wkt_allows_zero_coordinates():
 
     node.set_geometry((0, 10))
 
-    assert node.to_wkt() == "Point(0.0 10.0)"
+    assert node.to_wkt() == "POINT (0.0 10.0)"
 
 
 def test_from_epanet_preserves_reservoir_elevation(tmp_path):

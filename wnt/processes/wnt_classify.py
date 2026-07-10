@@ -208,4 +208,4 @@ def topology_value(value):
     return {
         "BRANCHED": "branched",
         "MESHED": "mesh",
-    }[value]
+    }.get(value, str(value).lower())

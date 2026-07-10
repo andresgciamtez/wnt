@@ -117,7 +117,7 @@ def test_link_validation_wkt_and_accessors():
     assert link.get_geometry()[0] == (0.0, 0.0)
     assert link.get_geometry()[-1] == (1.0, 1.0)
     assert link.get_vertices() == [(1.0, 0.0)]
-    assert link.to_wkt() == "LineString(0.0 0.0,1.0 0.0,1.0 1.0)"
+    assert link.to_wkt() == "LINESTRING (0.0 0.0, 1.0 0.0, 1.0 1.0)"
     assert polyline_length(link.get_geometry()) == pytest.approx(2.0)
     assert link.get_type() == "PIPE"
 
@@ -318,6 +318,50 @@ def test_epanet_import_parses_optional_pipe_status_and_validates_columns(tmp_pat
     inp.write_text("[PIPES]\nBROKEN N1 N2 10 100\n[END]\n", encoding="latin-1")
     with pytest.raises(ValueError, match="Invalid EPANET pipe definition"):
         WntNetwork().from_epanet(inp)
+
+
+@pytest.mark.parametrize(
+    "text, message",
+    [
+        ("[COORDINATES]\nBROKEN 1\n[END]\n", "Invalid EPANET coordinate definition"),
+        ("[VALVES]\nV1 N1 N2 100\n[END]\n", "Invalid EPANET valve definition"),
+        ("[VERTICES]\nP1 0\n[END]\n", "Invalid EPANET vertex definition"),
+    ],
+)
+def test_epanet_import_validates_truncated_coordinate_valve_and_vertex(tmp_path, text, message):
+    inp = tmp_path / "truncated.inp"
+    inp.write_text(text, encoding="latin-1")
+
+    with pytest.raises(ValueError, match=message):
+        WntNetwork().from_epanet(inp)
+
+
+def test_epanet_import_ignores_extra_coordinate_and_vertex_tokens(tmp_path):
+    inp = tmp_path / "extra_tokens.inp"
+    inp.write_text(
+        textwrap.dedent(
+            """
+            [JUNCTIONS]
+            J1 0
+            J2 0
+            [COORDINATES]
+            J1 0 0 ignored
+            J2 1 0 ignored
+            [PIPES]
+            P1 J1 J2 1 100 120
+            [VERTICES]
+            P1 0.5 0.25 ignored
+            [END]
+            """
+        ).strip(),
+        encoding="latin-1",
+    )
+
+    network = WntNetwork()
+    network.from_epanet(inp)
+
+    assert network.nodes()[0].get_geometry() == (0.0, 0.0)
+    assert network.links()[0].get_vertices() == [(0.5, 0.25)]
 
 
 def test_epanet_import_skips_link_geometry_when_nodes_are_missing(tmp_path):

@@ -12,7 +12,7 @@ from wnt.processes import messages
 from wnt.processes.wnt_assign_demand import AssignDemandAlgorithm
 from wnt.processes.wnt_config_toolkit import ConfigToolkitAlgorithm
 from wnt.processes.wnt_network_to_graph import NetworkToGraphAlgorithm
-from wnt.processes.wnt_classify import ClassifyAlgorithm
+from wnt.processes.wnt_classify import ClassifyAlgorithm, topology_value
 from wnt.processes.wnt_connect_by_distance import ConnectByDistanceAlgorithm
 from wnt.processes.wnt_elevation_from_raster import ElevationFromRasterAlgorithm
 from wnt.processes.wnt_elevation_from_tin import ElevationFromTINAlgorithm
@@ -36,6 +36,7 @@ from wnt.utils.utils_core import WntLink, WntNetwork, WntNode
 from wnt.utils.utils_epanet_api import (
     constants_for_version,
     EpanetConfigurationError,
+    EpanetError,
     format_elapsed_time,
     EpanetToolkit,
     ToolkitInfo,
@@ -527,6 +528,13 @@ def test_classify_writes_topology_and_zone(monkeypatch):
     assert ["mesh", 2] in classifications
     assert sorted({zone for _, zone in classifications}) == [1, 2]
     assert algorithm.processAlgorithm({}, None, FakeFeedback(canceled=True)) == {}
+
+
+def test_topology_value_falls_back_for_unknown_labels():
+    assert topology_value("BRANCHED") == "branched"
+    assert topology_value("MESHED") == "mesh"
+    assert topology_value("RING") == "ring"
+    assert topology_value(3) == "3"
 
 
 def test_connect_by_distance_writes_nearest_connections_and_crs_error(monkeypatch):
@@ -2839,6 +2847,9 @@ class FakeEpanetLibrary:
         out._obj.value = 0
         return 0
 
+    def ENcloseH(self):
+        return self._err("ENcloseH")
+
     def ENsolveH(self):
         return self._err("ENsolveH")
 
@@ -2903,7 +2914,8 @@ def test_results_from_epanet_loads_node_and_link_results(monkeypatch, tmp_path):
     algorithm = ResultsFromEpanetAlgorithm()
     inp = tmp_path / "model.inp"
     inp.write_text("[END]\n", encoding="utf-8")
-    patch_results_algorithm(monkeypatch)
+    library = FakeEpanetLibrary()
+    patch_results_algorithm(monkeypatch, library)
     sinks = bind_common_parameters(monkeypatch, algorithm, files={algorithm.INPUT: inp})
 
     context = FakeProcessingContext()
@@ -2934,6 +2946,8 @@ def test_results_from_epanet_loads_node_and_link_results(monkeypatch, tmp_path):
         12.0,
         13.0,
     ]
+    assert library.calls["ENcloseH"] == 1
+    assert library.calls["ENclose"] == 1
 
 
 def test_epanet_results_preserve_elapsed_hours_and_latin1_ids(monkeypatch, tmp_path):
@@ -2987,7 +3001,8 @@ def test_results_from_epanet_loads_quality_results(monkeypatch, tmp_path):
     inp = tmp_path / "model.inp"
     inp.write_text("[END]\n", encoding="utf-8")
 
-    patch_results_algorithm(monkeypatch)
+    library = FakeEpanetLibrary()
+    patch_results_algorithm(monkeypatch, library)
     sinks = bind_common_parameters(
         monkeypatch,
         algorithm,
@@ -3008,6 +3023,25 @@ def test_results_from_epanet_loads_quality_results(monkeypatch, tmp_path):
     link_attrs[1] = link_attrs[1].rstrip("\x00")
     assert node_attrs == ["00:00:00", "N1", 12.0]
     assert link_attrs == ["00:00:00", "L1", 14.0]
+    assert library.calls["ENcloseQ"] == 1
+    assert library.calls["ENclose"] == 1
+
+
+def test_epanet_toolkit_closes_subsystems_when_results_fail(tmp_path):
+    inp = tmp_path / "model.inp"
+    inp.write_text("[END]\n", encoding="utf-8")
+
+    hydraulic_library = FakeEpanetLibrary(error_at="ENgetnodeid")
+    with pytest.raises(EpanetError):
+        EpanetToolkit(hydraulic_library, "fake-epanet").read_hydraulic_results(inp)
+    assert hydraulic_library.calls["ENcloseH"] == 1
+    assert hydraulic_library.calls["ENclose"] == 1
+
+    quality_library = FakeEpanetLibrary(error_at="ENgetnodeid")
+    with pytest.raises(EpanetError):
+        EpanetToolkit(quality_library, "fake-epanet").read_quality_results(inp)
+    assert quality_library.calls["ENcloseQ"] == 1
+    assert quality_library.calls["ENclose"] == 1
 
 
 def test_results_from_epanet_reports_configuration_and_toolkit_errors(monkeypatch, tmp_path):

@@ -3,6 +3,7 @@
 import ctypes
 import os
 import platform
+import sys
 import tempfile
 from configparser import ConfigParser
 from dataclasses import dataclass
@@ -262,11 +263,13 @@ class EpanetToolkit:
         node_rows = []
         link_rows = []
         step_count = 0
+        hydraulics_open = False
         try:
             self.open(inp_file, report_file)
             node_count = self.getcount(self.constants.node_count)
             link_count = self.getcount(self.constants.link_count)
             self.open_hydraulics()
+            hydraulics_open = True
             self.init_hydraulics(self.constants.no_save)
             while True:
                 step_count += 1
@@ -298,12 +301,7 @@ class EpanetToolkit:
                 if self.next_hydraulics() == 0:
                     break
         finally:
-            if self._project_open:
-                self.close()
-            try:
-                Path(report_file).unlink(missing_ok=True)
-            except OSError:
-                pass
+            self._finalize_epanet_run(report_file, hydraulics_open=hydraulics_open)
         return EpanetResults(node_rows, link_rows, step_count, node_count, link_count)
 
     def read_quality_results(self, inp_file):
@@ -314,6 +312,8 @@ class EpanetToolkit:
         node_rows = []
         link_rows = []
         step_count = 0
+        hydraulics_open = False
+        quality_open = False
         try:
             self.open(inp_file, report_file)
             node_count = self.getcount(self.constants.node_count)
@@ -322,13 +322,14 @@ class EpanetToolkit:
                 self._check(self._lib.ENsolveH())
             else:
                 self.open_hydraulics()
+                hydraulics_open = True
                 self.init_hydraulics(self.constants.save)
                 while True:
                     self.run_hydraulics()
                     if self.next_hydraulics() == 0:
                         break
-                self.close_hydraulics()
             self.open_quality()
+            quality_open = True
             self.init_quality(self.constants.no_save)
             while True:
                 step_count += 1
@@ -351,15 +352,39 @@ class EpanetToolkit:
                     )
                 if self.next_quality() == 0:
                     break
-            self.close_quality()
         finally:
-            if self._project_open:
-                self.close()
-            try:
-                Path(report_file).unlink(missing_ok=True)
-            except OSError:
-                pass
+            self._finalize_epanet_run(
+                report_file,
+                hydraulics_open=hydraulics_open,
+                quality_open=quality_open,
+            )
         return EpanetResults(node_rows, link_rows, step_count, node_count, link_count)
+
+    def _finalize_epanet_run(self, report_file, hydraulics_open=False, quality_open=False):
+        """Close opened EPANET subsystems and remove the temporary report file."""
+        cleanup_error = None
+        active_error = sys.exc_info()[1]
+
+        def cleanup(action):
+            nonlocal cleanup_error
+            try:
+                action()
+            except EpanetError as exc:
+                if cleanup_error is None:
+                    cleanup_error = exc
+
+        if quality_open:
+            cleanup(self.close_quality)
+        if hydraulics_open:
+            cleanup(self.close_hydraulics)
+        if self._project_open:
+            cleanup(self.close)
+        try:
+            Path(report_file).unlink(missing_ok=True)
+        except OSError:
+            pass
+        if active_error is None and cleanup_error is not None:
+            raise cleanup_error
 
     def open(self, inp_file, report_file):
         inp = ctypes.c_char_p(str(inp_file).encode())
