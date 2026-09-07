@@ -155,27 +155,27 @@ def test_processing_toolbox_entries_use_spanish_catalog():
         ),
         'processes/wnt_demand_to_epanet_scenario.py': (
             'Demand to epanet scenario file (.scn)',
-            'Demanda a archivo de escenario de EPANET (.scn)',
+            'Exportar demandas a escenario de EPANET (.scn)',
         ),
         'processes/wnt_network_from_epanet.py': (
             'Network from EPANET file',
-            'Red desde archivo de EPANET',
+            'Importar red desde EPANET',
         ),
         'processes/wnt_network_from_lines.py': (
             'Network from lines',
-            'Red desde l\u00edneas',
+            'Crear red a partir de líneas',
         ),
         'processes/wnt_network_to_graph.py': (
             'Network to graph file',
-            'Red a archivo de grafo',
+            'Exportar red a grafo',
         ),
         'processes/wnt_network_to_ppno.py': (
             'Network to pressure pipe optimization data file (.ext)',
-            'Red a archivo de datos para optimizaci\u00f3n de tuber\u00edas a presi\u00f3n (.ext)',
+            'Exportar red a PPNO (.ext)',
         ),
         'processes/wnt_pipe_properties_to_epanet_scenario.py': (
             'Pipe properties to EPANET scenario file (.scn)',
-            'Propiedades de tuber\u00edas a archivo de escenario de EPANET (.scn)',
+            'Exportar propiedades de tuberías a escenario de EPANET (.scn)',
         ),
         'processes/wnt_update_assignment.py': (
             'Update assignment',
@@ -184,29 +184,29 @@ def test_processing_toolbox_entries_use_spanish_catalog():
         'processes/wnt_validate.py': ('Validate', 'Validar'),
         'processes/wnt_network_to_epanet.py': (
             'Network to epanet file (.inp)',
-            'Red a archivo EPANET (.inp)',
+            'Exportar red a EPANET (.inp)',
         ),
         'processes/wnt_network_to_pipesizing.py': (
             'Network to pipesizing data file (.pro)',
-            'Red a archivo de datos pipesizing (.pro)',
+            'Exportar red a PipeSizing (.pro)',
         ),
-        'processes/wnt_network_to_xml.py': ('Network to XML', 'Red a XML'),
+        'processes/wnt_network_to_xml.py': ('Network to XML', 'Exportar red a XML'),
         'processes/wnt_hydrant_pairs.py': ('Hydrant pairs', 'Pares de hidrantes'),
         'processes/wnt_classify.py': ('Classify', 'Clasificar'),
-        'processes/wnt_node_degrees.py': ('Node degrees', 'Grados de nodo'),
-        'processes/wnt_network_from_xml.py': ('Network from XML', 'Red desde XML'),
+        'processes/wnt_node_degrees.py': ('Node degrees', 'Calcular grados de los nodos'),
+        'processes/wnt_network_from_xml.py': ('Network from XML', 'Importar red desde XML'),
         'processes/wnt_results_from_epanet.py': (
             'Results from EPANET',
-            'Resultados de EPANET',
+            'Importar resultados de EPANET',
         ),
         'processes/wnt_merge_networks.py': ('Merge networks', 'Fusionar redes'),
         'processes/wnt_elevation_from_tin.py': (
             'Node elevation from TIN (LandXML)',
-            'Elevación de nodos desde TIN (LandXML)',
+            'Asignar cotas a nodos desde TIN (LandXML)',
         ),
         'processes/wnt_elevation_from_raster.py': (
             'Node elevation from DEM',
-            'Elevación de nodos desde MDE',
+            'Asignar cotas a nodos desde MDE',
         ),
         'processes/wnt_split_lines_at_points.py': (
             'Split lines at points',
@@ -270,27 +270,27 @@ def test_processing_toolbox_entries_use_spanish_ts_fallback(monkeypatch):
         ),
         'processes/wnt_demand_to_epanet_scenario.py': (
             'Demand to epanet scenario file (.scn)',
-            'Demanda a archivo de escenario de EPANET (.scn)',
+            'Exportar demandas a escenario de EPANET (.scn)',
         ),
         'processes/wnt_network_from_epanet.py': (
             'Network from EPANET file',
-            'Red desde archivo de EPANET',
+            'Importar red desde EPANET',
         ),
         'processes/wnt_network_from_lines.py': (
             'Network from lines',
-            'Red desde líneas',
+            'Crear red a partir de líneas',
         ),
         'processes/wnt_network_to_graph.py': (
             'Network to graph file',
-            'Red a archivo de grafo',
+            'Exportar red a grafo',
         ),
         'processes/wnt_network_to_ppno.py': (
             'Network to pressure pipe optimization data file (.ext)',
-            'Red a archivo de datos para optimización de tuberías a presión (.ext)',
+            'Exportar red a PPNO (.ext)',
         ),
         'processes/wnt_pipe_properties_to_epanet_scenario.py': (
             'Pipe properties to EPANET scenario file (.scn)',
-            'Propiedades de tuberías a archivo de escenario de EPANET (.scn)',
+            'Exportar propiedades de tuberías a escenario de EPANET (.scn)',
         ),
         'processes/wnt_update_assignment.py': (
             'Update assignment',
@@ -299,29 +299,29 @@ def test_processing_toolbox_entries_use_spanish_ts_fallback(monkeypatch):
         'processes/wnt_validate.py': ('Validate', 'Validar'),
         'processes/wnt_network_to_epanet.py': (
             'Network to epanet file (.inp)',
-            'Red a archivo EPANET (.inp)',
+            'Exportar red a EPANET (.inp)',
         ),
         'processes/wnt_network_to_pipesizing.py': (
             'Network to pipesizing data file (.pro)',
-            'Red a archivo de datos pipesizing (.pro)',
+            'Exportar red a PipeSizing (.pro)',
         ),
-        'processes/wnt_network_to_xml.py': ('Network to XML', 'Red a XML'),
+        'processes/wnt_network_to_xml.py': ('Network to XML', 'Exportar red a XML'),
         'processes/wnt_hydrant_pairs.py': ('Hydrant pairs', 'Pares de hidrantes'),
         'processes/wnt_classify.py': ('Classify', 'Clasificar'),
-        'processes/wnt_node_degrees.py': ('Node degrees', 'Grados de nodo'),
-        'processes/wnt_network_from_xml.py': ('Network from XML', 'Red desde XML'),
+        'processes/wnt_node_degrees.py': ('Node degrees', 'Calcular grados de los nodos'),
+        'processes/wnt_network_from_xml.py': ('Network from XML', 'Importar red desde XML'),
         'processes/wnt_results_from_epanet.py': (
             'Results from EPANET',
-            'Resultados de EPANET',
+            'Importar resultados de EPANET',
         ),
         'processes/wnt_merge_networks.py': ('Merge networks', 'Fusionar redes'),
         'processes/wnt_elevation_from_tin.py': (
             'Node elevation from TIN (LandXML)',
-            'Elevación de nodos desde TIN (LandXML)',
+            'Asignar cotas a nodos desde TIN (LandXML)',
         ),
         'processes/wnt_elevation_from_raster.py': (
             'Node elevation from DEM',
-            'Elevación de nodos desde MDE',
+            'Asignar cotas a nodos desde MDE',
         ),
         'processes/wnt_split_lines_at_points.py': (
             'Split lines at points',

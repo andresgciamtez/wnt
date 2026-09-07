@@ -20,3 +20,5 @@ toolkit.ini
 
 # Local platform wrappers
 package_wnt.bat
+
+.build-tools/

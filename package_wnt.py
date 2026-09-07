@@ -8,6 +8,7 @@ from pathlib import Path
 import shutil
 import subprocess  # nosec B404
 import sys
+import tempfile
 
 
 class PackageError(RuntimeError):
@@ -90,11 +91,11 @@ def package(argv=None):
     if not ts_file.is_file():
         raise PackageError(f"Translation catalog not found: {ts_file}")
 
-    for module in ("pytest", "bandit", "flake8", "defusedxml"):
+    for module in ("pytest", "bandit", "flake8", "defusedxml", "pb_tool"):
         require_module(module)
 
-    pb_paths, lrelease_paths, archive_paths = executable_locations()
-    pb_tool = find_executable(("pb_tool",), pb_paths)
+    _, lrelease_paths, archive_paths = executable_locations()
+    pb_command = [sys.executable, "-c", "from pb_tool.pb_tool import cli; cli()"]
     lrelease = find_executable(
         ("lrelease", "lrelease-qt5", "lrelease5", "pyside6-lrelease"),
         lrelease_paths,
@@ -104,6 +105,8 @@ def package(argv=None):
     env = os.environ.copy()
     env["PATH"] = str(archive.parent) + os.pathsep + env.get("PATH", "")
 
+    run_step("Checking translations",
+             [sys.executable, "translation_catalog.py", "--check"], repository, env)
     run_step(
         "Compiling translations",
         [str(lrelease), str(ts_file), "-qm", str(qm_file)],
@@ -123,12 +126,15 @@ def package(argv=None):
         repository,
         env,
     )
-    run_step("Validating pb_tool configuration", [str(pb_tool), "validate"], plugin_dir, env)
+    run_step("Validating pb_tool configuration", pb_command + ["validate"], plugin_dir, env)
 
     if not args.skip_deploy:
-        run_step("Deploying plugin", [str(pb_tool), "deploy", "-y"], plugin_dir, env)
+        run_step("Deploying plugin", pb_command + ["deploy", "-y"], plugin_dir, env)
 
-    run_step("Creating plugin ZIP", [str(pb_tool), "zip", "-q"], plugin_dir, env)
+    # A fresh staging directory prevents quick zip from reusing an installed plugin.
+    with tempfile.TemporaryDirectory(prefix="wnt-package-") as staging:
+        run_step("Creating plugin ZIP",
+                 pb_command + ["zip", "-q", "-p", staging, "--no-docs"], plugin_dir, env)
 
     archive_path = plugin_dir / "wnt.zip"
     if not archive_path.is_file():

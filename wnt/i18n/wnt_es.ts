@@ -606,35 +606,35 @@
         </message>
         <message>
             <source>Network from XML</source>
-            <translation>Red desde XML</translation>
+            <translation>Importar red desde XML</translation>
         </message>
         <message>
             <source>Network to epanet file (.inp)</source>
-            <translation>Red a archivo EPANET (.inp)</translation>
+            <translation>Exportar red a EPANET (.inp)</translation>
         </message>
         <message>
             <source>Network to pipesizing data file (.pro)</source>
-            <translation>Red a archivo de datos pipesizing (.pro)</translation>
+            <translation>Exportar red a PipeSizing (.pro)</translation>
         </message>
         <message>
             <source>Network to XML</source>
-            <translation>Red a XML</translation>
+            <translation>Exportar red a XML</translation>
         </message>
         <message>
             <source>Node degrees</source>
-            <translation>Grados de nodo</translation>
+            <translation>Calcular grados de los nodos</translation>
         </message>
         <message>
             <source>Node elevation from DEM</source>
-            <translation>Elevación de nodos desde MDE</translation>
+            <translation>Asignar cotas a nodos desde MDE</translation>
         </message>
         <message>
             <source>Node elevation from TIN (LandXML)</source>
-            <translation>Elevación de nodos desde TIN (LandXML)</translation>
+            <translation>Asignar cotas a nodos desde TIN (LandXML)</translation>
         </message>
         <message>
             <source>Results from EPANET</source>
-            <translation>Resultados de EPANET</translation>
+            <translation>Importar resultados de EPANET</translation>
         </message>
         <message>
             <source>Quality results</source>
@@ -1098,27 +1098,27 @@
         </message>
         <message>
             <source>Demand to epanet scenario file (.scn)</source>
-            <translation>Demanda a archivo de escenario de EPANET (.scn)</translation>
+            <translation>Exportar demandas a escenario de EPANET (.scn)</translation>
         </message>
         <message>
             <source>Network from EPANET file</source>
-            <translation>Red desde archivo de EPANET</translation>
+            <translation>Importar red desde EPANET</translation>
         </message>
         <message>
             <source>Network from lines</source>
-            <translation>Red desde líneas</translation>
+            <translation>Crear red a partir de líneas</translation>
         </message>
         <message>
             <source>Network to graph file</source>
-            <translation>Red a archivo de grafo</translation>
+            <translation>Exportar red a grafo</translation>
         </message>
         <message>
             <source>Network to pressure pipe optimization data file (.ext)</source>
-            <translation>Red a archivo de datos para optimización de tuberías a presión (.ext)</translation>
+            <translation>Exportar red a PPNO (.ext)</translation>
         </message>
         <message>
             <source>Pipe properties to EPANET scenario file (.scn)</source>
-            <translation>Propiedades de tuberías a archivo de escenario de EPANET (.scn)</translation>
+            <translation>Exportar propiedades de tuberías a escenario de EPANET (.scn)</translation>
         </message>
         <message>
             <source>Toolkit configuration file</source>

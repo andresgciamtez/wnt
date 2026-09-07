@@ -99,6 +99,7 @@ class HydrantPairsAlgorithm(WntProcessingAlgorithm):
                 self.MAX_DISTANCE,
                 self.tr('Maximum hydrant separation'),
                 defaultValue=200,
+                parentParameterName=self.INPUT_HYDRANTS,
                 minValue=0.1,
                 maxValue=10000
                 )
